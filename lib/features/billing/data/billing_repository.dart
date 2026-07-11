@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/image_compress.dart';
 import '../../../core/network/api_endpoint.dart';
 import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
@@ -54,7 +55,9 @@ class BillingRepository extends BaseApiService {
   }
 
   /// Buat invoice pembayaran langganan (checkout). Mengembalikan hasil berisi
-  /// `gatewayPaymentUrl` (link Xendit) yang dibuka di browser untuk membayar.
+  /// invoice + [PaymentInstruction] (detail transfer bank manual: nama bank,
+  /// no & atas nama rekening, nominal). Owner transfer manual lalu mengunggah
+  /// bukti via [uploadPaymentProof]; admin yang mengonfirmasi.
   ///
   /// [renewalMode] hanya diperlukan bila outlet sudah punya langganan aktif
   /// dengan paket berbeda — backend membalas 409 (`renewal_choice_required`)
@@ -94,52 +97,112 @@ class BillingRepository extends BaseApiService {
     }
   }
 
-  /// Sinkronkan status invoice langsung dari gateway (Xendit). Dipakai
-  /// sebagai fallback saat webhook belum/tidak sampai (mis. di dev pakai
-  /// localhost). Backend query Xendit; kalau sudah PAID, invoice ditandai
-  /// lunas & langganan diaktifkan. Mengembalikan invoice terbaru.
-  Future<BillingInvoice> syncInvoice(String invoiceId) async {
-    return post<BillingInvoice>(
-      ApiEndpoint.billingInvoiceSync(invoiceId),
-      converter: (data) =>
-          BillingInvoice.fromJson(data as Map<String, dynamic>),
+  /// Unggah bukti transfer untuk sebuah invoice pending (multipart, field
+  /// `image`). Setelah ini status invoice tetap `pending` sampai admin
+  /// mengonfirmasi transfer masuk. [externalReference] opsional — mis. no.
+  /// referensi/berita transfer dari bank.
+  ///
+  /// File dikompres dulu (JPEG, max 1600 px) supaya upload cepat & hemat
+  /// storage — konsisten dengan upload bukti bayar di kasir.
+  Future<void> uploadPaymentProof(
+    String invoiceId,
+    File image, {
+    String? externalReference,
+  }) async {
+    final compressedPath = await ImageCompress.compressFile(image.path);
+    final formData = FormData.fromMap({
+      'image': await MultipartFile.fromFile(
+        compressedPath,
+        filename: compressedPath.split('/').last,
+      ),
+      if (externalReference != null && externalReference.isNotEmpty)
+        'external_reference': externalReference,
+    });
+    await dio.post<Map<String, dynamic>>(
+      ApiEndpoint.billingInvoiceUploadProof(invoiceId),
+      data: formData,
+      options: Options(
+        contentType: 'multipart/form-data',
+        responseType: ResponseType.json,
+      ),
     );
   }
 }
 
-/// Hasil checkout langganan — yang dipakai UI utama adalah `gatewayPaymentUrl`.
+/// Hasil checkout langganan — invoice yang dibuat + instruksi transfer bank
+/// manual yang harus ditampilkan ke owner.
 class BillingCheckoutResult {
   final String invoiceId;
   final String invoiceNo;
   final int amountIdr;
   final String status;
-  final String? gatewayPaymentUrl;
+  final PaymentInstruction? paymentInstruction;
 
   const BillingCheckoutResult({
     required this.invoiceId,
     required this.invoiceNo,
     required this.amountIdr,
     required this.status,
-    this.gatewayPaymentUrl,
+    this.paymentInstruction,
   });
 
   factory BillingCheckoutResult.fromJson(Map<String, dynamic> json) {
     final inv = json['invoice'];
     final pi = json['payment_instruction'];
     final invMap = inv is Map ? inv : const {};
-    final piMap = pi is Map ? pi : const {};
+    final piMap = pi is Map<String, dynamic> ? pi : null;
     return BillingCheckoutResult(
       invoiceId: invMap['id']?.toString() ?? '',
       invoiceNo:
           invMap['invoice_no']?.toString() ??
-          piMap['invoice_no']?.toString() ??
+          piMap?['invoice_no']?.toString() ??
           '',
       amountIdr:
           (invMap['amount_idr'] as num?)?.toInt() ??
-          (piMap['amount_idr'] as num?)?.toInt() ??
+          (piMap?['amount_idr'] as num?)?.toInt() ??
           0,
       status: invMap['status']?.toString() ?? 'pending',
-      gatewayPaymentUrl: invMap['gateway_payment_url']?.toString(),
+      paymentInstruction: piMap != null
+          ? PaymentInstruction.fromJson(piMap)
+          : null,
+    );
+  }
+}
+
+/// Instruksi transfer bank manual (pengganti gateway/QR). Ditampilkan ke owner
+/// setelah checkout: transfer sesuai nominal ke rekening berikut lalu unggah
+/// bukti transfer.
+class PaymentInstruction {
+  final String methodCode;
+  final String methodName;
+  final int amountIdr;
+  final String invoiceNo;
+  final String bankName;
+  final String bankAccountNo;
+  final String bankAccountName;
+  final String instructions;
+
+  const PaymentInstruction({
+    required this.methodCode,
+    required this.methodName,
+    required this.amountIdr,
+    required this.invoiceNo,
+    required this.bankName,
+    required this.bankAccountNo,
+    required this.bankAccountName,
+    required this.instructions,
+  });
+
+  factory PaymentInstruction.fromJson(Map<String, dynamic> json) {
+    return PaymentInstruction(
+      methodCode: json['method_code']?.toString() ?? '',
+      methodName: json['method_name']?.toString() ?? '',
+      amountIdr: (json['amount_idr'] as num?)?.toInt() ?? 0,
+      invoiceNo: json['invoice_no']?.toString() ?? '',
+      bankName: json['bank_name']?.toString() ?? '',
+      bankAccountNo: json['bank_account_no']?.toString() ?? '',
+      bankAccountName: json['bank_account_name']?.toString() ?? '',
+      instructions: json['instructions']?.toString() ?? '',
     );
   }
 }

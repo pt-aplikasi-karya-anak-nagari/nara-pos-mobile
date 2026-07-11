@@ -22,9 +22,9 @@ class BillingInvoice {
   final String? failureReason;
   final String? renewalMode;
   final String? notes;
-  /// Link pembayaran Xendit (hosted checkout). Diisi untuk invoice pending —
-  /// dibuka di browser supaya owner bisa membayar.
-  final String? gatewayPaymentUrl;
+  /// Referensi transfer eksternal yang diisi owner saat mengunggah bukti
+  /// (mis. no. referensi / berita transfer dari bank).
+  final String? externalReference;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -52,17 +52,24 @@ class BillingInvoice {
     this.failureReason,
     this.renewalMode,
     this.notes,
-    this.gatewayPaymentUrl,
+    this.externalReference,
     required this.createdAt,
     required this.updatedAt,
   });
 
   bool get isPaid => status == 'paid';
 
-  /// Invoice yang masih bisa dibayar (pending/unpaid) & punya link Xendit.
-  bool get isPayable =>
-      (status == 'pending' || status == 'unpaid' || status == 'failed') &&
-      (gatewayPaymentUrl != null && gatewayPaymentUrl!.isNotEmpty);
+  /// Invoice yang bukti transfernya sudah diunggah (menunggu / sudah dikonfirmasi).
+  bool get hasProof => (paymentProofUrl ?? '').isNotEmpty;
+
+  /// Ditolak admin — transfer tidak valid / tidak cocok. Owner perlu unggah
+  /// ulang bukti yang benar.
+  bool get isRejected => status == 'rejected';
+
+  /// Owner boleh mengunggah bukti transfer HANYA selama invoice pending.
+  /// Backend menolak upload untuk status non-pending; invoice yang ditolak
+  /// harus di-checkout ulang (bikin invoice pending baru), bukan re-upload.
+  bool get canUploadProof => status == 'pending';
 
   factory BillingInvoice.fromJson(Map<String, dynamic> json) {
     DateTime parseDate(dynamic value) {
@@ -101,7 +108,7 @@ class BillingInvoice {
       failureReason: json['failure_reason']?.toString(),
       renewalMode: json['renewal_mode']?.toString(),
       notes: json['notes']?.toString(),
-      gatewayPaymentUrl: json['gateway_payment_url']?.toString(),
+      externalReference: json['external_reference']?.toString(),
       createdAt: parseDate(json['created_at']),
       updatedAt: parseDate(json['updated_at']),
     );

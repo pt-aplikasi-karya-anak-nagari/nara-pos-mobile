@@ -15,8 +15,8 @@ class ApiEndpoint {
       '/outlets/$outletId/billing/invoices';
   static String billingCheckout(String outletId) =>
       '/outlets/$outletId/billing/checkout';
-  static String billingInvoiceSync(String invoiceId) =>
-      '/billing/invoices/$invoiceId/sync-gateway';
+  static String billingInvoiceUploadProof(String invoiceId) =>
+      '/billing/invoices/$invoiceId/upload-proof';
   static String billingInvoiceDownload(String invoiceId) =>
       '/billing/invoices/$invoiceId/download';
   static String outletEmployees(String outletId) =>

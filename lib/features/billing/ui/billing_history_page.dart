@@ -1,15 +1,17 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../app/theme.dart';
-import '../../subscription/data/subscription_repository.dart';
-import '../../subscription/ui/subscription_qr_payment_page.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/format.dart';
+import '../../../core/image_crop.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/responsive.dart';
 import '../data/billing_repository.dart';
@@ -188,8 +190,7 @@ class _InvoiceCard extends ConsumerStatefulWidget {
 
 class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
   bool _downloading = false;
-  bool _paying = false;
-  bool _checking = false;
+  bool _uploading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +255,7 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
           const Gap(8),
           _InfoRow(
             label: 'Metode bayar',
-            value: invoice.paymentMethodName ?? 'QRIS (Xendit)',
+            value: invoice.paymentMethodName ?? 'Transfer Bank',
           ),
           const Gap(8),
           _InfoRow(label: 'Rekening tujuan', value: _paymentAccount(invoice)),
@@ -268,13 +269,20 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
             value: formatRupiah(invoice.amountIdr),
             strong: true,
           ),
-          if (invoice.isPayable) ...[
+          if ((invoice.failureReason ?? '').isEmpty && invoice.isRejected) ...[
+            const Gap(8),
+            _InfoRow(
+              label: 'Status transfer',
+              value: 'Bukti ditolak — unggah ulang bukti yang benar.',
+            ),
+          ],
+          if (invoice.canUploadProof) ...[
             const Gap(12),
             SizedBox(
               width: double.infinity,
               height: 44,
               child: ElevatedButton.icon(
-                onPressed: _paying ? null : _pay,
+                onPressed: _uploading ? null : _uploadProof,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimary,
                   foregroundColor: Colors.white,
@@ -283,7 +291,7 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                icon: _paying
+                icon: _uploading
                     ? const SizedBox(
                         width: 16,
                         height: 16,
@@ -292,46 +300,21 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.payment_rounded, size: 18),
-                label: Text(_paying ? 'Membuka…' : 'Bayar Sekarang'),
-              ),
-            ),
-          ],
-          // Tombol cek status untuk invoice yang belum lunas. Berguna saat
-          // webhook Xendit belum sampai (mis. dev pakai localhost) — backend
-          // query langsung ke Xendit lalu update status & aktifkan langganan.
-          if (invoice.status == 'pending' || invoice.status == 'unpaid') ...[
-            const Gap(8),
-            SizedBox(
-              width: double.infinity,
-              height: 42,
-              child: OutlinedButton.icon(
-                onPressed: _checking ? null : _checkStatus,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: kPrimary,
-                  side: BorderSide(color: kPrimary.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: _checking
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 18),
+                    : const Icon(Icons.upload_file_rounded, size: 18),
                 label: Text(
-                  _checking ? 'Mengecek…' : 'Cek Status Pembayaran',
+                  _uploading
+                      ? 'Mengunggah…'
+                      : invoice.hasProof
+                      ? 'Unggah ulang bukti transfer'
+                      : 'Unggah bukti transfer',
                 ),
               ),
             ),
             const Gap(6),
             Text(
-              'Sudah scan & bayar QRIS tapi masih "Menunggu Bayar"? Tunggu '
-              'beberapa detik lalu tekan "Cek Status Pembayaran". Status '
-              '"Penyelesaian/Settlement" di Xendit itu pencairan dana (1–2 hari '
-              'kerja), bukan status bayar — abaikan saja.',
+              'Transfer sesuai nominal ke rekening tujuan, lalu unggah bukti '
+              'transfer. Langganan aktif setelah admin mengonfirmasi transfer '
+              'masuk.',
               style: TextStyle(color: kTextMid, fontSize: 11, height: 1.35),
             ),
           ],
@@ -377,52 +360,37 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
     );
   }
 
-  /// Buka halaman QRIS in-app (Payments API v3) untuk invoice yang masih
-  /// pending: tampilkan QR + polling status sampai lunas.
-  Future<void> _pay() async {
-    final qr = widget.invoice.gatewayPaymentUrl; // QR string mentah (v3).
-    if (qr == null || qr.isEmpty) return;
-    setState(() => _paying = true);
+  /// Pilih foto bukti transfer dari galeri (crop kotak), lalu unggah ke
+  /// backend. Invoice tetap `pending` sampai admin mengonfirmasi.
+  Future<void> _uploadProof() async {
     try {
-      await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => SubscriptionQrPaymentPage(
-            invoiceId: widget.invoice.id,
-            invoiceNo: widget.invoice.invoiceNo,
-            amountIdr: widget.invoice.amountIdr,
-            qrString: qr,
-            planName: widget.invoice.planName,
-          ),
-        ),
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 80,
       );
+      if (picked == null) return;
+      final croppedPath = await ImageCrop.square(
+        picked.path,
+        title: 'Crop bukti transfer',
+      );
+      if (croppedPath == null) return;
       if (!mounted) return;
-      ref.invalidate(billingInvoicesProvider);
-      ref.invalidate(activeOutletSubscriptionProvider);
-    } finally {
-      if (mounted) setState(() => _paying = false);
-    }
-  }
-
-  /// Tanya backend untuk sinkronkan status invoice ini dari Xendit.
-  Future<void> _checkStatus() async {
-    setState(() => _checking = true);
-    try {
-      final updated = await ref
+      setState(() => _uploading = true);
+      await ref
           .read(billingRepositoryProvider)
-          .syncInvoice(widget.invoice.id);
+          .uploadPaymentProof(widget.invoice.id, File(croppedPath));
       if (!mounted) return;
       ref.invalidate(billingInvoicesProvider);
-      // Kalau jadi lunas, langganan ikut aktif → refresh status langganan.
-      ref.invalidate(activeOutletSubscriptionProvider);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            updated.isPaid
-                ? 'Pembayaran terkonfirmasi! Langganan aktif. 🎉'
-                : 'Pembayaran belum terbaca. Kalau kamu sudah scan & bayar QRIS, tunggu beberapa detik lalu cek lagi.',
+            'Bukti transfer terkirim. Menunggu konfirmasi admin. 🙌',
           ),
-          backgroundColor: updated.isPaid ? kSuccess : kWarning,
-          duration: const Duration(seconds: 4),
+          backgroundColor: kSuccess,
+          duration: Duration(seconds: 4),
         ),
       );
     } catch (e) {
@@ -430,13 +398,13 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Gagal cek status: ${e.toString().replaceAll('Exception: ', '')}',
+            'Gagal unggah bukti: ${e.toString().replaceAll('Exception: ', '')}',
           ),
           backgroundColor: kDanger,
         ),
       );
     } finally {
-      if (mounted) setState(() => _checking = false);
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -544,8 +512,8 @@ class _StatusPill extends StatelessWidget {
     );
   }
 
-  // `void`/`expired` BUKAN kegagalan bayar (checkout dibatalkan/kedaluwarsa),
-  // jadi warnanya netral — bukan merah seperti `failed`.
+  // `failed`/`rejected` = merah (gagal / bukti transfer ditolak). `pending` =
+  // kuning (menunggu transfer / konfirmasi admin).
   Color _color() {
     switch (status.toLowerCase()) {
       case 'paid':
@@ -554,6 +522,7 @@ class _StatusPill extends StatelessWidget {
       case 'unpaid':
         return kWarning;
       case 'failed':
+      case 'rejected':
         return kDanger;
       default: // void, expired, unknown
         return kTextMid;
@@ -568,6 +537,8 @@ class _StatusPill extends StatelessWidget {
         return 'MENUNGGU BAYAR';
       case 'unpaid':
         return 'BELUM BAYAR';
+      case 'rejected':
+        return 'DITOLAK';
       case 'void':
         return 'DIBATALKAN';
       case 'expired':
