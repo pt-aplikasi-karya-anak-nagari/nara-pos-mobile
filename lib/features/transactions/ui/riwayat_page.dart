@@ -470,24 +470,33 @@ class _SaleTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: sale.isRefunded
-                    ? kDanger.withValues(alpha: 0.1)
-                    : kSuccess.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: HugeIcon(
-                  icon: sale.isRefunded
-                      ? AppIcons.refund
-                      : AppIcons.checkCircle,
-                  color: sale.isRefunded ? kDanger : kSuccess,
-                  size: 20,
-                ),
-              ),
+            Builder(
+              builder: (_) {
+                // Warna leading: penuh = danger, sebagian = warning,
+                // selainnya = success.
+                final Color c = sale.isRefunded
+                    ? kDanger
+                    : sale.isPartiallyRefunded
+                    ? kWarning
+                    : kSuccess;
+                return Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: c.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: HugeIcon(
+                      icon: sale.isRefunded || sale.isPartiallyRefunded
+                          ? AppIcons.refund
+                          : AppIcons.checkCircle,
+                      color: c,
+                      size: 20,
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -540,7 +549,11 @@ class _SaleTile extends StatelessWidget {
                             ],
                           ),
                         ),
-                      if (!sale.isPaid)
+                      // "BELUM BAYAR" hanya untuk transaksi yang benar-benar
+                      // belum lunas — bukan yang jadi non-'paid' karena retur.
+                      if (!sale.isPaid &&
+                          !sale.isRefunded &&
+                          !sale.isPartiallyRefunded)
                         Container(
                           margin: const EdgeInsets.only(left: 6),
                           padding: const EdgeInsets.symmetric(
@@ -553,6 +566,26 @@ class _SaleTile extends StatelessWidget {
                           ),
                           child: const Text(
                             'BELUM BAYAR',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      if (sale.isPartiallyRefunded)
+                        Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kWarning,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'RETUR SEBAGIAN',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 9,

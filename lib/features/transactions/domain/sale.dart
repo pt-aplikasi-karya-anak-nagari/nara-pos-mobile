@@ -49,6 +49,14 @@ class Sale {
   String? note;
 
   bool isRefunded;
+  /// True bila transaksi diretur SEBAGIAN (retur per-item). Backend field:
+  /// `payment_status = 'partially_refunded'`. Berbeda dari [isRefunded] yang
+  /// berarti retur PENUH. Transaksi partial masih bisa diretur lagi selama
+  /// masih ada item dengan sisa qty (lihat [hasRefundableItems]).
+  bool isPartiallyRefunded;
+  /// Akumulasi nominal yang sudah diretur (backend field `refunded_amount`).
+  /// 0 = belum ada retur. Dihitung server; mobile hanya menampilkan.
+  double refundedAmount;
   DateTime? refundedAt;
   /// User yang melakukan refund (mis. owner / admin outlet via dashboard
   /// web). Backend field: `refunded_by`. Null = belum di-refund.
@@ -118,6 +126,8 @@ class Sale {
     this.paymentRef,
     this.note,
     this.isRefunded = false,
+    this.isPartiallyRefunded = false,
+    this.refundedAmount = 0,
     this.refundedAt,
     this.refundedBy,
     this.refundReason,
@@ -176,6 +186,12 @@ class Sale {
   int get totalQty => items.fold(0, (sum, it) => sum + it.qty);
   set totalQty(int value) {}
 
+  /// True bila masih ada minimal satu item yang bisa diretur
+  /// (quantity - refunded_qty > 0). Dipakai untuk menampilkan opsi
+  /// "Refund sebagian" dan menggate tombol refund pada transaksi yang
+  /// sudah diretur sebagian.
+  bool get hasRefundableItems => items.any((it) => it.remainingQty > 0);
+
   /// Maps from Go backend entity Transaction JSON.
   /// Backend tidak punya status 'refunded' di kolom payment_status —
   /// status refund dideteksi dari refunded_at != null.
@@ -189,6 +205,11 @@ class Sale {
     final confirmedAt = json['confirmed_at'] != null
         ? DateTime.tryParse(json['confirmed_at'].toString())?.toLocal()
         : null;
+    // payment_status kini bisa: paid | unpaid | refunded | partially_refunded.
+    // Retur sebagian TIDAK dianggap refund penuh (isRefunded) walau backend
+    // ikut mengisi refunded_at — pembeda: status 'partially_refunded'.
+    final statusLower = json['payment_status']?.toString().toLowerCase();
+    final isPartial = statusLower == 'partially_refunded';
     final sale = Sale(
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ?? DateTime.now()
@@ -216,8 +237,12 @@ class Sale {
       // Backend juga set `payment_status = 'refunded'` di endpoint refund
       // baru (lihat repository.Refund). Cek both supaya kompat data lama
       // (yang cuma punya refunded_at) maupun data baru (status='refunded').
-      isRefunded: refundedAt != null ||
-          json['payment_status']?.toString().toLowerCase() == 'refunded',
+      // Retur SEBAGIAN dikecualikan: refunded_at bisa terisi tapi status
+      // 'partially_refunded' → bukan refund penuh.
+      isRefunded: statusLower == 'refunded' ||
+          (refundedAt != null && !isPartial),
+      isPartiallyRefunded: isPartial,
+      refundedAmount: _d(json['refunded_amount']),
       refundedAt: refundedAt,
       refundedBy: json['refunded_by']?.toString(),
       refundReason: json['refund_reason']?.toString(),

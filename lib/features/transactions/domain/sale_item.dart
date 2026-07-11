@@ -16,6 +16,9 @@ class SaleItem {
   final String discountLabel;
   final String discountName;
   final int qty;
+  /// Jumlah qty item ini yang SUDAH diretur (akumulasi refund parsial).
+  /// Backend field: `refunded_qty`. 0 = belum ada retur untuk item ini.
+  final int refundedQty;
   final String note;
   // C4: label add-on/topping ("Boba, Less Sugar") untuk struk & riwayat.
   final String modifiersLabel;
@@ -35,9 +38,17 @@ class SaleItem {
     this.discountLabel = '',
     this.discountName = '',
     required this.qty,
+    this.refundedQty = 0,
     this.note = '',
     this.modifiersLabel = '',
   });
+
+  /// Sisa qty yang masih bisa diretur (quantity - refunded_qty). Clamp ke 0
+  /// supaya tidak pernah negatif walau data backend tak konsisten.
+  int get remainingQty {
+    final r = qty - refundedQty;
+    return r < 0 ? 0 : r;
+  }
 
   /// Gabungkan array modifier JSON backend → label nama ("Boba, Less Sugar").
   static String modifiersLabelFrom(dynamic raw) {
@@ -81,6 +92,9 @@ class SaleItem {
       qty: json['quantity'] is int
           ? json['quantity']
           : int.tryParse(json['quantity']?.toString() ?? '0') ?? 0,
+      refundedQty: json['refunded_qty'] is int
+          ? json['refunded_qty']
+          : int.tryParse(json['refunded_qty']?.toString() ?? '0') ?? 0,
       note: json['note']?.toString() ?? '',
       modifiersLabel: modifiersLabelFrom(json['modifiers']),
     )..id = json['id']?.toString() ?? '';

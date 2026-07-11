@@ -86,10 +86,16 @@ class TransactionApiService extends BaseApiService {
   /// Refund transaksi. [overridePin] wajib bila outlet mengaktifkan
   /// `require_pin_refund` — backend memverifikasi PIN manajer berwenang dan
   /// membalas HTTP 403 dengan pesan jelas bila PIN salah/kosong.
+  ///
+  /// [items] opsional untuk retur PARSIAL: daftar
+  /// `{transaction_item_id, quantity}`. Bila null/kosong, backend melakukan
+  /// refund PENUH (perilaku lama). Bila diisi, hanya qty item tsb yang
+  /// diretur & di-restock; nominal dihitung server.
   Future<Map<String, dynamic>> refund(
     String transactionId, {
     String? reason,
     String? overridePin,
+    List<Map<String, dynamic>>? items,
   }) async {
     return await post<Map<String, dynamic>>(
       '/transactions/$transactionId/refund',
@@ -97,6 +103,7 @@ class TransactionApiService extends BaseApiService {
         if (reason != null && reason.isNotEmpty) 'reason': reason,
         if (overridePin != null && overridePin.isNotEmpty)
           'override_pin': overridePin,
+        if (items != null && items.isNotEmpty) 'items': items,
       },
       converter: (res) => res as Map<String, dynamic>,
     );
@@ -467,9 +474,21 @@ class TransactionRepository {
   /// Refund transaksi: backend balikkan stok, set status refunded, kurangi
   /// poin pelanggan. Mengembalikan Sale terbaru dari backend. [overridePin]
   /// diteruskan bila outlet mensyaratkan PIN otorisasi manajer.
-  Future<Sale> refund(String saleId, {String? reason, String? overridePin}) async {
-    final res =
-        await apiService.refund(saleId, reason: reason, overridePin: overridePin);
+  ///
+  /// [items] opsional (retur PARSIAL): daftar `{transaction_item_id,
+  /// quantity}`. Null/kosong → refund PENUH (perilaku lama).
+  Future<Sale> refund(
+    String saleId, {
+    String? reason,
+    String? overridePin,
+    List<Map<String, dynamic>>? items,
+  }) async {
+    final res = await apiService.refund(
+      saleId,
+      reason: reason,
+      overridePin: overridePin,
+      items: items,
+    );
     return Sale.fromJson(res);
   }
 

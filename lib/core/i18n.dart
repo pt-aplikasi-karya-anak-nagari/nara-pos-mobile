@@ -357,6 +357,19 @@ const Map<String, Map<String, String>> _strings = {
     'id': 'Transaksi berhasil di-refund',
     'en': 'Transaction refunded',
   },
+  'refund.mode_full': {'id': 'Refund penuh', 'en': 'Full refund'},
+  'refund.mode_partial': {'id': 'Refund sebagian', 'en': 'Partial refund'},
+  'refund.select_items': {
+    'id': 'Pilih item yang diretur',
+    'en': 'Select items to refund',
+  },
+  'refund.select_items_hint': {
+    'id': 'Atur jumlah tiap item yang ingin diretur (min. 1 item).',
+    'en': 'Set the quantity of each item to refund (min. 1 item).',
+  },
+  'refund.status_partial': {'id': 'Retur sebagian', 'en': 'Partially refunded'},
+  'refund.refunded_amount': {'id': 'Total diretur', 'en': 'Refunded'},
+  'refund.item_refunded': {'id': 'Diretur', 'en': 'Refunded'},
 
   // common
 
