@@ -23,6 +23,11 @@ class Product {
   String? imageUrl;
   bool isAvailable;
   bool trackStock;
+  // isTaxable: apakah produk kena pajak (PPN/PB1). Default true supaya
+  // produk existing tetap dipajaki seperti biasa. Item non-pajak
+  // (is_taxable=false) dikecualikan dari basis pajak di kasir & backend.
+  // Level produk saja — varian mengikuti induknya.
+  bool isTaxable;
   String discountType;
   double discountValue;
   String discountName;
@@ -49,6 +54,7 @@ class Product {
     this.imageUrl,
     this.isAvailable = true,
     this.trackStock = true,
+    this.isTaxable = true,
     this.discountType = 'none',
     this.discountValue = 0,
     this.discountName = '',
@@ -85,6 +91,7 @@ class Product {
     String? imageUrl,
     bool? isAvailable,
     bool? trackStock,
+    bool? isTaxable,
     String? discountType,
     double? discountValue,
     String? discountName,
@@ -109,6 +116,7 @@ class Product {
       imageUrl: imageUrl ?? this.imageUrl,
       isAvailable: isAvailable ?? this.isAvailable,
       trackStock: trackStock ?? this.trackStock,
+      isTaxable: isTaxable ?? this.isTaxable,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
       discountName: discountName ?? this.discountName,
@@ -145,6 +153,9 @@ class Product {
       imageUrl: json['image_url'] as String?,
       isAvailable: json['is_available'] as bool? ?? true,
       trackStock: json['track_stock'] as bool? ?? true,
+      // Default true saat field absen → produk lama (payload/cache tanpa
+      // is_taxable) tetap dianggap kena pajak.
+      isTaxable: json['is_taxable'] as bool? ?? true,
       discountType: json['discount_type'] as String? ?? 'none',
       discountValue: (json['discount_value'] as num? ?? 0).toDouble(),
       discountName: json['discount_name'] as String? ?? '',
@@ -176,6 +187,7 @@ class Product {
         'image_url': imageUrl,
         'is_available': isAvailable,
         'track_stock': trackStock,
+        'is_taxable': isTaxable,
         'discount_type': discountType,
         'discount_value': discountValue,
         'discount_name': discountName,

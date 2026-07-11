@@ -63,6 +63,9 @@ class ProductFormPage extends HookConsumerWidget {
     final barcodeCtrl = useTextEditingController(text: existing?.barcode ?? '');
     final barcodeText = useValueListenable(barcodeCtrl);
     final trackStock = useState(existing?.trackStock ?? false);
+    // Kena pajak (PPN/PB1). Default ON supaya produk baru mengikuti perilaku
+    // umum; produk existing memakai nilai tersimpan.
+    final isTaxable = useState(existing?.isTaxable ?? true);
     final stockCtrl = useTextEditingController(
       text: existing != null && existing.trackStock
           ? existing.stock.toString()
@@ -238,6 +241,7 @@ class ProductFormPage extends HookConsumerWidget {
             barcode: barcode,
             trackStock: trackStock.value,
             stock: stockVal,
+            isTaxable: isTaxable.value,
             discountType: discountType.value,
             discountValue: discountValue,
             discountName: discountName,
@@ -250,6 +254,7 @@ class ProductFormPage extends HookConsumerWidget {
             barcode: barcode,
             trackStock: trackStock.value,
             stock: stockVal,
+            isTaxable: isTaxable.value,
             discountType: discountType.value,
             discountValue: discountValue,
             discountName: discountName,
@@ -321,6 +326,7 @@ class ProductFormPage extends HookConsumerWidget {
               'category_id': product.categoryId,
               'is_available': product.isAvailable,
               'track_stock': product.trackStock,
+              'is_taxable': product.isTaxable,
               'description': product.description,
               'discount_type': product.discountType,
               'discount_value': product.discountValue,
@@ -662,6 +668,28 @@ class ProductFormPage extends HookConsumerWidget {
           ),
         ),
       ],
+      const SizedBox(height: 12),
+      _FieldWrap(
+        child: SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          activeThumbColor: kPrimary,
+          title: Text(
+            'Kena pajak (PPN/PB1)',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: kTextDark,
+            ),
+          ),
+          subtitle: Text(
+            'Nonaktifkan untuk item bebas pajak — dikecualikan dari '
+            'perhitungan pajak di kasir.',
+            style: TextStyle(fontSize: 11, color: kTextMid),
+          ),
+          value: isTaxable.value,
+          onChanged: (v) => isTaxable.value = v,
+        ),
+      ),
       const SizedBox(height: 12),
       _FieldWrap(
         child: SwitchListTile.adaptive(

@@ -345,6 +345,10 @@ class TransactionRepository {
         if (item.variantId != null) 'variant_id': item.variantId,
         'name': item.displayName,
         'price': item.effectivePrice,
+        // Snapshot flag pajak per item. Server otoritatif atas pajak &
+        // mengecualikan item non-pajak; dikirim agar payload konsisten
+        // dengan preview kasir.
+        'is_taxable': item.isTaxable,
         if (item.note.trim().isNotEmpty) 'note': item.note.trim(),
         // Snapshot diskon per item (manual override > diskon master produk).
         // Backend pakai field ini untuk mengisi kolom diskon di transaction_items

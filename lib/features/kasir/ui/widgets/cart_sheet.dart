@@ -394,6 +394,30 @@ class _LineDiscountButton extends StatelessWidget {
   }
 }
 
+/// Penanda halus untuk baris item yang bebas pajak (is_taxable=false).
+class _TaxFreeBadge extends StatelessWidget {
+  const _TaxFreeBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: kTextMid.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'Bebas pajak',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: kTextMid,
+        ),
+      ),
+    );
+  }
+}
+
 class _CartStatChip extends StatelessWidget {
   final IconAsset icon;
   final String label;
@@ -671,6 +695,10 @@ class _CartRow extends ConsumerWidget {
                         formatRupiah(item.effectivePrice),
                         style: TextStyle(fontSize: 12, color: kTextMid),
                       ),
+                      if (!item.isTaxable) ...[
+                        const SizedBox(width: 6),
+                        const _TaxFreeBadge(),
+                      ],
                     ],
                   ),
                   Builder(

@@ -111,10 +111,18 @@ class Outlet {
   /// pajak — net price = harga / (1 + tax%). Service charge tetap di-add
   /// on top dari net (konvensi resto Indonesia).
   ///
+  /// [amount] = subtotal SELURUH baris (setelah diskon per item).
+  /// [taxableSubtotal] = Σ subtotal baris yang KENA pajak saja (item
+  /// non-pajak dikecualikan). Bila null → dianggap sama dengan [amount]
+  /// (semua item kena pajak) supaya pemanggil lama tidak berubah perilaku.
+  /// Service charge tetap dihitung dari [amount] penuh dan ikut dipajaki
+  /// (mode exclusive), persis seperti server.
+  ///
   /// Return tuple: (subtotal, serviceCharge, tax, grandTotal). Subtotal
   /// di sini = net price (sudah strip tax kalau inclusive).
   ({double subtotal, double serviceCharge, double tax, double grandTotal})
-      computeTaxBreakdown(double amount) {
+      computeTaxBreakdown(double amount, {double? taxableSubtotal}) {
+    final taxable = taxableSubtotal ?? amount;
     if (!taxEnabled || amount <= 0) {
       return (
         subtotal: amount,
@@ -127,25 +135,30 @@ class Outlet {
     final serviceRate = (serviceChargePercent / 100).clamp(0, 1).toDouble();
 
     if (taxInclusive && taxRate > 0) {
-      final net = amount / (1 + taxRate);
-      final tax = amount - net;
+      // Pajak di-back-out HANYA dari porsi taxable; item bebas pajak tidak
+      // mengandung PPN di harganya. displaySubtotal (net) = subtotal penuh
+      // dikurangi pajak yang di-strip.
+      final taxableNet = taxable / (1 + taxRate);
+      final tax = taxable - taxableNet;
+      final net = amount - tax;
       final service = net * serviceRate;
       return (
-        subtotal: net,
-        serviceCharge: service,
-        tax: tax,
-        grandTotal: amount + service,
+        subtotal: net.roundToDouble(),
+        serviceCharge: service.roundToDouble(),
+        tax: tax.roundToDouble(),
+        grandTotal: (net + tax + service).roundToDouble(),
       );
     }
 
     final service = amount * serviceRate;
-    final taxBase = amount + service;
-    final tax = taxBase * taxRate;
+    // Service charge ikut dipajaki penuh; basis pajak = taxableSubtotal +
+    // service charge.
+    final tax = (taxable + service) * taxRate;
     return (
-      subtotal: amount,
-      serviceCharge: service,
-      tax: tax,
-      grandTotal: amount + service + tax,
+      subtotal: amount.roundToDouble(),
+      serviceCharge: service.roundToDouble(),
+      tax: tax.roundToDouble(),
+      grandTotal: (amount + service + tax).roundToDouble(),
     );
   }
 }

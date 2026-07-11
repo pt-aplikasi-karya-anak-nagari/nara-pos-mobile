@@ -100,6 +100,11 @@ class CartItem {
   // If variant exists, it has its own absolute price. If not, use product price.
   double get basePrice => variantId != null ? variantPrice : product.price;
 
+  /// Apakah baris ini kena pajak. Mengikuti flag produk (varian mewarisi
+  /// induknya). Dipakai kasir untuk menghitung basis pajak (taxableSubtotal)
+  /// agar preview cocok dengan pajak yang dihitung server.
+  bool get isTaxable => product.isTaxable;
+
   bool get hasManualDiscount =>
       manualDiscountType != 'none' && manualDiscountValue > 0;
 

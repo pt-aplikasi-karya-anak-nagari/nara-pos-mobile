@@ -192,6 +192,16 @@ final subtotalProvider = Provider<double>(
   (ref) =>
       ref.watch(cartProvider).fold(0.0, (s, c) => s + c.subtotal).roundToDouble(),
 );
+// Subtotal HANYA dari baris yang kena pajak (item non-pajak dikecualikan).
+// Menjadi basis pajak agar preview kasir cocok persis dengan pajak yang
+// dihitung server (server otoritatif & mengecualikan item is_taxable=false).
+final taxableSubtotalProvider = Provider<double>(
+  (ref) => ref
+      .watch(cartProvider)
+      .where((c) => c.isTaxable)
+      .fold(0.0, (s, c) => s + c.subtotal)
+      .roundToDouble(),
+);
 final originalSubtotalProvider = Provider<double>(
   (ref) => ref
       .watch(cartProvider)
@@ -212,11 +222,14 @@ final discountTotalProvider = Provider<double>(
 final _taxBreakdownProvider = Provider<
     ({double subtotal, double serviceCharge, double tax, double grandTotal})>((ref) {
   final subtotal = ref.watch(subtotalProvider);
+  final taxableSubtotal = ref.watch(taxableSubtotalProvider);
   final outlet = ref.watch(activeOutletProvider);
   if (outlet == null) {
     return (subtotal: subtotal, serviceCharge: 0.0, tax: 0.0, grandTotal: subtotal);
   }
-  return outlet.computeTaxBreakdown(subtotal);
+  // Pajak dihitung HANYA dari taxableSubtotal (item non-pajak dikecualikan),
+  // service charge tetap dari subtotal penuh — sama seperti server.
+  return outlet.computeTaxBreakdown(subtotal, taxableSubtotal: taxableSubtotal);
 });
 
 final serviceChargeProvider = Provider<double>(

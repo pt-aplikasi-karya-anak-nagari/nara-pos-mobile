@@ -187,6 +187,7 @@ Map<String, dynamic> _productToJson(CartItem c) {
     'image_url': p.imageUrl,
     'is_available': p.isAvailable,
     'track_stock': p.trackStock,
+    'is_taxable': p.isTaxable,
     'discount_type': p.discountType,
     'discount_value': p.discountValue,
     'discount_name': p.discountName,
