@@ -1,0 +1,785 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:image/image.dart' as img;
+import '../../../core/permission_service.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+
+import '../../../core/format.dart';
+import '../../outlet/domain/outlet.dart';
+import '../../transactions/domain/sale.dart';
+import '../../shifts/domain/shift.dart';
+import '../../../core/outlet_scope.dart';
+import 'printer_settings.dart';
+import 'receipt_settings_repository.dart';
+import '../domain/receipt_settings.dart';
+
+class PrinterService {
+  PrinterService(this._ref);
+  final Ref _ref;
+
+  Future<bool> get isPermissionGranted =>
+      _ref.read(systemPermissionServiceProvider).isNearbyDevicesGranted;
+
+  Future<bool> get isBluetoothEnabled => PrintBluetoothThermal.bluetoothEnabled;
+
+  Future<bool> get isConnected => PrintBluetoothThermal.connectionStatus;
+
+  Future<List<BluetoothInfo>> pairedDevices() =>
+      PrintBluetoothThermal.pairedBluetooths;
+
+  Future<bool> connect(String mac) async {
+    final connected = await PrintBluetoothThermal.connectionStatus;
+    if (connected) {
+      await PrintBluetoothThermal.disconnect;
+    }
+    return PrintBluetoothThermal.connect(macPrinterAddress: mac);
+  }
+
+  Future<bool> disconnect() => PrintBluetoothThermal.disconnect;
+
+  Future<bool> _ensureConnected() async {
+    if (await PrintBluetoothThermal.connectionStatus) return true;
+    final s = _ref.read(printerSettingsProvider);
+    if (!s.hasDevice) return false;
+    return PrintBluetoothThermal.connect(macPrinterAddress: s.deviceMac);
+  }
+
+  _ReceiptHeader _resolveHeader(PrinterSettings s) {
+    final outlet = _ref.read(activeOutletProvider);
+    return _ReceiptHeader(
+      name: outlet?.name.isNotEmpty == true ? outlet!.name : 'NARA',
+      address: outlet?.address ?? '',
+      phone: outlet?.phone ?? '',
+    );
+  }
+
+  Future<img.Image?> _renderLogo({int size = 160}) async {
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final bg = Paint()..color = const Color(0xFFFFFFFF);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()),
+        bg,
+      );
+      const decoration = FlutterLogoDecoration(
+        style: FlutterLogoStyle.markOnly,
+      );
+      final painter = decoration.createBoxPainter(() {});
+      final inset = size * 0.12;
+      painter.paint(
+        canvas,
+        Offset(inset, inset),
+        ImageConfiguration(size: Size(size - inset * 2, size - inset * 2)),
+      );
+      final picture = recorder.endRecording();
+      final uiImage = await picture.toImage(size, size);
+      final bd = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      if (bd == null) return null;
+      final decoded = img.decodePng(bd.buffer.asUint8List());
+      if (decoded == null) return null;
+      return img.grayscale(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> testPrint() async {
+    if (!await _ensureConnected()) return false;
+    final s = _ref.read(printerSettingsProvider);
+    final header = _resolveHeader(s);
+    final logo = await _renderLogo();
+    final profile = await CapabilityProfile.load();
+    final gen = Generator(s.paperSize, profile);
+    final bytes = <int>[
+      ...gen.reset(),
+      if (logo != null) ...gen.image(logo, align: PosAlign.center),
+      ...gen.text(
+        'TEST PRINT',
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      ),
+      ...gen.text(
+        _safe(header.name),
+        styles: const PosStyles(align: PosAlign.center),
+      ),
+      if (header.address.isNotEmpty)
+        ...gen.text(
+          _safe(header.address),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      ...gen.hr(),
+      ...gen.text('Printer terhubung.'),
+      ...gen.text('Ukuran kertas: ${_paperLabel(s.paperSize)}'),
+      ...gen.text('Waktu: ${formatDateTime(DateTime.now())}'),
+      ...gen.feed(2),
+      ...gen.cut(),
+    ];
+    return PrintBluetoothThermal.writeBytes(bytes);
+  }
+
+  Future<bool> printReceipt(Sale sale, {bool reprint = false}) async {
+    if (!await _ensureConnected()) return false;
+    final s = _ref.read(printerSettingsProvider);
+    // Branding/toggle struk dari backend (single source of truth per outlet).
+    // Null-safe: kalau gagal fetch, struk tetap tercetak dengan default lama.
+    OutletReceiptSettings? rs;
+    try {
+      rs = await _ref.read(receiptSettingsFutureProvider.future);
+    } catch (_) {
+      rs = null;
+    }
+    final logo = await _renderLogo();
+    final profile = await CapabilityProfile.load();
+    final gen = Generator(s.paperSize, profile);
+    final bytes = _buildReceipt(gen, s, sale, reprint: reprint, logo: logo, rs: rs);
+    final copies = rs?.printCopies ?? s.copies;
+    bool ok = true;
+    for (var i = 0; i < copies; i++) {
+      final sent = await PrintBluetoothThermal.writeBytes(bytes);
+      ok = ok && sent;
+    }
+    return ok;
+  }
+
+  /// Buka laci kas (cash drawer) lewat pulse ESC/POS (perintah ESC p).
+  /// Dipanggil otomatis saat pembayaran tunai supaya laci terbuka tanpa
+  /// kunci manual. Aman dipanggil walau printer/laci tidak terpasang —
+  /// langsung return false tanpa melempar error sehingga tidak mengganggu
+  /// alur checkout.
+  Future<bool> openCashDrawer() async {
+    final s = _ref.read(printerSettingsProvider);
+    if (!s.hasDevice) return false;
+    if (!await _ensureConnected()) return false;
+    final profile = await CapabilityProfile.load();
+    final gen = Generator(s.paperSize, profile);
+    return PrintBluetoothThermal.writeBytes(<int>[...gen.drawer()]);
+  }
+
+  Future<bool> printShiftReport(Shift shift, List<Sale> sales) async {
+    if (!await _ensureConnected()) return false;
+    final s = _ref.read(printerSettingsProvider);
+    final profile = await CapabilityProfile.load();
+    final gen = Generator(s.paperSize, profile);
+    final header = _resolveHeader(s);
+
+    double totalQris = 0;
+    double totalCard = 0;
+    double totalTransfer = 0;
+    double totalCash = 0;
+
+    for (final sale in sales) {
+      if (sale.isRefunded) continue;
+      if (sale.paymentMethod == 'QRIS') totalQris += sale.total;
+      if (sale.paymentMethod == 'Kartu') totalCard += sale.total;
+      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.total;
+      if (sale.paymentMethod == 'Tunai') totalCash += sale.total;
+    }
+
+    final bytes = <int>[
+      ...gen.reset(),
+      ...gen.text(
+        _safe(header.name),
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      ),
+      ...gen.text(
+        'LAPORAN SHIFT',
+        styles: const PosStyles(align: PosAlign.center, bold: true),
+      ),
+      ...gen.hr(),
+      ...gen.text('ID Shift: #${shift.remoteId}'),
+      ...gen.text('Kasir: ${_safe(shift.cashierName)}'),
+      ...gen.text('Outlet: ${_safe(shift.outletRemoteId ?? 'Unknown')}'),
+      ...gen.text('Mulai: ${formatDateTime(shift.startTime)}'),
+      if (shift.endTime != null)
+        ...gen.text('Selesai: ${formatDateTime(shift.endTime!)}'),
+      ...gen.hr(),
+      ...gen.text('RINGKASAN KAS', styles: const PosStyles(bold: true)),
+      ...gen.row([
+        PosColumn(text: 'Modal Awal', width: 6),
+        PosColumn(
+          text: _fmtShort(shift.startingCash),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.row([
+        PosColumn(text: 'Penjualan Tunai', width: 6),
+        PosColumn(
+          text: _fmtShort(totalCash),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.hr(ch: '-'),
+      ...gen.row([
+        PosColumn(
+          text: 'Ekspektasi Kas',
+          width: 6,
+          styles: const PosStyles(bold: true),
+        ),
+        PosColumn(
+          text: _fmtShort(shift.expectedCash ?? 0),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right, bold: true),
+        ),
+      ]),
+      ...gen.row([
+        PosColumn(text: 'Uang Fisik', width: 6),
+        PosColumn(
+          text: _fmtShort(shift.actualCash ?? 0),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.row([
+        PosColumn(
+          text: 'Selisih',
+          width: 6,
+          styles: const PosStyles(bold: true),
+        ),
+        PosColumn(
+          text: _fmtShort(shift.difference ?? 0),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right, bold: true),
+        ),
+      ]),
+      ...gen.hr(),
+      ...gen.text('METODE PEMBAYARAN', styles: const PosStyles(bold: true)),
+      ...gen.row([
+        PosColumn(text: 'Tunai', width: 6),
+        PosColumn(
+          text: _fmtShort(totalCash),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.row([
+        PosColumn(text: 'QRIS', width: 6),
+        PosColumn(
+          text: _fmtShort(totalQris),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.row([
+        PosColumn(text: 'Kartu', width: 6),
+        PosColumn(
+          text: _fmtShort(totalCard),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.row([
+        PosColumn(text: 'Transfer', width: 6),
+        PosColumn(
+          text: _fmtShort(totalTransfer),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+      ...gen.hr(ch: '-'),
+      ...gen.row([
+        PosColumn(
+          text: 'TOTAL PENJUALAN',
+          width: 6,
+          styles: const PosStyles(bold: true),
+        ),
+        PosColumn(
+          text: _fmtShort(totalCash + totalQris + totalCard + totalTransfer),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right, bold: true),
+        ),
+      ]),
+      if (shift.notes != null && shift.notes!.isNotEmpty) ...[
+        ...gen.feed(1),
+        ...gen.text('Catatan:', styles: const PosStyles(bold: true)),
+        ...gen.text(_safe(shift.notes!)),
+      ],
+      ...gen.feed(2),
+      ...gen.cut(),
+    ];
+
+    return PrintBluetoothThermal.writeBytes(bytes);
+  }
+
+  List<int> _buildReceipt(
+    Generator gen,
+    PrinterSettings s,
+    Sale sale, {
+    bool reprint = false,
+    img.Image? logo,
+    OutletReceiptSettings? rs,
+  }) {
+    final bytes = <int>[];
+    final header = _resolveHeader(s);
+
+    // Resolusi field header: backend (rs) menang bila non-empty, jika
+    // tidak fallback ke outlet/PrinterSettings lama.
+    final bizName = (rs?.headerBusinessName.isNotEmpty ?? false)
+        ? rs!.headerBusinessName
+        : header.name;
+    final bizAddress = (rs?.headerAddress.isNotEmpty ?? false)
+        ? rs!.headerAddress
+        : header.address;
+    final bizPhone = (rs?.headerPhone.isNotEmpty ?? false)
+        ? rs!.headerPhone
+        : header.phone;
+
+    // Display toggles (default true = perilaku lama).
+    final showCashier = rs?.showCashierName ?? true;
+    final showCustomer = rs?.showCustomerName ?? true;
+    final showOrderType = rs?.showOrderType ?? true;
+    final showTable = rs?.showTableNumber ?? true;
+    final showPayment = rs?.showPaymentDetail ?? true;
+    final showNotes = rs?.showItemNotes ?? true;
+    final showTxId = rs?.showTransactionId ?? true;
+    final showTax = rs?.showTaxBreakdown ?? true;
+
+    bytes.addAll(gen.reset());
+
+    if (logo != null && (rs?.headerShowLogo ?? true)) {
+      bytes.addAll(gen.image(logo, align: PosAlign.center));
+    }
+
+    bytes.addAll(
+      gen.text(
+        _safe(bizName),
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      ),
+    );
+    if (bizAddress.isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          _safe(bizAddress),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    if (bizPhone.isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          _safe('Telp: $bizPhone'),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    // NPWP / Tax ID — penting untuk pelanggan bisnis yang butuh faktur.
+    if ((rs?.headerTaxId ?? '').isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          _safe('NPWP: ${rs!.headerTaxId}'),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    // Baris ekstra header (mis. Instagram, slogan) dari konfigurasi owner.
+    for (final line in (rs?.headerExtraLines ?? const <String>[])) {
+      if (line.trim().isEmpty) continue;
+      bytes.addAll(
+        gen.text(_safe(line), styles: const PosStyles(align: PosAlign.center)),
+      );
+    }
+    bytes.addAll(gen.hr());
+
+    if (showTxId) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'No', width: 4),
+          PosColumn(
+            text: '#${sale.invoiceId.isNotEmpty ? sale.invoiceId : sale.id}',
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    bytes.addAll(
+      gen.row([
+        PosColumn(text: 'Waktu', width: 4),
+        PosColumn(
+          text: formatDateTime(sale.createdAt),
+          width: 8,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+    );
+    if (showOrderType) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Tipe', width: 4),
+          PosColumn(
+            text: _safe(sale.orderType),
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    // Baris meja untuk dine-in — informatif bila banyak meja & beberapa
+    // tamu sekaligus. Lewati kalau tipe non-dine-in atau data meja kosong
+    // (mis. takeaway, atau dine-in yang belum di-assign meja).
+    // Pakai tablePositionDisplay (strip prefix "Meja") supaya tidak
+    // duplikat dengan label kolom kiri "Meja".
+    if (showTable && sale.isDineIn && sale.tablePositionDisplay != null) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Meja', width: 4),
+          PosColumn(
+            text: _safe(sale.tablePositionDisplay!),
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    if (showCashier && sale.cashierName.isNotEmpty) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Kasir', width: 4),
+          PosColumn(
+            text: _safe(sale.cashierName),
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    if (showCustomer && sale.customerName.isNotEmpty) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Pelanggan', width: 4),
+          PosColumn(
+            text: _safe(sale.customerName),
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    if (showPayment) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Bayar', width: 4),
+          PosColumn(
+            text: _safe(sale.paymentMethod),
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    bytes.addAll(gen.hr());
+
+    for (final it in sale.items) {
+      final line = it.variant.isEmpty
+          ? it.productName
+          : '${it.productName} (${it.variant})';
+      bytes.addAll(gen.text(_safe(line), styles: const PosStyles(bold: true)));
+      // C4: add-on/topping di bawah nama produk.
+      if (it.modifiersLabel.isNotEmpty) {
+        bytes.addAll(
+          gen.text(_safe('  + ${it.modifiersLabel}'), styles: const PosStyles()),
+        );
+      }
+      if (it.discountAmount > 0) {
+        bytes.addAll(
+          gen.row([
+            PosColumn(
+              text: '${it.qty} x ${_fmtShort(it.originalPrice)}',
+              width: 7,
+            ),
+            PosColumn(
+              text: _fmtShort(it.originalPrice * it.qty),
+              width: 5,
+              styles: const PosStyles(align: PosAlign.right),
+            ),
+          ]),
+        );
+        bytes.addAll(
+          gen.row([
+            PosColumn(text: '  Diskon ${it.discountLabel}', width: 7),
+            PosColumn(
+              text: '-${_fmtShort(it.discountAmount)}',
+              width: 5,
+              styles: const PosStyles(align: PosAlign.right),
+            ),
+          ]),
+        );
+      } else {
+        bytes.addAll(
+          gen.row([
+            PosColumn(text: '${it.qty} x ${_fmtShort(it.price)}', width: 7),
+            PosColumn(
+              text: _fmtShort(it.subtotal),
+              width: 5,
+              styles: const PosStyles(align: PosAlign.right),
+            ),
+          ]),
+        );
+      }
+      if (showNotes && it.note.isNotEmpty) {
+        bytes.addAll(
+          gen.text(_safe('  * ${it.note}'), styles: const PosStyles()),
+        );
+      }
+    }
+    bytes.addAll(gen.hr());
+
+    bytes.addAll(
+      gen.row([
+        PosColumn(text: 'Subtotal', width: 6),
+        PosColumn(
+          text: formatRupiah(sale.originalSubtotal),
+          width: 6,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+    );
+    if (sale.discountTotal > 0) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Total Diskon', width: 6),
+          PosColumn(
+            text: '-${formatRupiah(sale.discountTotal)}',
+            width: 6,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    if (sale.serviceCharge > 0) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Layanan', width: 6),
+          PosColumn(
+            text: formatRupiah(sale.serviceCharge),
+            width: 6,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    if (showTax && sale.tax > 0) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Pajak', width: 6),
+          PosColumn(
+            text: formatRupiah(sale.tax),
+            width: 6,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    bytes.addAll(
+      gen.row([
+        PosColumn(
+          text: 'TOTAL',
+          width: 6,
+          styles: const PosStyles(bold: true, height: PosTextSize.size2),
+        ),
+        PosColumn(
+          text: formatRupiah(sale.total),
+          width: 6,
+          styles: const PosStyles(
+            align: PosAlign.right,
+            bold: true,
+            height: PosTextSize.size2,
+          ),
+        ),
+      ]),
+    );
+    if (showPayment && sale.cashAmount > 0) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Tunai', width: 6),
+          PosColumn(
+            text: formatRupiah(sale.cashAmount),
+            width: 6,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Kembalian', width: 6),
+          PosColumn(
+            text: formatRupiah(sale.changeAmount),
+            width: 6,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+
+    if ((rs?.showLoyaltyPoints ?? true) && sale.pointsEarned > 0) {
+      bytes.addAll(
+        gen.text(
+          _safe('Poin diperoleh: +${sale.pointsEarned}'),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+
+    bytes.addAll(gen.hr());
+
+    if (sale.isRefunded) {
+      bytes.addAll(
+        gen.text(
+          '*** REFUNDED ***',
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
+    }
+    if (reprint) {
+      bytes.addAll(
+        gen.text(
+          '-- CETAK ULANG --',
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    if (sale.pendingSync) {
+      bytes.addAll(
+        gen.text(
+          '** OFFLINE - BELUM SINKRON **',
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
+    }
+
+    bytes.addAll(gen.feed(1));
+    final noresi = sale.invoiceId.isNotEmpty
+        ? sale.invoiceId
+        : sale.id.toString();
+    bytes.addAll(
+      gen.qrcode('resi:$noresi', align: PosAlign.center, size: QRSize.size5),
+    );
+    bytes.addAll(gen.feed(1));
+
+    // Footer: ucapan terima kasih (backend menang), teks promo, lalu QR
+    // review opsional — semuanya dari konfigurasi owner di backend.
+    final thanks = (rs?.footerThanksText.isNotEmpty ?? false)
+        ? rs!.footerThanksText
+        : s.storeFooter;
+    if (thanks.isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          _safe(thanks),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    if ((rs?.footerPromoText ?? '').isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          _safe(rs!.footerPromoText),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+    }
+    if ((rs?.footerShowQr ?? false) && (rs?.footerQrUrl ?? '').isNotEmpty) {
+      bytes.addAll(gen.feed(1));
+      bytes.addAll(
+        gen.qrcode(rs!.footerQrUrl, align: PosAlign.center, size: QRSize.size4),
+      );
+      if (rs.footerQrCaption.isNotEmpty) {
+        bytes.addAll(
+          gen.text(
+            _safe(rs.footerQrCaption),
+            styles: const PosStyles(align: PosAlign.center),
+          ),
+        );
+      }
+    }
+
+    bytes.addAll(
+      gen.text(
+        'Powered by NARA POS',
+        styles: const PosStyles(align: PosAlign.center),
+      ),
+    );
+    bytes.addAll(gen.cut());
+    return bytes;
+  }
+
+  String _fmtShort(double v) => formatRupiah(v).replaceAll('Rp ', '');
+
+  String _safe(String s) {
+    final buf = StringBuffer();
+    for (final r in s.runes) {
+      if (r <= 0xFF) {
+        buf.writeCharCode(r);
+      } else {
+        buf.write('?');
+      }
+    }
+    return buf.toString();
+  }
+}
+
+String _paperLabel(PaperSize size) {
+  if (size == PaperSize.mm80) return '80mm';
+  if (size == PaperSize.mm72) return '72mm';
+  return '58mm';
+}
+
+String paperSizeLabel(PaperSize size) => _paperLabel(size);
+
+class _ReceiptHeader {
+  final String name;
+  final String address;
+  final String phone;
+  const _ReceiptHeader({
+    required this.name,
+    required this.address,
+    required this.phone,
+  });
+}
+
+class ReceiptHeaderDefaults {
+  final String name;
+  final String address;
+  final String phone;
+  const ReceiptHeaderDefaults({
+    required this.name,
+    required this.address,
+    required this.phone,
+  });
+}
+
+ReceiptHeaderDefaults receiptHeaderDefaultsFrom(Outlet? outlet) {
+  return ReceiptHeaderDefaults(
+    name: outlet?.name ?? '',
+    address: outlet?.address ?? '',
+    phone: outlet?.phone ?? '',
+  );
+}
+
+final receiptHeaderDefaultsProvider = Provider<ReceiptHeaderDefaults>((ref) {
+  final outlet = ref.watch(activeOutletProvider);
+  return receiptHeaderDefaultsFrom(outlet);
+});
+
+final printerServiceProvider = Provider<PrinterService>((ref) {
+  return PrinterService(ref);
+});

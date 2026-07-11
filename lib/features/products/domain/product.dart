@@ -1,0 +1,270 @@
+import '../../../core/format.dart';
+class Product {
+  String? remoteId;
+  String name;
+  String description;
+  double price;
+  int stock;
+  // lowStockThreshold: kalau stock <= threshold (dan threshold > 0),
+  // produk tampil sebagai "stok menipis" di kasir. Threshold = 0
+  // berarti tidak ada alert untuk produk ini.
+  int lowStockThreshold;
+  // stockUnit untuk display di kasir ("5 pcs", "200 ml", "1.5 kg").
+  String stockUnit;
+  // Counter total qty terjual all-time. Backend increment di setiap
+  // transactions.Create. Dipakai badge "Terjual: N" (opt-in lewat
+  // outlet.show_sold_count).
+  int sold;
+  String? categoryName;
+  String? categoryId;
+  String? sku;
+  String? barcode;
+  String emoji;
+  String? imageUrl;
+  bool isAvailable;
+  bool trackStock;
+  String discountType;
+  double discountValue;
+  String discountName;
+  String? outletRemoteId;
+  List<ProductVariant> variants;
+
+  // Local UI state
+  bool isFavorite;
+
+  Product({
+    this.remoteId,
+    required this.name,
+    this.description = '',
+    required this.price,
+    this.stock = 0,
+    this.lowStockThreshold = 0,
+    this.stockUnit = 'pcs',
+    this.sold = 0,
+    this.categoryName,
+    this.categoryId,
+    this.sku,
+    this.barcode,
+    this.emoji = '📦',
+    this.imageUrl,
+    this.isAvailable = true,
+    this.trackStock = true,
+    this.discountType = 'none',
+    this.discountValue = 0,
+    this.discountName = '',
+    this.outletRemoteId,
+    this.variants = const [],
+    this.isFavorite = false,
+  });
+
+  bool get hasDiscount => discountType != 'none' && discountValue > 0;
+  bool get isOutOfStock => trackStock && stock <= 0;
+  // isLowStock: true kalau produk track stock, threshold > 0, dan
+  // stock dalam range (0, threshold]. Out-of-stock SUDAH ada
+  // isOutOfStock terpisah — di UI biasanya rendering badge berbeda.
+  bool get isLowStock =>
+      trackStock &&
+      lowStockThreshold > 0 &&
+      stock > 0 &&
+      stock <= lowStockThreshold;
+
+  Product copyWith({
+    String? remoteId,
+    String? name,
+    String? description,
+    double? price,
+    int? stock,
+    int? lowStockThreshold,
+    String? stockUnit,
+    int? sold,
+    String? categoryName,
+    String? categoryId,
+    String? sku,
+    String? barcode,
+    String? emoji,
+    String? imageUrl,
+    bool? isAvailable,
+    bool? trackStock,
+    String? discountType,
+    double? discountValue,
+    String? discountName,
+    String? outletRemoteId,
+    List<ProductVariant>? variants,
+    bool? isFavorite,
+  }) {
+    return Product(
+      remoteId: remoteId ?? this.remoteId,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      stock: stock ?? this.stock,
+      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
+      stockUnit: stockUnit ?? this.stockUnit,
+      sold: sold ?? this.sold,
+      categoryName: categoryName ?? this.categoryName,
+      categoryId: categoryId ?? this.categoryId,
+      sku: sku ?? this.sku,
+      barcode: barcode ?? this.barcode,
+      emoji: emoji ?? this.emoji,
+      imageUrl: imageUrl ?? this.imageUrl,
+      isAvailable: isAvailable ?? this.isAvailable,
+      trackStock: trackStock ?? this.trackStock,
+      discountType: discountType ?? this.discountType,
+      discountValue: discountValue ?? this.discountValue,
+      discountName: discountName ?? this.discountName,
+      outletRemoteId: outletRemoteId ?? this.outletRemoteId,
+      variants: variants ?? this.variants,
+      isFavorite: isFavorite ?? this.isFavorite,
+    );
+  }
+
+  factory Product.custom({required String name, required double price}) {
+    return Product(
+      name: name,
+      price: price,
+      emoji: '🛒',
+      description: 'Produk Custom',
+    );
+  }
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      remoteId: json['id']?.toString(),
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      price: (json['price'] as num? ?? 0).toDouble(),
+      stock: json['stock'] as int? ?? 0,
+      lowStockThreshold: json['low_stock_threshold'] as int? ?? 0,
+      stockUnit: json['stock_unit'] as String? ?? 'pcs',
+      sold: json['sold'] as int? ?? 0,
+      categoryName: json['category'] as String?,
+      categoryId: json['category_id']?.toString(),
+      sku: json['sku'] as String?,
+      barcode: json['barcode'] as String?,
+      emoji: json['emoji'] as String? ?? '📦',
+      imageUrl: json['image_url'] as String?,
+      isAvailable: json['is_available'] as bool? ?? true,
+      trackStock: json['track_stock'] as bool? ?? true,
+      discountType: json['discount_type'] as String? ?? 'none',
+      discountValue: (json['discount_value'] as num? ?? 0).toDouble(),
+      discountName: json['discount_name'] as String? ?? '',
+      outletRemoteId: json['outlet_id']?.toString(),
+      isFavorite: json['is_favorite'] as bool? ?? false,
+      variants: (json['variants'] as List? ?? [])
+          .map((v) => ProductVariant.fromJson(v))
+          .toList(),
+    );
+  }
+
+  /// Serialisasi balik ke bentuk yang dibaca [Product.fromJson] — dipakai
+  /// untuk cache produk offline (SQLite). Round-trip key-nya sengaja
+  /// dibuat persis sama dengan fromJson.
+  Map<String, dynamic> toJson() => {
+        'id': remoteId,
+        'name': name,
+        'description': description,
+        'price': price,
+        'stock': stock,
+        'low_stock_threshold': lowStockThreshold,
+        'stock_unit': stockUnit,
+        'sold': sold,
+        'category': categoryName,
+        'category_id': categoryId,
+        'sku': sku,
+        'barcode': barcode,
+        'emoji': emoji,
+        'image_url': imageUrl,
+        'is_available': isAvailable,
+        'track_stock': trackStock,
+        'discount_type': discountType,
+        'discount_value': discountValue,
+        'discount_name': discountName,
+        'outlet_id': outletRemoteId,
+        'is_favorite': isFavorite,
+        'variants': variants.map((v) => v.toJson()).toList(),
+      };
+
+  double get discountedPrice {
+    if (discountType == 'fixed') {
+      return (price - discountValue).clamp(0, double.infinity);
+    }
+    if (discountType == 'percent') {
+      return (price * (1 - discountValue / 100)).clamp(0, double.infinity);
+    }
+    return price;
+  }
+
+  String get discountLabel {
+    if (discountType == 'fixed') return formatRupiah(discountValue);
+    if (discountType == 'percent') return '${discountValue.toInt()}%';
+    return '';
+  }
+}
+
+class ProductVariant {
+  String? remoteId;
+  String productId;
+  String name;
+  String? sku;
+  double price;
+  int stock;
+  String discountType;
+  double discountValue;
+  String discountName;
+
+  ProductVariant({
+    this.remoteId,
+    required this.productId,
+    required this.name,
+    this.sku,
+    required this.price,
+    this.stock = 0,
+    this.discountType = 'none',
+    this.discountValue = 0,
+    this.discountName = '',
+  });
+
+  factory ProductVariant.fromJson(Map<String, dynamic> json) {
+    return ProductVariant(
+      remoteId: json['id']?.toString(),
+      productId: json['product_id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      sku: json['sku'] as String?,
+      price: (json['price'] as num? ?? 0).toDouble(),
+      stock: json['stock'] as int? ?? 0,
+      discountType: json['discount_type'] as String? ?? 'none',
+      discountValue: (json['discount_value'] as num? ?? 0).toDouble(),
+      discountName: json['discount_name'] as String? ?? '',
+    );
+  }
+
+  bool get hasDiscount => discountType != 'none' && discountValue > 0;
+
+  Map<String, dynamic> toJson() => {
+        'id': remoteId,
+        'product_id': productId,
+        'name': name,
+        'sku': sku,
+        'price': price,
+        'stock': stock,
+        'discount_type': discountType,
+        'discount_value': discountValue,
+        'discount_name': discountName,
+      };
+
+  double get discountedPrice {
+    if (discountType == 'fixed') {
+      return (price - discountValue).clamp(0, double.infinity);
+    }
+    if (discountType == 'percent') {
+      return (price * (1 - discountValue / 100)).clamp(0, double.infinity);
+    }
+    return price;
+  }
+
+  String get discountLabel {
+    if (discountType == 'fixed') return formatRupiah(discountValue);
+    if (discountType == 'percent') return '${discountValue.toInt()}%';
+    return '';
+  }
+}

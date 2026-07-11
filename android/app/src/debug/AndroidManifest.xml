@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The INTERNET permission is required for development. Specifically,
+         the Flutter tool needs it to communicate with the running application
+         to allow setting breakpoints, to provide hot reload, etc.
+    -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Khusus build DEBUG: izinkan HTTP cleartext supaya app bisa terhubung
+         ke backend dev lokal (http://<LAN-IP>:3002 atau http://localhost:3002
+         via `adb reverse`). Android API 28+ memblokir cleartext secara default.
+         Tidak diterapkan ke build release (production memakai HTTPS). -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

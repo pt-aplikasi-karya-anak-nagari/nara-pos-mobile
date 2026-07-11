@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "659660163327",
+    "project_id": "nara-pos",
+    "storage_bucket": "nara-pos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:659660163327:android:0468d41faa25a2e54264ca",
+        "android_client_info": {
+          "package_name": "com.example.nara_pos_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAo5kub7wnL5L-mU-8uFpRiXSbu-cojRIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

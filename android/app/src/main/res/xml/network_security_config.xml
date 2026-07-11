@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mengizinkan HTTP polos (cleartext) agar app bisa terhubung ke backend DEV
+  yang berjalan di LAN/localhost (http://…). Produksi memakai https, jadi tak
+  terpengaruh. Host DEV yang umum sudah didaftarkan; base-config juga mengizinkan
+  cleartext agar ganti IP LAN tidak perlu edit file ini.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Host backend dev yang dipakai (sesuaikan bila IP berubah). -->
+        <domain includeSubdomains="true">192.0.18.51</domain>
+        <domain includeSubdomains="true">192.0.88.24</domain>
+        <domain includeSubdomains="true">192.168.1.20</domain>
+        <!-- Loopback: emulator Android (10.0.2.2) + localhost. -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

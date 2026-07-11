@@ -1,0 +1,20 @@
+{
+  // Hot reload OTOMATIS tiap file disimpan (termasuk auto-save) — hanya berlaku
+  // di sesi DEBUG (config "NARA · dev" / "NARA · prod"). Set "manual" kalau mau
+  // hot reload hanya saat save manual (Ctrl/Cmd+S), atau "never" untuk mematikan.
+  "dart.flutterHotReloadOnSave": "all",
+
+  // Jangan hot RESTART otomatis saat save (lebih lambat) — cukup hot reload.
+  // Hot restart tetap bisa manual via tombol ⟳ di toolbar debug (atau Shift+R
+  // di panel Debug Console).
+  "dart.flutterHotRestartOnSave": "never",
+
+  // Format & rapikan import saat save (opsional, membantu konsistensi).
+  "editor.formatOnSave": true,
+  "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  }
+}
