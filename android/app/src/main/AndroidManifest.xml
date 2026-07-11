@@ -44,7 +44,7 @@
             <data android:mimeType="text/plain"/>
         </intent>
         <!-- Diperlukan url_launcher (Android 11+) agar bisa membuka URL
-             pembayaran Xendit di browser. -->
+             eksternal (mis. struk/invoice, tautan) di browser. -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
