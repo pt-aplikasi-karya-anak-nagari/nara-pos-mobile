@@ -15,6 +15,7 @@ import '../../transactions/domain/sale.dart';
 import '../data/shift_repository.dart';
 import '../domain/shift.dart';
 import 'cash_movement_sheet.dart';
+import 'z_report_page.dart';
 
 class ShiftHistoryPage extends HookConsumerWidget {
   const ShiftHistoryPage({super.key});
@@ -171,7 +172,17 @@ class _PhoneList extends ConsumerWidget {
         itemCount: items.length,
         separatorBuilder: (_, _) => const Gap(12),
         itemBuilder: (context, index) {
-          return _ShiftListCard(shift: items[index]);
+          final shift = items[index];
+          return _ShiftListCard(
+            shift: shift,
+            onTap: shift.remoteId != null
+                ? () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ZReportPage(shiftId: shift.remoteId!),
+                      ),
+                    )
+                : null,
+          );
         },
       ),
     );
@@ -456,6 +467,20 @@ class _TabletDetailPanel extends ConsumerWidget {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (s.remoteId != null)
+                  IconButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ZReportPage(shiftId: s.remoteId!),
+                      ),
+                    ),
+                    icon: const HugeIcon(
+                      icon: AppIcons.receiptLong,
+                      color: kPrimary,
+                      size: 20,
+                    ),
+                    tooltip: 'Z-Report (Laporan Tutup Shift)',
+                  ),
                 if (!s.isOpen)
                   IconButton(
                     onPressed: () async {
@@ -885,14 +910,15 @@ class _SubHeader extends StatelessWidget {
 
 class _ShiftListCard extends StatelessWidget {
   final Shift shift;
-  const _ShiftListCard({required this.shift});
+  final VoidCallback? onTap;
+  const _ShiftListCard({required this.shift, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final isNegative = (shift.difference ?? 0) < 0;
     final hasDifference = shift.difference != null && shift.difference != 0;
 
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -960,6 +986,17 @@ class _ShiftListCard extends StatelessWidget {
           else
             Icon(Icons.chevron_right, color: kTextMid),
         ],
+      ),
+    );
+
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: card,
       ),
     );
   }

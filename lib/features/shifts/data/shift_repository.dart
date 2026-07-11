@@ -8,6 +8,7 @@ import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/offline/shift_outbox.dart';
 import '../../transactions/domain/sale.dart';
 import '../domain/shift.dart';
+import '../domain/z_report.dart';
 import 'shift_api_service.dart';
 
 /// Cache offline shift aktif terakhir per outlet (objek tunggal). Selain
@@ -84,6 +85,12 @@ final shiftRepositoryProvider = Provider<ShiftRepository>((ref) {
 final cashMovementsProvider =
     FutureProvider.family<List<Map<String, dynamic>>, String>((ref, shiftId) {
   return ref.read(shiftApiServiceProvider).getCashMovements(shiftId);
+});
+
+// Z-Report (laporan tutup shift) untuk sebuah shift. Di-cache per shiftId.
+final shiftZReportProvider =
+    FutureProvider.family<ZReport, String>((ref, shiftId) {
+  return ref.read(shiftApiServiceProvider).getShiftZReport(shiftId);
 });
 
 class ActiveShiftNotifier extends AsyncNotifier<Shift?> {

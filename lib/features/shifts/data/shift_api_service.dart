@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/shift.dart';
+import '../domain/z_report.dart';
 
 class ShiftApiService extends BaseApiService {
   ShiftApiService(super.dio);
@@ -64,6 +65,18 @@ class ShiftApiService extends BaseApiService {
           'occurred_at': occurredAt.toUtc().toIso8601String(),
       },
       converter: (data) => Shift.fromJson(data),
+    );
+  }
+
+  // ── Z-Report (laporan tutup shift) ────────────────────────────────────
+  /// Ambil Z-Report untuk sebuah shift: info shift, rincian pembayaran per
+  /// metode, dan total penjualan/pajak/service/diskon. Agregasi dihitung di
+  /// backend supaya konsisten dengan web.
+  Future<ZReport> getShiftZReport(String shiftId) async {
+    return get(
+      '/shifts/$shiftId/z-report',
+      converter: (data) =>
+          ZReport.fromJson(Map<String, dynamic>.from(data as Map)),
     );
   }
 

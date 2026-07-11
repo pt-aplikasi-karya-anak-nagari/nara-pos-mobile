@@ -19,6 +19,7 @@ import '../data/export_service.dart';
 import '../data/laporan_report_service.dart';
 import 'excel_preview_page.dart';
 import 'pdf_preview_page.dart';
+import 'tax_report_page.dart';
 
 enum _Period { harian, bulanan, tahunan }
 
@@ -367,6 +368,15 @@ class LaporanPage extends HookConsumerWidget {
                                     ),
                                   ),
                                 ),
+                                const Gap(12),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32.0,
+                                  ),
+                                  child: _TaxReportTile(
+                                    onTap: () => _openTaxReport(context),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -570,6 +580,10 @@ class LaporanPage extends HookConsumerWidget {
                               onNext: () => shift(1),
                             ),
                             const Gap(16),
+                            _TaxReportTile(
+                              onTap: () => _openTaxReport(context),
+                            ),
+                            const Gap(16),
                             _StatGrid(
                               columns: statColumns,
                               children: statCards,
@@ -693,6 +707,75 @@ class LaporanPage extends HookConsumerWidget {
       case _Period.tahunan:
         return '${d.year}';
     }
+  }
+}
+
+void _openTaxReport(BuildContext context) {
+  Navigator.of(context, rootNavigator: true).push(
+    MaterialPageRoute(builder: (_) => const TaxReportPage()),
+  );
+}
+
+/// Tombol menuju layar Laporan Pajak (PPN/PB1). Dipakai di panel tablet
+/// maupun konten mobile pada Laporan.
+class _TaxReportTile extends StatelessWidget {
+  final VoidCallback onTap;
+  const _TaxReportTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kDivider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: kPrimary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: HugeIcon(
+                  icon: AppIcons.percent,
+                  color: kPrimary,
+                  size: 18,
+                ),
+              ),
+            ),
+            const Gap(12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Laporan Pajak (PPN/PB1)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: kTextDark,
+                    ),
+                  ),
+                  Text(
+                    'Keluaran per masa untuk SPT',
+                    style: TextStyle(fontSize: 11, color: kTextMid),
+                  ),
+                ],
+              ),
+            ),
+            HugeIcon(icon: AppIcons.chevronRight, color: kTextMid, size: 16),
+          ],
+        ),
+      ),
+    );
   }
 }
 
