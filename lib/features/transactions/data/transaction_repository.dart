@@ -281,6 +281,10 @@ class TransactionRepository {
     // Ikut tersimpan di payload outbox sehingga jalur offline pun mengirim split
     // saat sync.
     List<Map<String, dynamic>>? payments,
+    // B1c: PIN otorisasi manajer. Hanya diisi saat checkout pertama ditolak
+    // backend karena diskon melampaui batas kasir (`max_discount_percent`) dan
+    // kasir mengulang dengan PIN. Null/kosong → tidak dikirim (perilaku lama).
+    String? overridePin,
   }) async {
     // Idempotency key: digenerate sekali per checkout dan ikut tersimpan di
     // payload outbox. Saat transaksi offline di-retry, ref yang SAMA dikirim
@@ -326,6 +330,11 @@ class TransactionRepository {
       // Bukti pembayaran (foto QRIS scan / struk transfer) — opsional;
       // kalau cash atau user skip upload, kirim string kosong.
       'payment_proof_url': paymentProofUrl ?? '',
+      // B1c: PIN otorisasi manajer bila diskon melampaui batas kasir. Dikirim
+      // hanya bila diisi — checkout normal (diskon di bawah batas) tak
+      // menyertakannya sehingga perilaku lama tidak berubah.
+      if (overridePin != null && overridePin.isNotEmpty)
+        'override_pin': overridePin,
       // Backend memakai field ini untuk update poin pelanggan
       // (lihat transactionService.CreateTransaction → AddPoints).
       // Kalau tidak dikirim, delta = 0 dan poin pelanggan tidak akan berubah.

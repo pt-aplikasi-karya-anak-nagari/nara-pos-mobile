@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -22,6 +23,7 @@ import '../../../payments/data/payment_method_repository.dart';
 import '../../../payments/domain/payment_method.dart';
 import '../../../customers/data/customer_repository.dart';
 import '../../../transactions/data/transaction_repository.dart';
+import '../../../transactions/domain/sale.dart';
 import '../../providers.dart';
 import '../../../shifts/data/shift_repository.dart';
 import '../../../settings/data/loyalty_settings.dart';
@@ -34,6 +36,87 @@ import 'table_selector_sheet.dart';
 // Payment methods are now loaded from the database via paymentMethodsFutureProvider
 
 // Dynamic order types will be loaded from the database via orderTypesFutureProvider
+
+/// B1c: dialog PIN otorisasi manajer saat diskon melampaui batas kasir
+/// (`max_discount_percent`). Mengikuti pola dialog PIN void/refund (B1a): input
+/// numeric obscure 4-6 digit dengan pesan error backend ("...melebihi batas...")
+/// ditampilkan di atas. Mengembalikan PIN bila dikonfirmasi, atau null bila
+/// dibatalkan.
+Future<String?> _promptManagerPin(
+  BuildContext context, {
+  required String errorText,
+}) async {
+  final pinController = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        final pin = pinController.text.trim();
+        final pinValid = pin.length >= 4 && pin.length <= 6;
+        return AlertDialog(
+          title: const Text('Otorisasi Manajer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kDanger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  errorText,
+                  style: const TextStyle(
+                    color: kDanger,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Gap(12),
+              const Text(
+                'Diskon melampaui batas kasir. Masukkan PIN otorisasi manajer '
+                'berwenang untuk melanjutkan transaksi.',
+              ),
+              const Gap(12),
+              TextField(
+                controller: pinController,
+                autofocus: true,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (_) => setLocal(() {}),
+                decoration: InputDecoration(
+                  labelText: 'PIN Otorisasi Manajer',
+                  hintText: '4-6 digit',
+                  counterText: '',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: pinValid ? () => Navigator.pop(ctx, pin) : null,
+              child: const Text('Otorisasi'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+  pinController.dispose();
+  return result;
+}
 
 class PaymentSheet extends HookConsumerWidget {
   final ValueChanged<String> onPaid;
@@ -301,9 +384,18 @@ class PaymentSheet extends HookConsumerWidget {
       final awardedPoints = (basePoints * custTierMult).round();
       processing.value = true;
       try {
-      final sale = await ref
-          .read(transactionRepositoryProvider)
-          .saveFromCart(
+      // B1c: diskon melampaui batas kasir → backend menolak checkout (400,
+      // pesan mengandung "melebihi batas"). Bungkus panggilan checkout dalam
+      // loop retry: bila ditolak karena batas, minta PIN otorisasi manajer
+      // (dialog mengikuti pola PIN void/refund B1a) lalu ulangi checkout dengan
+      // `override_pin`. Diskon di bawah batas tidak pernah memicu dialog.
+      Sale? saleResult;
+      String? overridePin;
+      while (saleResult == null) {
+        try {
+          saleResult = await ref
+              .read(transactionRepositoryProvider)
+              .saveFromCart(
             cart: cart,
             subtotal: subtotal,
             originalSubtotal: originalSubtotal,
@@ -351,7 +443,24 @@ class PaymentSheet extends HookConsumerWidget {
             tableId: activeTable?.id,
             tableName: activeTable?.name,
             paymentProofUrl: proofUrl.value,
+            overridePin: overridePin,
           );
+        } catch (e) {
+          final msg = e.toString().replaceAll('Exception: ', '');
+          // Hanya error "diskon melebihi batas" yang boleh dilewati via PIN
+          // manajer. Error lain (stok habis, shift tak aktif, dll) diteruskan
+          // ke penanganan di bawah supaya tampil apa adanya ke kasir.
+          if (!msg.contains('melebihi batas') || !context.mounted) rethrow;
+          final pin = await _promptManagerPin(context, errorText: msg);
+          // Dibatalkan → keluar tanpa error; keranjang dipertahankan agar kasir
+          // bisa menyesuaikan diskon atau mencoba lagi.
+          if (pin == null) return;
+          overridePin = pin;
+          // Ulangi checkout dengan override_pin. Bila PIN salah, backend
+          // membalas pesan "melebihi batas" lagi → dialog dibuka ulang.
+        }
+      }
+      final sale = saleResult;
 
       // Status meja kini diupdate otomatis oleh TransactionRepository.saveFromCart
 
