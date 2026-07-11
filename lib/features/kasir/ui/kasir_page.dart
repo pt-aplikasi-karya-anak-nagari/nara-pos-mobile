@@ -15,6 +15,7 @@ import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/beep_service.dart';
 import '../../../core/format.dart';
+import '../../../core/realtime/realtime_service.dart';
 import '../../../core/i18n.dart';
 import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/sale_outbox.dart';
@@ -45,6 +46,25 @@ class KasirPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Realtime: notifikasi stok menipis (event inventory.low_stock dari backend
+    // via NATS→SSE) → snackbar sekilas supaya kasir/owner sadar untuk restock.
+    ref.listen(realtimeEventsProvider, (prev, next) {
+      final ev = next.asData?.value;
+      if (ev == null || ev.type != 'inventory.low_stock') return;
+      final name = (ev.data['name'] as String?) ?? 'Produk';
+      final stock = ev.data['stock'];
+      final unit = (ev.data['stock_unit'] as String?) ?? '';
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Stok menipis: $name — sisa $stock $unit'.trim()),
+          backgroundColor: const Color(0xFFB45309), // amber-700
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    });
+
     final category = ref.watch(selectedMainCategoryProvider);
     final scanMode = useState(false);
     final dynamicCats = ref.watch(categoryNamesProvider);
