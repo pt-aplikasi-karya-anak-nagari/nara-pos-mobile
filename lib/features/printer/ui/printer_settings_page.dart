@@ -9,6 +9,8 @@ import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/responsive.dart';
 import '../../../shared/widgets/tablet_components.dart';
+import '../domain/print_station.dart';
+import '../data/print_station_repository.dart';
 import '../data/printer_service.dart';
 import '../data/printer_settings.dart';
 import '../../../core/permission_service.dart';
@@ -174,6 +176,15 @@ class PrinterSettingsPage extends HookConsumerWidget {
       onAutoPrint: (v) =>
           ref.read(printerSettingsProvider.notifier).setAutoPrint(v),
       onCopies: (v) => ref.read(printerSettingsProvider.notifier).setCopies(v),
+      onAutoPrintKitchen: (v) =>
+          ref.read(printerSettingsProvider.notifier).setAutoPrintKitchen(v),
+    );
+
+    // E11: pemetaan stasiun cetak → printer. Perangkat yang sudah dipindai
+    // dipakai sebagai pilihan target per stasiun.
+    final stationMappingCard = _StationMappingCard(
+      settings: settings,
+      devices: devices.value,
     );
 
     // ── Layout ───────────────────────────────────────────────────────────────
@@ -234,6 +245,8 @@ class PrinterSettingsPage extends HookConsumerWidget {
                             children: [
                               settingsPanel,
                               const Gap(24),
+                              stationMappingCard,
+                              const Gap(24),
                               _HeaderEditorCard(settings: settings),
                             ],
                           ),
@@ -286,6 +299,8 @@ class PrinterSettingsPage extends HookConsumerWidget {
                       devicePanel,
                       const Gap(24),
                       settingsPanel,
+                      const Gap(24),
+                      stationMappingCard,
                       const Gap(24),
                       _HeaderEditorCard(settings: settings),
                     ],
@@ -400,12 +415,14 @@ class _SettingsPanel extends StatelessWidget {
   final ValueChanged<PaperSize> onPaperSize;
   final ValueChanged<bool> onAutoPrint;
   final ValueChanged<int> onCopies;
+  final ValueChanged<bool> onAutoPrintKitchen;
 
   const _SettingsPanel({
     required this.settings,
     required this.onPaperSize,
     required this.onAutoPrint,
     required this.onCopies,
+    required this.onAutoPrintKitchen,
   });
 
   @override
@@ -422,8 +439,10 @@ class _SettingsPanel extends StatelessWidget {
         _PrintSettingsCard(
           autoPrint: settings.autoPrint,
           copies: settings.copies,
+          autoPrintKitchen: settings.autoPrintKitchen,
           onAutoPrint: onAutoPrint,
           onCopies: onCopies,
+          onAutoPrintKitchen: onAutoPrintKitchen,
         ),
       ],
     );
@@ -1107,13 +1126,17 @@ class _PaperSizeSelector extends StatelessWidget {
 class _PrintSettingsCard extends StatelessWidget {
   final bool autoPrint;
   final int copies;
+  final bool autoPrintKitchen;
   final ValueChanged<bool> onAutoPrint;
   final ValueChanged<int> onCopies;
+  final ValueChanged<bool> onAutoPrintKitchen;
   const _PrintSettingsCard({
     required this.autoPrint,
     required this.copies,
+    required this.autoPrintKitchen,
     required this.onAutoPrint,
     required this.onCopies,
+    required this.onAutoPrintKitchen,
   });
 
   @override
@@ -1250,6 +1273,56 @@ class _PrintSettingsCard extends StatelessWidget {
               ],
             ),
           ),
+          Divider(height: 1, color: kDivider, indent: 16, endIndent: 16),
+          // E11: Auto-print tiket dapur/bar row.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: kPrimary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Center(
+                    child: HugeIcon(
+                      icon: AppIcons.printer,
+                      color: kPrimary,
+                      size: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cetak tiket dapur',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: kTextDark,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Gap(2),
+                      Text(
+                        'Cetak tiket dapur/bar per stasiun saat checkout',
+                        style: TextStyle(fontSize: 11, color: kTextMid),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: autoPrintKitchen,
+                  onChanged: onAutoPrintKitchen,
+                  activeThumbColor: kPrimary,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1287,6 +1360,173 @@ class _StepButton extends StatelessWidget {
             size: 16,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Station → printer mapping (E11) ──────────────────────────────────────────
+
+/// Kartu pemetaan stasiun cetak (dapur/bar) → printer Bluetooth. Stasiun tanpa
+/// ikatan memakai printer default. Perangkat pilihan diambil dari daftar
+/// paired yang sudah dipindai halaman ini.
+class _StationMappingCard extends ConsumerWidget {
+  final PrinterSettings settings;
+  final List<BluetoothInfo> devices;
+  const _StationMappingCard({required this.settings, required this.devices});
+
+  String _labelForMac(String mac) {
+    if (mac.isEmpty) {
+      final def = settings.deviceName.isNotEmpty ? settings.deviceName : 'belum diatur';
+      return 'Printer default ($def)';
+    }
+    for (final d in devices) {
+      if (d.macAdress == mac) return d.name;
+    }
+    return mac; // perangkat tak terlihat/paired saat ini.
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stationsAsync = ref.watch(printStationsFutureProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionLabel(title: 'Printer Stasiun'),
+        const Gap(10),
+        stationsAsync.when(
+          loading: () => _mapWrap(
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          ),
+          error: (_, _) => _mapWrap(
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Gagal memuat stasiun cetak.',
+                style: TextStyle(fontSize: 12, color: kTextMid),
+              ),
+            ),
+          ),
+          data: (stations) {
+            final active = stations.where((s) => s.isActive).toList();
+            if (active.isEmpty) {
+              return _mapWrap(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded,
+                          color: kTextMid, size: 15),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Belum ada stasiun cetak. Semua item dicetak ke printer default.',
+                          style: TextStyle(fontSize: 11, color: kTextMid),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final rows = <Widget>[];
+            for (var i = 0; i < active.length; i++) {
+              if (i > 0) {
+                rows.add(
+                  Divider(height: 1, color: kDivider, indent: 16, endIndent: 16),
+                );
+              }
+              rows.add(_stationRow(context, ref, active[i]));
+            }
+            return _mapWrap(Column(children: rows));
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _mapWrap(Widget child) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kDivider),
+        ),
+        child: child,
+      );
+
+  Widget _stationRow(BuildContext context, WidgetRef ref, PrintStation station) {
+    final boundMac = settings.macForStation(station.id);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: kAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Center(
+              child: HugeIcon(icon: AppIcons.printer, color: kAccent, size: 18),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  station.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: kTextDark,
+                    fontSize: 13,
+                  ),
+                ),
+                const Gap(2),
+                Text(
+                  _labelForMac(boundMac),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: kTextMid),
+                ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Pilih printer',
+            icon: Icon(
+              Icons.arrow_drop_down_rounded,
+              color: kTextMid,
+              size: 24,
+            ),
+            onSelected: (mac) => ref
+                .read(printerSettingsProvider.notifier)
+                .setStationPrinter(station.id, mac),
+            itemBuilder: (ctx) => [
+              const PopupMenuItem<String>(
+                value: '',
+                child: Text('Printer default'),
+              ),
+              ...devices.map(
+                (d) => PopupMenuItem<String>(
+                  value: d.macAdress,
+                  child: Text(d.name.isNotEmpty ? d.name : d.macAdress),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

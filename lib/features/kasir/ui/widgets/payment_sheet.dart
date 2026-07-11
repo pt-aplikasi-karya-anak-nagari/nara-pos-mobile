@@ -508,6 +508,13 @@ class PaymentSheet extends HookConsumerWidget {
       if (printerSettings.autoPrint && printerSettings.hasDevice) {
         await ref.read(printerServiceProvider).printReceipt(sale);
       }
+      // E11: cetak otomatis tiket dapur/bar per stasiun. `cart` di-snapshot di
+      // awal confirmPay (sebelum keranjang di-clear di atas), jadi kategori
+      // produk untuk routing masih tersedia. Gated toggle terpisah; perilaku
+      // lama tak berubah saat toggle mati.
+      if (printerSettings.autoPrintKitchen && printerSettings.hasDevice) {
+        await ref.read(printerServiceProvider).printKitchenTickets(sale, cart);
+      }
       // Buka laci kas otomatis bila ada porsi tunai. No-op aman bila
       // printer/laci tidak terpasang.
       if (isCashPayment) {

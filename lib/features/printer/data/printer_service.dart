@@ -9,13 +9,52 @@ import '../../../core/permission_service.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
 import '../../../core/format.dart';
+import '../../kasir/domain/cart_item.dart';
 import '../../outlet/domain/outlet.dart';
 import '../../transactions/domain/sale.dart';
 import '../../shifts/domain/shift.dart';
 import '../../../core/outlet_scope.dart';
+import '../domain/print_station.dart';
+import 'print_station_repository.dart';
 import 'printer_settings.dart';
 import 'receipt_settings_repository.dart';
 import '../domain/receipt_settings.dart';
+
+/// E11: metadata pesanan yang tercetak di kepala tiap tiket dapur/bar.
+/// Sengaja lepas dari [Sale]/[CartItem] supaya [PrinterService.buildStationTicket]
+/// murni & bisa diuji tanpa perangkat, dan bisa dipakai ulang untuk reprint
+/// (yang merutekan lewat SaleItem.printStationId, bukan cart).
+class KitchenOrderMeta {
+  final String orderNo;
+  final String? tableLabel;
+  final String orderType;
+  final DateTime time;
+
+  const KitchenOrderMeta({
+    required this.orderNo,
+    this.tableLabel,
+    required this.orderType,
+    required this.time,
+  });
+}
+
+/// E11: satu baris pada tiket dapur — tanpa harga sama sekali. Kitchen cuma
+/// perlu tahu apa yang harus dibuat.
+class KitchenTicketItem {
+  final int qty;
+  final String name;
+  final String variant;
+  final List<String> modifiers;
+  final String note;
+
+  const KitchenTicketItem({
+    required this.qty,
+    required this.name,
+    this.variant = '',
+    this.modifiers = const [],
+    this.note = '',
+  });
+}
 
 class PrinterService {
   PrinterService(this._ref);
@@ -148,6 +187,214 @@ class PrinterService {
       ok = ok && sent;
     }
     return ok;
+  }
+
+  /// E11: cetak tiket dapur/bar per stasiun saat checkout kasir.
+  ///
+  /// [cartItems] di-snapshot oleh pemanggil SEBELUM keranjang di-clear supaya
+  /// kategori produk (dasar routing) tetap tersedia. Item dirutekan ke stasiun
+  /// via [groupItemsByStation]; bila tak ada stasiun terkonfigurasi, semua item
+  /// jatuh ke satu grup catch-all "Lainnya" → satu tiket berisi semuanya
+  /// (default yang masuk akal).
+  ///
+  /// Satu tiket dicetak per grup. Tiap grup diarahkan ke printer stasiunnya
+  /// (bila diikat di pengaturan) atau ke printer Bluetooth default sebagai
+  /// fallback. Transport hari ini Bluetooth-ONLY (lihat [_resolveStationMac]).
+  Future<bool> printKitchenTickets(Sale sale, List<CartItem> cartItems) async {
+    if (cartItems.isEmpty) return false;
+    final s = _ref.read(printerSettingsProvider);
+
+    // Konfigurasi stasiun dari backend. Null-safe: gagal fetch → anggap tak ada
+    // stasiun, tetap cetak satu tiket catch-all supaya dapur tidak buta.
+    List<PrintStation> stations;
+    try {
+      stations = await _ref.read(printStationsFutureProvider.future);
+    } catch (_) {
+      stations = const [];
+    }
+
+    final groups = groupItemsByStation<CartItem>(
+      items: cartItems,
+      stations: stations,
+      categoryOf: (c) => c.product.categoryId,
+    );
+    if (groups.isEmpty) return false;
+
+    final meta = KitchenOrderMeta(
+      orderNo: sale.invoiceId.isNotEmpty ? sale.invoiceId : sale.id.toString(),
+      tableLabel: sale.isDineIn ? sale.tablePositionDisplay : null,
+      orderType: sale.orderType,
+      time: sale.createdAt,
+    );
+
+    final profile = await CapabilityProfile.load();
+    final gen = Generator(s.paperSize, profile);
+
+    bool ok = true;
+    String? connectedMac; // hindari reconnect berulang ke printer yang sama.
+    for (final group in groups) {
+      final items = group.items.map(_cartItemToTicketItem).toList();
+      final bytes = buildStationTicket(
+        gen,
+        stationName: group.label,
+        orderMeta: meta,
+        items: items,
+      );
+      final mac = _resolveStationMac(s, group.station);
+      if (mac.isEmpty) {
+        // Tidak ada printer default maupun stasiun → tidak bisa cetak.
+        ok = false;
+        continue;
+      }
+      if (mac != connectedMac) {
+        final connected = await connect(mac);
+        if (!connected) {
+          ok = false;
+          continue;
+        }
+        connectedMac = mac;
+      }
+      final sent = await PrintBluetoothThermal.writeBytes(bytes);
+      ok = ok && sent;
+    }
+
+    // Kembalikan koneksi ke printer default supaya operasi setelah ini (mis.
+    // buka laci kas / cetak ulang struk) memakai printer utama, bukan printer
+    // stasiun terakhir.
+    if (s.hasDevice && connectedMac != null && connectedMac != s.deviceMac) {
+      await connect(s.deviceMac);
+    }
+    return ok;
+  }
+
+  KitchenTicketItem _cartItemToTicketItem(CartItem c) => KitchenTicketItem(
+        qty: c.qty,
+        name: c.product.name,
+        variant: c.variantName,
+        modifiers: c.modifiers.map((m) => m.name).toList(),
+        note: c.note,
+      );
+
+  /// Resolusi MAC printer untuk sebuah [station]:
+  ///   1. Printer yang diikat ke stasiun di pengaturan (stationPrinters).
+  ///   2. Fallback ke printer Bluetooth default aplikasi.
+  String _resolveStationMac(PrinterSettings s, PrintStation? station) {
+    if (station != null) {
+      final bound = s.macForStation(station.id);
+      if (bound.isNotEmpty) return bound;
+      // TODO(hardware): LAN transport belum ada — fallback ke printer BT default.
+      // Bila target stasiun berupa IP:PORT (printer jaringan), kita TIDAK punya
+      // socket sender; jadi tiketnya tetap dicetak ke printer BT default.
+      if (_looksLikeLanTarget(station.target)) {
+        // sengaja jatuh ke fallback default di bawah.
+      }
+    }
+    return s.deviceMac; // default BT (bisa '' → pemanggil menandai gagal).
+  }
+
+  /// Deteksi kasar target "IP:PORT" (printer jaringan). Dipakai hanya untuk
+  /// menandai jalur hardware-gated; TIDAK mengubah perilaku (tetap fallback BT).
+  bool _looksLikeLanTarget(String target) {
+    final parts = target.split(':');
+    if (parts.length != 2) return false;
+    final octets = parts.first.split('.');
+    if (octets.length != 4) return false;
+    return octets.every((o) => int.tryParse(o) != null) &&
+        int.tryParse(parts[1]) != null;
+  }
+
+  /// E11: bangun byte ESC/POS satu tiket dapur/bar. MURNI & injectable — tak
+  /// menyentuh I/O printer sehingga bisa di-golden-test dengan [Generator] +
+  /// [CapabilityProfile] yang dimuat di test. LEBIH RAMPING dari struk:
+  /// header nama stasiun bold size-2; meta pesanan (no/meja/tipe/waktu); lalu
+  /// per baris `qty x nama (varian)` + baris `+ modifier` (indent) + `* catatan`.
+  /// TANPA harga, TANPA total, TANPA QR, TANPA logo. Diakhiri [Generator.cut].
+  List<int> buildStationTicket(
+    Generator gen, {
+    required String stationName,
+    required KitchenOrderMeta orderMeta,
+    required List<KitchenTicketItem> items,
+  }) {
+    final bytes = <int>[];
+    bytes.addAll(gen.reset());
+
+    // Header: nama stasiun, bold size-2, tengah.
+    bytes.addAll(
+      gen.text(
+        _safe(stationName),
+        styles: const PosStyles(
+          align: PosAlign.center,
+          bold: true,
+          height: PosTextSize.size2,
+          width: PosTextSize.size2,
+        ),
+      ),
+    );
+    bytes.addAll(gen.hr());
+
+    // Meta pesanan (mirror idiom PosColumn di _buildReceipt).
+    bytes.addAll(
+      gen.row([
+        PosColumn(text: 'No', width: 4),
+        PosColumn(
+          text: '#${orderMeta.orderNo}',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+    );
+    if (orderMeta.tableLabel != null && orderMeta.tableLabel!.isNotEmpty) {
+      bytes.addAll(
+        gen.row([
+          PosColumn(text: 'Meja', width: 4),
+          PosColumn(
+            text: _safe(orderMeta.tableLabel!),
+            width: 8,
+            styles: const PosStyles(align: PosAlign.right),
+          ),
+        ]),
+      );
+    }
+    bytes.addAll(
+      gen.row([
+        PosColumn(text: 'Tipe', width: 4),
+        PosColumn(
+          text: _safe(orderMeta.orderType),
+          width: 8,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+    );
+    bytes.addAll(
+      gen.row([
+        PosColumn(text: 'Waktu', width: 4),
+        PosColumn(
+          text: formatDateTime(orderMeta.time),
+          width: 8,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]),
+    );
+    bytes.addAll(gen.hr());
+
+    // Baris item: `qty x nama (varian)` bold, lalu modifier & catatan.
+    for (final it in items) {
+      final line = it.variant.isEmpty
+          ? '${it.qty} x ${it.name}'
+          : '${it.qty} x ${it.name} (${it.variant})';
+      bytes.addAll(gen.text(_safe(line), styles: const PosStyles(bold: true)));
+      for (final m in it.modifiers) {
+        if (m.trim().isEmpty) continue;
+        bytes.addAll(gen.text(_safe('  + $m'), styles: const PosStyles()));
+      }
+      if (it.note.isNotEmpty) {
+        bytes.addAll(gen.text(_safe('  * ${it.note}'), styles: const PosStyles()));
+      }
+    }
+
+    bytes.addAll(gen.feed(2));
+    bytes.addAll(gen.cut());
+    return bytes;
   }
 
   /// Buka laci kas (cash drawer) lewat pulse ESC/POS (perintah ESC p).
