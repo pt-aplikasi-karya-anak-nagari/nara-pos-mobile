@@ -25,6 +25,7 @@ import '../../printer/ui/printer_settings_page.dart';
 import '../../products/ui/category_list_page.dart';
 import '../../products/ui/product_list_page.dart';
 import '../../settings/ui/display_settings_page.dart';
+import '../../settings/ui/pin_settings_page.dart';
 import '../../settings/ui/tax_settings_page.dart';
 import '../../order_types/ui/order_type_list_page.dart';
 import '../../customers/ui/customer_list_page.dart';
@@ -384,6 +385,18 @@ class ProfilPage extends HookConsumerWidget {
                     ),
                     selected: selectedMenu == 'display',
                   ),
+                // PIN Otorisasi — self-service, semua role bisa menyetel PIN
+                // miliknya untuk mengesahkan void/refund (POST /me/pin).
+                _Tile(
+                  spec: _TileSpec(
+                    id: 'pin_settings',
+                    icon: AppIcons.accessRights,
+                    label: 'PIN Otorisasi',
+                    onTap: () =>
+                        handleTap('pin_settings', AppRoutes.pinSettings),
+                  ),
+                  selected: selectedMenu == 'pin_settings',
+                ),
                 _LanguageTile(
                   isEn: isEn,
                   label: ref.t('profile.language'),
@@ -459,6 +472,8 @@ class ProfilPage extends HookConsumerWidget {
           return const TaxSettingsPage();
         case 'display':
           return const DisplaySettingsPage();
+        case 'pin_settings':
+          return const PinSettingsPage();
         case 'order_types':
           return const OrderTypeListPage();
         case 'tables':

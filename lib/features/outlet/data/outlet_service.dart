@@ -404,6 +404,18 @@ class OutletService extends BaseApiService {
     );
   }
 
+  /// Pengaturan aplikasi per-outlet (security/PIN, cashier UX, QR menu, dll).
+  /// Backend selalu return value — kalau outlet belum pernah save, backend
+  /// return default in-memory. Mobile hanya mengonsumsi flag require_pin_*.
+  Future<Map<String, dynamic>> getAppSettings(String outletId) async {
+    return get<Map<String, dynamic>>(
+      ApiEndpoint.outletAppSettings(outletId),
+      converter: (data) => data is Map
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{},
+    );
+  }
+
   // E11: daftar stasiun cetak outlet. Backend membungkus rows di SuccessResponse
   // (data = list), tapi kita juga toleran bila berbentuk {items: [...]}.
   Future<List<Map<String, dynamic>>> getPrintStations(String outletId) async {

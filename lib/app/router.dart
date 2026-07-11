@@ -19,6 +19,7 @@ import '../features/products/ui/product_list_page.dart';
 import '../features/modifiers/ui/modifier_groups_page.dart';
 import '../features/profil/ui/profil_page.dart';
 import '../features/settings/ui/display_settings_page.dart';
+import '../features/settings/ui/pin_settings_page.dart';
 import '../features/settings/ui/tax_settings_page.dart';
 import '../features/transactions/ui/riwayat_page.dart';
 import '../features/transactions/ui/transaction_detail_page.dart';
@@ -191,6 +192,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.display,
         name: AppRoutes.displayName,
         builder: (_, _) => const DisplaySettingsPage(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: AppRoutes.pinSettings,
+        name: AppRoutes.pinSettingsName,
+        builder: (_, _) => const PinSettingsPage(),
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,

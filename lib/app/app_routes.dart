@@ -51,6 +51,9 @@ class AppRoutes {
   static const String inventoryName = 'inventory';
   static const String display = '/profil/display';
   static const String displayName = 'display';
+  // PIN otorisasi manajer (self-service set/ubah/hapus PIN sendiri).
+  static const String pinSettings = '/profil/pin';
+  static const String pinSettingsName = 'pin-settings';
   static const String loyalty = '/profil/loyalty-settings';
   static const String loyaltyName = 'loyalty';
   static const String billing = '/profil/billing';

@@ -83,23 +83,41 @@ class TransactionApiService extends BaseApiService {
     );
   }
 
-  Future<Map<String, dynamic>> refund(String transactionId, {String? reason}) async {
+  /// Refund transaksi. [overridePin] wajib bila outlet mengaktifkan
+  /// `require_pin_refund` — backend memverifikasi PIN manajer berwenang dan
+  /// membalas HTTP 403 dengan pesan jelas bila PIN salah/kosong.
+  Future<Map<String, dynamic>> refund(
+    String transactionId, {
+    String? reason,
+    String? overridePin,
+  }) async {
     return await post<Map<String, dynamic>>(
       '/transactions/$transactionId/refund',
-      data: {if (reason != null && reason.isNotEmpty) 'reason': reason},
+      data: {
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        if (overridePin != null && overridePin.isNotEmpty)
+          'override_pin': overridePin,
+      },
       converter: (res) => res as Map<String, dynamic>,
     );
   }
 
   /// Batalkan (void) transaksi UNPAID — bill "Bayar Nanti" yang salah input.
   /// Backend set status=cancelled, restore stok, lepas meja. Reason opsional.
+  /// [overridePin] wajib bila outlet mengaktifkan `require_pin_void` (backend
+  /// balas 403 bila PIN salah/kosong).
   Future<Map<String, dynamic>> voidTransaction(
     String transactionId, {
     String? reason,
+    String? overridePin,
   }) async {
     return await post<Map<String, dynamic>>(
       '/transactions/$transactionId/void',
-      data: {if (reason != null && reason.isNotEmpty) 'reason': reason},
+      data: {
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        if (overridePin != null && overridePin.isNotEmpty)
+          'override_pin': overridePin,
+      },
       converter: (res) => res as Map<String, dynamic>,
     );
   }
@@ -447,16 +465,23 @@ class TransactionRepository {
   }
 
   /// Refund transaksi: backend balikkan stok, set status refunded, kurangi
-  /// poin pelanggan. Mengembalikan Sale terbaru dari backend.
-  Future<Sale> refund(String saleId, {String? reason}) async {
-    final res = await apiService.refund(saleId, reason: reason);
+  /// poin pelanggan. Mengembalikan Sale terbaru dari backend. [overridePin]
+  /// diteruskan bila outlet mensyaratkan PIN otorisasi manajer.
+  Future<Sale> refund(String saleId, {String? reason, String? overridePin}) async {
+    final res =
+        await apiService.refund(saleId, reason: reason, overridePin: overridePin);
     return Sale.fromJson(res);
   }
 
   /// Void transaksi UNPAID (bill "Bayar Nanti" yang salah input). Backend
   /// set status=cancelled, restore stok, lepas meja bila sudah kosong.
-  Future<Sale> voidSale(String saleId, {String? reason}) async {
-    final res = await apiService.voidTransaction(saleId, reason: reason);
+  /// [overridePin] diteruskan bila outlet mensyaratkan PIN otorisasi manajer.
+  Future<Sale> voidSale(String saleId, {String? reason, String? overridePin}) async {
+    final res = await apiService.voidTransaction(
+      saleId,
+      reason: reason,
+      overridePin: overridePin,
+    );
     return Sale.fromJson(res);
   }
 

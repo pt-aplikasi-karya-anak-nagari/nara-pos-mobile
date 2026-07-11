@@ -5,6 +5,11 @@ class ApiEndpoint {
   static const String register = '/register';
   static const String refresh = '/refresh';
   static const String logout = '/logout';
+
+  // PIN otorisasi manajer (void/refund/diskon) — self-service per user.
+  //   POST /me/pin  body {pin} (4-6 digit; string kosong = hapus)
+  //   GET  /me/pin  → {has_pin: bool}
+  static const String mePin = '/me/pin';
   static const String subscriptionPlans = '/subscription-plans';
   static const String outletTypes = '/outlet-types';
   static const String outlets = '/outlets';
@@ -72,6 +77,12 @@ class ApiEndpoint {
   // Loyalty settings per-outlet (enabled, amount_per_point, point_value).
   static String outletLoyaltySettings(String outletId) =>
       '/outlets/$outletId/loyalty-settings';
+
+  // Pengaturan aplikasi per-outlet (catch-all: keamanan/PIN, cashier UX, QR
+  // menu, notifikasi). Backend selalu return value (default in-memory bila
+  // outlet belum pernah save). Dipakai mobile untuk flag require_pin_*.
+  static String outletAppSettings(String outletId) =>
+      '/outlets/$outletId/app-settings';
   // E11: stasiun cetak per outlet (routing struk dapur/bar).
   static String outletPrintStations(String outletId) =>
       '/outlets/$outletId/print-stations';

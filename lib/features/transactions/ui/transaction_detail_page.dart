@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:path_provider/path_provider.dart';
@@ -22,6 +23,7 @@ import '../../customers/data/customer_repository.dart';
 import '../../shifts/data/shift_repository.dart';
 import '../../access_rights/data/access_rights_repository.dart';
 import '../../access_rights/domain/permission.dart';
+import '../../settings/data/app_settings.dart';
 import '../data/transaction_repository.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
@@ -189,53 +191,99 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   /// karakter di backend) supaya jejak audit jelas.
   Future<void> _refund(Sale sale) async {
     if (_refunding) return;
-    final reason = await _askRefundReason();
-    if (reason == null) return; // dibatalkan
 
-    setState(() => _refunding = true);
+    // Apakah outlet mewajibkan PIN otorisasi manajer untuk refund? Fetch
+    // on-demand (hasilnya di-cache provider). Bila gagal (mis. offline),
+    // fallback false lalu andalkan penanganan 403 dari backend.
+    bool requirePin = false;
     try {
-      await ref.read(transactionRepositoryProvider).refund(sale.id, reason: reason);
-      ref.invalidate(transactionDetailProvider(sale.id));
-      ref.invalidate(salesFutureProvider);
-      // Refund menyentuh laci kas shift aktif (uang keluar) & poin pelanggan,
-      // jadi invalidate provider terkait supaya angka konsisten.
-      ref.invalidate(activeShiftProvider);
-      if (sale.customer?.id.isNotEmpty == true) {
-        ref.invalidate(customerDetailProvider(sale.customer!.id));
-        ref.invalidate(customerSalesProvider(sale.customer!.id));
+      requirePin =
+          (await ref.read(outletAppSettingsProvider.future)).requirePinRefund;
+    } catch (_) {
+      requirePin = false;
+    }
+    if (!mounted) return;
+
+    // Loop retry: bila submit gagal (mis. 403 PIN salah), dialog dibuka ulang
+    // dengan pesan backend + input sebelumnya sehingga user bisa perbaiki PIN.
+    String reasonInit = '';
+    String pinInit = '';
+    String? errorText;
+    while (true) {
+      final input = await _askRefundReason(
+        requirePin: requirePin,
+        reasonInit: reasonInit,
+        pinInit: pinInit,
+        errorText: errorText,
+      );
+      if (input == null) return; // dibatalkan
+
+      setState(() => _refunding = true);
+      try {
+        await ref.read(transactionRepositoryProvider).refund(
+              sale.id,
+              reason: input.reason,
+              overridePin: input.pin.isEmpty ? null : input.pin,
+            );
+        ref.invalidate(transactionDetailProvider(sale.id));
+        ref.invalidate(salesFutureProvider);
+        // Refund menyentuh laci kas shift aktif (uang keluar) & poin pelanggan,
+        // jadi invalidate provider terkait supaya angka konsisten.
+        ref.invalidate(activeShiftProvider);
+        if (sale.customer?.id.isNotEmpty == true) {
+          ref.invalidate(customerDetailProvider(sale.customer!.id));
+          ref.invalidate(customerSalesProvider(sale.customer!.id));
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(ref.t('refund.success')),
+              backgroundColor: kSuccess,
+            ),
+          );
+        }
+        return;
+      } catch (e) {
+        if (!mounted) return;
+        // Pertahankan input & tampilkan pesan backend (mis. "PIN otorisasi
+        // salah") di dialog berikutnya supaya user bisa isi ulang.
+        reasonInit = input.reason;
+        pinInit = input.pin;
+        errorText = e.toString();
+      } finally {
+        if (mounted) setState(() => _refunding = false);
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(ref.t('refund.success')),
-            backgroundColor: kSuccess,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal refund: $e'),
-            backgroundColor: kDanger,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _refunding = false);
     }
   }
 
-  /// Dialog konfirmasi refund dengan input alasan. Mengembalikan alasan
-  /// (sudah trim, min 5 char) jika dikonfirmasi, atau null jika dibatalkan.
-  Future<String?> _askRefundReason() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
+  /// Dialog konfirmasi refund: input alasan (wajib, min 5 char) dan — bila
+  /// [requirePin] atau percobaan sebelumnya ditolak backend ([errorText] != null)
+  /// — input PIN otorisasi manajer (numeric, obscure, 4-6 digit). Mengembalikan
+  /// (reason, pin) jika dikonfirmasi, atau null jika dibatalkan. [pin] bisa
+  /// string kosong bila PIN tidak diminta.
+  Future<({String reason, String pin})?> _askRefundReason({
+    required bool requirePin,
+    String reasonInit = '',
+    String pinInit = '',
+    String? errorText,
+  }) async {
+    final reasonController = TextEditingController(text: reasonInit);
+    final pinController = TextEditingController(text: pinInit);
+    // Tampilkan input PIN bila outlet mewajibkan, atau bila percobaan
+    // sebelumnya ditolak backend (403) — supaya user bisa mengisi ulang.
+    final showPin = requirePin || errorText != null;
+    final result = await showDialog<({String reason, String pin})>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
-          final reason = controller.text.trim();
-          final valid = reason.length >= 5;
+          final reason = reasonController.text.trim();
+          final pin = pinController.text.trim();
+          final reasonValid = reason.length >= 5;
+          final pinValid = pin.length >= 4 && pin.length <= 6;
+          // PIN wajib bila outlet mensyaratkan. Bila hanya muncul akibat 403
+          // (bukan requirePin), PIN opsional tapi format tetap divalidasi.
+          final pinOk = requirePin ? pinValid : (pin.isEmpty || pinValid);
+          final valid = reasonValid && pinOk;
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -248,13 +296,32 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (errorText != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: kDanger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      errorText,
+                      style: const TextStyle(
+                        color: kDanger,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Gap(12),
+                ],
                 Text(
                   ref.t('refund.confirm_body'),
                   style: TextStyle(color: kTextMid, height: 1.4),
                 ),
                 const Gap(12),
                 TextField(
-                  controller: controller,
+                  controller: reasonController,
                   autofocus: true,
                   minLines: 2,
                   maxLines: 3,
@@ -267,6 +334,27 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                     ),
                   ),
                 ),
+                if (showPin) ...[
+                  const Gap(12),
+                  TextField(
+                    controller: pinController,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => setLocal(() {}),
+                    decoration: InputDecoration(
+                      labelText: requirePin
+                          ? 'PIN Otorisasi Manajer'
+                          : 'PIN Otorisasi Manajer (bila diminta)',
+                      hintText: '4-6 digit',
+                      counterText: '',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             actions: [
@@ -275,7 +363,9 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                 child: const Text('Batal'),
               ),
               FilledButton(
-                onPressed: valid ? () => Navigator.of(ctx).pop(reason) : null,
+                onPressed: valid
+                    ? () => Navigator.of(ctx).pop((reason: reason, pin: pin))
+                    : null,
                 style: FilledButton.styleFrom(backgroundColor: kDanger),
                 child: Text(ref.t('refund.action')),
               ),
@@ -284,7 +374,8 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
         },
       ),
     );
-    controller.dispose();
+    reasonController.dispose();
+    pinController.dispose();
     return result;
   }
 

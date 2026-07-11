@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/format.dart';
 import '../../../../core/outlet_scope.dart';
+import '../../../settings/data/app_settings.dart';
 import '../../../kasir/providers.dart';
 import '../../../order_types/data/order_type_repository.dart';
 import '../../../shifts/data/shift_repository.dart';
@@ -427,53 +429,151 @@ class _SaleCard extends ConsumerWidget {
   }
 
   Future<void> _void(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Batalkan pesanan ini?'),
-        content: Text(
-          'Pesanan ${sale.invoiceId} (${formatRupiah(sale.total)}) akan '
-          'dibatalkan dan stok dikembalikan. Tindakan ini tidak bisa diurungkan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: kDanger),
-            child: const Text('Ya, Batalkan'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
+    // Apakah outlet mewajibkan PIN otorisasi manajer untuk void? Fetch
+    // on-demand (di-cache provider); bila gagal (mis. offline) fallback false
+    // lalu andalkan penanganan 403 dari backend.
+    bool requirePin = false;
     try {
-      await ref.read(transactionRepositoryProvider).voidSale(sale.id);
-      ref.invalidate(activeTableTransactionsProvider(tableId));
-      ref.invalidate(tablesFutureProvider);
-      ref.invalidate(tableGroupsFutureProvider);
-      ref.invalidate(salesFutureProvider);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Pesanan ${sale.invoiceId} dibatalkan'),
-            backgroundColor: kSuccess,
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal membatalkan: $e'),
-            backgroundColor: kDanger,
-          ),
-        );
+      requirePin =
+          (await ref.read(outletAppSettingsProvider.future)).requirePinVoid;
+    } catch (_) {
+      requirePin = false;
+    }
+    if (!context.mounted) return;
+
+    // Loop retry: bila submit gagal (mis. 403 PIN salah), dialog dibuka ulang
+    // dengan pesan backend + PIN sebelumnya sehingga user bisa perbaiki.
+    String pinInit = '';
+    String? errorText;
+    while (true) {
+      if (!context.mounted) return;
+      final input = await _askVoidConfirm(
+        context,
+        requirePin: requirePin,
+        pinInit: pinInit,
+        errorText: errorText,
+      );
+      if (input == null) return; // dibatalkan
+
+      try {
+        await ref.read(transactionRepositoryProvider).voidSale(
+              sale.id,
+              overridePin: input.pin.isEmpty ? null : input.pin,
+            );
+        ref.invalidate(activeTableTransactionsProvider(tableId));
+        ref.invalidate(tablesFutureProvider);
+        ref.invalidate(tableGroupsFutureProvider);
+        ref.invalidate(salesFutureProvider);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Pesanan ${sale.invoiceId} dibatalkan'),
+              backgroundColor: kSuccess,
+            ),
+          );
+        }
+        return;
+      } catch (e) {
+        if (!context.mounted) return;
+        // Pertahankan PIN & tampilkan pesan backend di dialog ulang.
+        pinInit = input.pin;
+        errorText = e.toString();
       }
     }
+  }
+
+  /// Dialog konfirmasi void. Bila [requirePin] atau percobaan sebelumnya
+  /// ditolak backend ([errorText] != null), tampilkan input PIN otorisasi
+  /// manajer (numeric, obscure, 4-6 digit). Mengembalikan (pin) bila
+  /// dikonfirmasi — pin bisa string kosong bila tidak diminta — atau null bila
+  /// dibatalkan.
+  Future<({String pin})?> _askVoidConfirm(
+    BuildContext context, {
+    required bool requirePin,
+    String pinInit = '',
+    String? errorText,
+  }) async {
+    final pinController = TextEditingController(text: pinInit);
+    final showPin = requirePin || errorText != null;
+    final result = await showDialog<({String pin})>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final pin = pinController.text.trim();
+          final pinValid = pin.length >= 4 && pin.length <= 6;
+          // PIN wajib bila outlet mensyaratkan. Bila hanya muncul akibat 403
+          // (bukan requirePin), PIN opsional tapi format tetap divalidasi.
+          final pinOk = requirePin ? pinValid : (pin.isEmpty || pinValid);
+          return AlertDialog(
+            title: const Text('Batalkan pesanan ini?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (errorText != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: kDanger.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      errorText,
+                      style: const TextStyle(
+                        color: kDanger,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Gap(12),
+                ],
+                Text(
+                  'Pesanan ${sale.invoiceId} (${formatRupiah(sale.total)}) akan '
+                  'dibatalkan dan stok dikembalikan. Tindakan ini tidak bisa diurungkan.',
+                ),
+                if (showPin) ...[
+                  const Gap(12),
+                  TextField(
+                    controller: pinController,
+                    autofocus: true,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => setLocal(() {}),
+                    decoration: InputDecoration(
+                      labelText: requirePin
+                          ? 'PIN Otorisasi Manajer'
+                          : 'PIN Otorisasi Manajer (bila diminta)',
+                      hintText: '4-6 digit',
+                      counterText: '',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
+              TextButton(
+                onPressed: pinOk ? () => Navigator.pop(ctx, (pin: pin)) : null,
+                style: TextButton.styleFrom(foregroundColor: kDanger),
+                child: const Text('Ya, Batalkan'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    pinController.dispose();
+    return result;
   }
 
   @override

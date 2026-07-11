@@ -158,6 +158,28 @@ class AuthApiService extends BaseApiService {
   Future<void> logout(String refreshToken) async {
     await dio.post(ApiEndpoint.logout, data: {'refresh_token': refreshToken});
   }
+
+  /// Set/ubah/hapus PIN otorisasi milik user yang sedang login. [pin] berupa
+  /// 4-6 digit angka; string kosong = hapus PIN. Endpoint terproteksi JWT
+  /// (POST /me/pin) — interceptor Dio otomatis melampirkan Bearer token.
+  Future<void> setMyPin(String pin) async {
+    await post<dynamic>(
+      ApiEndpoint.mePin,
+      data: {'pin': pin},
+      converter: (res) => res,
+    );
+  }
+
+  /// Status apakah user sudah punya PIN otorisasi (GET /me/pin → {has_pin}).
+  Future<bool> getMyPinStatus() async {
+    final data = await get<Map<String, dynamic>>(
+      ApiEndpoint.mePin,
+      converter: (res) => res is Map
+          ? Map<String, dynamic>.from(res)
+          : <String, dynamic>{},
+    );
+    return data['has_pin'] as bool? ?? false;
+  }
 }
 
 Map<String, dynamic> _asMap(dynamic value) {
