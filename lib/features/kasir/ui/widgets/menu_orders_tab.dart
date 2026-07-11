@@ -34,6 +34,12 @@ class MenuOrdersTab extends ConsumerWidget {
         ref.invalidate(menuOrdersProvider);
       }
     });
+    // Saat koneksi realtime (re)connect: refetch sekali. Core NATS tak
+    // menyimpan event, jadi yang terjadi selama koneksi putus tidak terkirim —
+    // sinkron ulang di sini menutup celah data basi.
+    ref.listen(realtimeConnectedProvider, (prev, next) {
+      if (next && prev != true) ref.invalidate(menuOrdersProvider);
+    });
 
     final ordersAsync = ref.watch(menuOrdersProvider);
     // 🟢 Live — true saat koneksi realtime tersambung (bukan sekadar "pernah
