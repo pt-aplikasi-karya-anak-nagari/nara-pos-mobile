@@ -96,7 +96,15 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   final authStorage = AuthStorage(prefs);
   await authStorage.init();
-  await NotificationService.instance.init();
+  // Inisialisasi notifikasi bersifat best-effort. Kegagalan plugin (ikon hilang,
+  // izin ditolak, channel gagal dibuat, dsb.) TIDAK boleh memblokir startup:
+  // kalau exception di sini lolos tak tertangkap, runApp() di bawah tak pernah
+  // jalan dan app stuck di splash putih (native launch screen). Bungkus & lewati.
+  try {
+    await NotificationService.instance.init();
+  } catch (e, st) {
+    debugPrint('NotificationService.init gagal, dilewati: $e\n$st');
+  }
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

@@ -110,7 +110,13 @@ class NotificationService {
     // icon notifikasi sebagai silhouette putih — kalau pakai logo color
     // hasilnya jadi kotak putih solid. File di-generate via
     // `tool/generate_notif_icon.dart`.
-    const android = AndroidInitializationSettings('@drawable/ic_notification');
+    //
+    // PENTING: pakai NAMA resource telanjang ('ic_notification'), BUKAN
+    // '@drawable/ic_notification'. Plugin me-resolve lewat
+    // Resources.getIdentifier(name, "drawable", pkg) yang hanya menerima nama
+    // polos; prefix '@drawable/' bikin getIdentifier balik 0 → PlatformException
+    // "resource could not be found" saat _plugin.initialize().
+    const android = AndroidInitializationSettings('ic_notification');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
