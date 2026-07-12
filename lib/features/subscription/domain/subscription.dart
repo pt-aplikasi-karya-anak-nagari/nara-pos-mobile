@@ -44,6 +44,11 @@ class OutletSubscription {
   final int priceIdrPaid;
   final int daysRemaining;
 
+  /// Key fitur katalog yang termasuk dalam plan langganan outlet ini
+  /// (Basic ≈ 12, Pro ≈ 28, Enterprise ≈ 41). Dipakai untuk gating menu
+  /// berbasis plan di halaman Profil. Kosong = fail-open (semua fitur tampil).
+  final List<String> featureKeys;
+
   const OutletSubscription({
     required this.id,
     required this.outletId,
@@ -55,6 +60,7 @@ class OutletSubscription {
     required this.expiresAt,
     required this.priceIdrPaid,
     required this.daysRemaining,
+    this.featureKeys = const [],
   });
 
   bool get isUsable {
@@ -81,6 +87,9 @@ class OutletSubscription {
       expiresAt: parseDate(json['expires_at']),
       priceIdrPaid: (json['price_idr_paid'] as num?)?.toInt() ?? 0,
       daysRemaining: (json['days_remaining'] as num?)?.toInt() ?? 0,
+      featureKeys: (json['feature_keys'] as List? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 }

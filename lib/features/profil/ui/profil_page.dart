@@ -13,6 +13,7 @@ import '../../../core/responsive.dart';
 import '../../access_rights/data/access_rights_repository.dart';
 import '../../attendance/ui/attendance_page.dart';
 import '../../billing/ui/billing_history_page.dart';
+import '../../subscription/data/subscription_repository.dart';
 import '../../subscription/ui/subscription_banner.dart';
 import '../../access_rights/domain/permission.dart';
 import '../../access_rights/ui/access_rights_page.dart';
@@ -135,10 +136,14 @@ class ProfilPage extends HookConsumerWidget {
                 const Gap(24),
 
                 // Group 1: Produk & Inventori
-                if (ref.hasPermission(Permission.manageProducts) ||
-                    ref.hasPermission(Permission.manageCategories)) ...[
+                if ((ref.hasPermission(Permission.manageProducts) &&
+                        (ref.hasFeature('product_management') ||
+                            ref.hasFeature('modifiers'))) ||
+                    (ref.hasPermission(Permission.manageCategories) &&
+                        ref.hasFeature('product_management'))) ...[
                   _SectionHeader(label: ref.t('profile.group_products')),
-                  if (ref.hasPermission(Permission.manageProducts))
+                  if (ref.hasPermission(Permission.manageProducts) &&
+                      ref.hasFeature('product_management'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'products',
@@ -148,7 +153,8 @@ class ProfilPage extends HookConsumerWidget {
                       ),
                       selected: selectedMenu == 'products',
                     ),
-                  if (ref.hasPermission(Permission.manageCategories))
+                  if (ref.hasPermission(Permission.manageCategories) &&
+                      ref.hasFeature('product_management'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'categories',
@@ -162,7 +168,8 @@ class ProfilPage extends HookConsumerWidget {
                   // Modifier & Add-on — kelola grup add-on (padanan menu web
                   // /dashboard/modifiers). Push langsung agar konsisten di
                   // phone & tablet tanpa panel detail khusus.
-                  if (ref.hasPermission(Permission.manageProducts))
+                  if (ref.hasPermission(Permission.manageProducts) &&
+                      ref.hasFeature('modifiers'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'modifiers',
@@ -220,15 +227,16 @@ class ProfilPage extends HookConsumerWidget {
                       ),
                       selected: selectedMenu == 'order_types',
                     ),
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'tables',
-                      icon: AppIcons.storefront,
-                      label: ref.t('profile.tables'),
-                      onTap: () => handleTap('tables', AppRoutes.tables),
+                  if (ref.hasFeature('table_management'))
+                    _Tile(
+                      spec: _TileSpec(
+                        id: 'tables',
+                        icon: AppIcons.storefront,
+                        label: ref.t('profile.tables'),
+                        onTap: () => handleTap('tables', AppRoutes.tables),
+                      ),
+                      selected: selectedMenu == 'tables',
                     ),
-                    selected: selectedMenu == 'tables',
-                  ),
                   if (ref.hasPermission(Permission.managePrinter))
                     _Tile(
                       spec: _TileSpec(
@@ -239,7 +247,7 @@ class ProfilPage extends HookConsumerWidget {
                       ),
                       selected: selectedMenu == 'printer',
                     ),
-                  if (isManagement) ...[
+                  if (isManagement && ref.hasFeature('shift_management'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'shift_history',
@@ -250,6 +258,7 @@ class ProfilPage extends HookConsumerWidget {
                       ),
                       selected: selectedMenu == 'shift_history',
                     ),
+                  if (isManagement && ref.hasFeature('payment_methods'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'payment_methods',
@@ -262,14 +271,16 @@ class ProfilPage extends HookConsumerWidget {
                       ),
                       selected: selectedMenu == 'payment_methods',
                     ),
-                  ],
                   const Gap(16),
                 ],
 
                 // Group 3: Karyawan & Hak Akses
-                if (role.canManageEmployees || isManagement) ...[
+                if ((role.canManageEmployees &&
+                        ref.hasFeature('employee_management')) ||
+                    (isManagement && ref.hasFeature('rbac_permissions'))) ...[
                   _SectionHeader(label: ref.t('profile.group_users')),
-                  if (role.canManageEmployees)
+                  if (role.canManageEmployees &&
+                      ref.hasFeature('employee_management'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'employees',
@@ -280,7 +291,7 @@ class ProfilPage extends HookConsumerWidget {
                       ),
                       selected: selectedMenu == 'employees',
                     ),
-                  if (isManagement)
+                  if (isManagement && ref.hasFeature('rbac_permissions'))
                     _Tile(
                       spec: _TileSpec(
                         id: 'access_rights',
@@ -297,25 +308,28 @@ class ProfilPage extends HookConsumerWidget {
                 // Group 4: CRM & Pelanggan
                 if (isManagement) ...[
                   _SectionHeader(label: ref.t('profile.group_crm')),
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'customers',
-                      icon: AppIcons.person,
-                      label: ref.t('profile.customers'),
-                      onTap: () => handleTap('customers', AppRoutes.customers),
+                  if (ref.hasFeature('customer_crm'))
+                    _Tile(
+                      spec: _TileSpec(
+                        id: 'customers',
+                        icon: AppIcons.person,
+                        label: ref.t('profile.customers'),
+                        onTap: () =>
+                            handleTap('customers', AppRoutes.customers),
+                      ),
+                      selected: selectedMenu == 'customers',
                     ),
-                    selected: selectedMenu == 'customers',
-                  ),
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'loyalty_settings',
-                      icon: AppIcons.favorite,
-                      label: ref.t('profile.loyalty'),
-                      onTap: () =>
-                          handleTap('loyalty_settings', AppRoutes.loyalty),
+                  if (ref.hasFeature('loyalty_program'))
+                    _Tile(
+                      spec: _TileSpec(
+                        id: 'loyalty_settings',
+                        icon: AppIcons.favorite,
+                        label: ref.t('profile.loyalty'),
+                        onTap: () =>
+                            handleTap('loyalty_settings', AppRoutes.loyalty),
+                      ),
+                      selected: selectedMenu == 'loyalty_settings',
                     ),
-                    selected: selectedMenu == 'loyalty_settings',
-                  ),
                   _Tile(
                     spec: _TileSpec(
                       id: 'billing',
@@ -330,7 +344,8 @@ class ProfilPage extends HookConsumerWidget {
 
                 // Group 5: Pengaturan Aplikasi
                 _SectionHeader(label: ref.t('profile.group_app')),
-                if (ref.hasPermission(Permission.manageTax))
+                if (ref.hasPermission(Permission.manageTax) &&
+                    ref.hasFeature('tax_service_charge'))
                   _Tile(
                     spec: _TileSpec(
                       id: 'tax',
@@ -341,7 +356,8 @@ class ProfilPage extends HookConsumerWidget {
                     selected: selectedMenu == 'tax',
                   ),
                 // Bahan Baku & Resep (B1) — akses sama dengan kelola produk.
-                if (ref.hasPermission(Permission.manageProducts))
+                if (ref.hasPermission(Permission.manageProducts) &&
+                    ref.hasFeature('recipe_bom'))
                   _Tile(
                     spec: _TileSpec(
                       id: 'recipes',
@@ -363,7 +379,8 @@ class ProfilPage extends HookConsumerWidget {
                     selected: selectedMenu == 'expenses',
                   ),
                 // Inventori produk (C1) — cek/restock stok dari HP.
-                if (ref.hasPermission(Permission.manageProducts))
+                if (ref.hasPermission(Permission.manageProducts) &&
+                    ref.hasFeature('inventory_tracking'))
                   _Tile(
                     spec: _TileSpec(
                       id: 'inventory',
@@ -411,16 +428,18 @@ class ProfilPage extends HookConsumerWidget {
                       ref.read(themeModeProvider.notifier).setMode(m),
                 ),
                 // Absensi pegawai — semua role bisa akses (untuk
-                // check-in/out & lihat riwayat sendiri).
-                _Tile(
-                  spec: _TileSpec(
-                    id: 'attendance',
-                    icon: AppIcons.time,
-                    label: 'Absensi',
-                    onTap: () => handleTap('attendance', AppRoutes.attendance),
+                // check-in/out & lihat riwayat sendiri). Digating plan via
+                // fitur 'attendance'.
+                if (ref.hasFeature('attendance'))
+                  _Tile(
+                    spec: _TileSpec(
+                      id: 'attendance',
+                      icon: AppIcons.time,
+                      label: 'Absensi',
+                      onTap: () => handleTap('attendance', AppRoutes.attendance),
+                    ),
+                    selected: selectedMenu == 'attendance',
                   ),
-                  selected: selectedMenu == 'attendance',
-                ),
                 if (ref.watch(activeShiftProvider).value != null)
                   _Tile(
                     spec: _TileSpec(
