@@ -444,6 +444,18 @@ class OutletService extends BaseApiService {
     );
   }
 
+  // Default printer per-role (owner-set) untuk role user yang login. Backend
+  // membungkus objek di SuccessResponse (data = objek). Selalu return value —
+  // kalau owner belum atur, backend kirim default in-memory.
+  Future<Map<String, dynamic>> getRolePrinterConfig(String outletId) async {
+    return get<Map<String, dynamic>>(
+      ApiEndpoint.outletRolePrinterConfigMine(outletId),
+      converter: (data) => data is Map
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{},
+    );
+  }
+
   // C4: grup modifier/add-on untuk sebuah produk.
   Future<List<Map<String, dynamic>>> getProductModifierGroups(
     String outletId,

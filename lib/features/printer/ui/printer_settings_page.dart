@@ -13,6 +13,7 @@ import '../domain/print_station.dart';
 import '../data/print_station_repository.dart';
 import '../data/printer_service.dart';
 import '../data/printer_settings.dart';
+import '../data/role_printer_config_repository.dart';
 import '../../../core/permission_service.dart';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -23,6 +24,11 @@ class PrinterSettingsPage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(printerSettingsProvider);
+    // Default per-role dari owner (baseline untuk 4 setting perilaku). Selalu
+    // punya baseline walau masih loading / offline (fallback hardcoded).
+    final role =
+        ref.watch(rolePrinterConfigProvider).value ??
+        RolePrinterConfig.fallback;
     final service = ref.read(printerServiceProvider);
     final isTablet = context.isTablet;
 
@@ -169,15 +175,18 @@ class PrinterSettingsPage extends HookConsumerWidget {
       onRequestPermission: showPermissionSheet,
     );
 
+    final notifier = ref.read(printerSettingsProvider.notifier);
     final settingsPanel = _SettingsPanel(
       settings: settings,
-      onPaperSize: (v) =>
-          ref.read(printerSettingsProvider.notifier).setPaperSize(v),
-      onAutoPrint: (v) =>
-          ref.read(printerSettingsProvider.notifier).setAutoPrint(v),
-      onCopies: (v) => ref.read(printerSettingsProvider.notifier).setCopies(v),
-      onAutoPrintKitchen: (v) =>
-          ref.read(printerSettingsProvider.notifier).setAutoPrintKitchen(v),
+      role: role,
+      onPaperSize: notifier.setPaperSize,
+      onResetPaperSize: notifier.clearPaperSize,
+      onAutoPrint: notifier.setAutoPrint,
+      onResetAutoPrint: notifier.clearAutoPrint,
+      onCopies: notifier.setCopies,
+      onResetCopies: notifier.clearCopies,
+      onAutoPrintKitchen: notifier.setAutoPrintKitchen,
+      onResetAutoPrintKitchen: notifier.clearAutoPrintKitchen,
     );
 
     // E11: pemetaan stasiun cetak → printer. Perangkat yang sudah dipindai
@@ -412,37 +421,114 @@ class _DevicePanel extends StatelessWidget {
 
 class _SettingsPanel extends StatelessWidget {
   final PrinterSettings settings;
+  final RolePrinterConfig role;
   final ValueChanged<PaperSize> onPaperSize;
+  final VoidCallback onResetPaperSize;
   final ValueChanged<bool> onAutoPrint;
+  final VoidCallback onResetAutoPrint;
   final ValueChanged<int> onCopies;
+  final VoidCallback onResetCopies;
   final ValueChanged<bool> onAutoPrintKitchen;
+  final VoidCallback onResetAutoPrintKitchen;
 
   const _SettingsPanel({
     required this.settings,
+    required this.role,
     required this.onPaperSize,
+    required this.onResetPaperSize,
     required this.onAutoPrint,
+    required this.onResetAutoPrint,
     required this.onCopies,
+    required this.onResetCopies,
     required this.onAutoPrintKitchen,
+    required this.onResetAutoPrintKitchen,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Baseline default role (dipakai bila user tak menimpa masing-masing field).
+    final rolePaper = paperSizeFromMm(role.paperSize);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SectionLabel(title: 'Ukuran Kertas'),
         const Gap(10),
-        _PaperSizeSelector(current: settings.paperSize, onChanged: onPaperSize),
+        _PaperSizeSelector(
+          current: settings.paperSizeOverride ?? rolePaper,
+          overridden: settings.paperSizeOverride != null,
+          roleLabel: paperSizeLabel(rolePaper),
+          onChanged: onPaperSize,
+          onReset: onResetPaperSize,
+        ),
         const Gap(20),
         _SectionLabel(title: 'Pengaturan Cetak'),
         const Gap(10),
         _PrintSettingsCard(
-          autoPrint: settings.autoPrint,
-          copies: settings.copies,
-          autoPrintKitchen: settings.autoPrintKitchen,
+          autoPrint: settings.autoPrintOverride ?? role.autoPrintReceipt,
+          autoPrintOverridden: settings.autoPrintOverride != null,
+          roleAutoPrint: role.autoPrintReceipt,
+          copies: settings.copiesOverride ?? role.printCopies,
+          copiesOverridden: settings.copiesOverride != null,
+          roleCopies: role.printCopies,
+          autoPrintKitchen:
+              settings.autoPrintKitchenOverride ?? role.autoPrintKitchen,
+          autoPrintKitchenOverridden:
+              settings.autoPrintKitchenOverride != null,
+          roleAutoPrintKitchen: role.autoPrintKitchen,
           onAutoPrint: onAutoPrint,
+          onResetAutoPrint: onResetAutoPrint,
           onCopies: onCopies,
+          onResetCopies: onResetCopies,
           onAutoPrintKitchen: onAutoPrintKitchen,
+          onResetAutoPrintKitchen: onResetAutoPrintKitchen,
+        ),
+      ],
+    );
+  }
+}
+
+/// Hint kecil di bawah tiap setting perilaku: menampilkan nilai default role,
+/// dan bila user sedang menimpa, tombol untuk kembali "Ikuti default role".
+class _RoleDefaultHint extends StatelessWidget {
+  final bool overridden;
+  final String roleValueLabel;
+  final VoidCallback onReset;
+  const _RoleDefaultHint({
+    required this.overridden,
+    required this.roleValueLabel,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!overridden) {
+      return Text(
+        'Mengikuti default role · $roleValueLabel',
+        style: TextStyle(fontSize: 11, color: kTextMid),
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Menimpa default role ($roleValueLabel)',
+            style: TextStyle(fontSize: 11, color: kTextMid),
+          ),
+        ),
+        GestureDetector(
+          onTap: onReset,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+            child: Text(
+              'Ikuti default role',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: kPrimary,
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -977,8 +1063,17 @@ class _ActionButton extends StatelessWidget {
 
 class _PaperSizeSelector extends StatelessWidget {
   final PaperSize current;
+  final bool overridden;
+  final String roleLabel;
   final ValueChanged<PaperSize> onChanged;
-  const _PaperSizeSelector({required this.current, required this.onChanged});
+  final VoidCallback onReset;
+  const _PaperSizeSelector({
+    required this.current,
+    required this.overridden,
+    required this.roleLabel,
+    required this.onChanged,
+    required this.onReset,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -990,7 +1085,7 @@ class _PaperSizeSelector extends StatelessWidget {
       PaperSize.mm80: 0.80,
     };
 
-    return Row(
+    final row = Row(
       children: sizes.map((s) {
         final active = s == current;
         final isLast = s == PaperSize.mm80;
@@ -1105,6 +1200,19 @@ class _PaperSizeSelector extends StatelessWidget {
         );
       }).toList(),
     );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        const Gap(8),
+        _RoleDefaultHint(
+          overridden: overridden,
+          roleValueLabel: roleLabel,
+          onReset: onReset,
+        ),
+      ],
+    );
   }
 
   String _sizeDesc(PaperSize s) {
@@ -1125,19 +1233,39 @@ class _PaperSizeSelector extends StatelessWidget {
 
 class _PrintSettingsCard extends StatelessWidget {
   final bool autoPrint;
+  final bool autoPrintOverridden;
+  final bool roleAutoPrint;
   final int copies;
+  final bool copiesOverridden;
+  final int roleCopies;
   final bool autoPrintKitchen;
+  final bool autoPrintKitchenOverridden;
+  final bool roleAutoPrintKitchen;
   final ValueChanged<bool> onAutoPrint;
+  final VoidCallback onResetAutoPrint;
   final ValueChanged<int> onCopies;
+  final VoidCallback onResetCopies;
   final ValueChanged<bool> onAutoPrintKitchen;
+  final VoidCallback onResetAutoPrintKitchen;
   const _PrintSettingsCard({
     required this.autoPrint,
+    required this.autoPrintOverridden,
+    required this.roleAutoPrint,
     required this.copies,
+    required this.copiesOverridden,
+    required this.roleCopies,
     required this.autoPrintKitchen,
+    required this.autoPrintKitchenOverridden,
+    required this.roleAutoPrintKitchen,
     required this.onAutoPrint,
+    required this.onResetAutoPrint,
     required this.onCopies,
+    required this.onResetCopies,
     required this.onAutoPrintKitchen,
+    required this.onResetAutoPrintKitchen,
   });
+
+  static String _onOff(bool v) => v ? 'Aktif' : 'Nonaktif';
 
   @override
   Widget build(BuildContext context) {
@@ -1186,6 +1314,12 @@ class _PrintSettingsCard extends StatelessWidget {
                       Text(
                         'Cetak struk saat pembayaran sukses',
                         style: TextStyle(fontSize: 11, color: kTextMid),
+                      ),
+                      const Gap(6),
+                      _RoleDefaultHint(
+                        overridden: autoPrintOverridden,
+                        roleValueLabel: _onOff(roleAutoPrint),
+                        onReset: onResetAutoPrint,
                       ),
                     ],
                   ),
@@ -1236,6 +1370,12 @@ class _PrintSettingsCard extends StatelessWidget {
                       Text(
                         'Cetak beberapa rangkap sekaligus',
                         style: TextStyle(fontSize: 11, color: kTextMid),
+                      ),
+                      const Gap(6),
+                      _RoleDefaultHint(
+                        overridden: copiesOverridden,
+                        roleValueLabel: '$roleCopies rangkap',
+                        onReset: onResetCopies,
                       ),
                     ],
                   ),
@@ -1311,6 +1451,12 @@ class _PrintSettingsCard extends StatelessWidget {
                       Text(
                         'Cetak tiket dapur/bar per stasiun saat checkout',
                         style: TextStyle(fontSize: 11, color: kTextMid),
+                      ),
+                      const Gap(6),
+                      _RoleDefaultHint(
+                        overridden: autoPrintKitchenOverridden,
+                        roleValueLabel: _onOff(roleAutoPrintKitchen),
+                        onReset: onResetAutoPrintKitchen,
                       ),
                     ],
                   ),

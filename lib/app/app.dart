@@ -16,6 +16,7 @@ import '../features/kasir/providers.dart';
 import '../features/notifications/data/notification_history.dart';
 import '../features/printer/data/printer_service.dart';
 import '../features/printer/data/printer_settings.dart';
+import '../features/printer/data/role_printer_config_repository.dart';
 import '../features/subscription/ui/subscription_banner.dart';
 import '../features/transactions/data/transaction_repository.dart';
 import 'app_routes.dart';
@@ -223,9 +224,12 @@ class _AutoPrintListenerState extends ConsumerState<_AutoPrintListener> {
     _printedOrderIds.add(orderId);
 
     final settings = ref.read(printerSettingsProvider);
+    // Gate auto-print pakai nilai EFEKTIF (override user → default role).
+    // SINKRON — tak menunggu jaringan → offline → default role hardcoded.
+    final effective = ref.read(effectivePrinterConfigProvider);
     // User belum aktifkan auto-print → jangan ganggu. Cetak manual via
     // detail page tetap available.
-    if (!settings.autoPrint) return;
+    if (!effective.autoPrint) return;
     // Auto-print ON tapi printer belum pair: kasir tahu via toast supaya
     // tidak penasaran kenapa tidak ada bunyi printer.
     if (!settings.hasDevice) {

@@ -25,6 +25,8 @@ import '../../drafts/providers.dart';
 import '../../drafts/ui/draft_list_sheet.dart';
 import '../../outlet/data/outlet_service.dart';
 import '../../printer/data/printer_service.dart';
+import '../../printer/data/role_printer_config_repository.dart';
+import '../../printer/data/receipt_settings_repository.dart';
 import '../../products/domain/product.dart';
 import '../../products/ui/barcode_scanner_page.dart';
 import '../../shifts/data/shift_repository.dart';
@@ -46,6 +48,13 @@ class KasirPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Pra-muat default printer (role dari backend + pengaturan struk outlet)
+    // saat layar kasir dibuka, supaya nilai efektif SUDAH ter-cache jauh sebelum
+    // checkout. Jalur auto-print membaca nilai ini secara sinkron (tak menunggu
+    // jaringan), jadi warming di sini mencegah first-print jatuh ke fallback.
+    ref.watch(rolePrinterConfigProvider);
+    ref.watch(receiptSettingsFutureProvider);
+
     // Realtime: notifikasi stok menipis (event inventory.low_stock dari backend
     // via NATS→SSE) → snackbar sekilas supaya kasir/owner sadar untuk restock.
     ref.listen(realtimeEventsProvider, (prev, next) {

@@ -86,6 +86,10 @@ class ApiEndpoint {
   // E11: stasiun cetak per outlet (routing struk dapur/bar).
   static String outletPrintStations(String outletId) =>
       '/outlets/$outletId/print-stations';
+  // Default printer per-role yang diatur owner. `/mine` = default efektif untuk
+  // role user yang sedang login (role diambil dari JWT sisi server).
+  static String outletRolePrinterConfigMine(String outletId) =>
+      '/outlets/$outletId/role-printer-config/mine';
   // C4: grup modifier/add-on yang melekat pada sebuah produk.
   // GET  → daftar grup untuk produk (dipakai kasir & init form attach).
   // PUT  → set/replace grup untuk produk (body {group_ids: [...]}).

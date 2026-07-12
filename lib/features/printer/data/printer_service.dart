@@ -18,6 +18,7 @@ import '../domain/print_station.dart';
 import 'print_station_repository.dart';
 import 'printer_settings.dart';
 import 'receipt_settings_repository.dart';
+import 'role_printer_config_repository.dart';
 import '../domain/receipt_settings.dart';
 
 /// E11: metadata pesanan yang tercetak di kepala tiap tiket dapur/bar.
@@ -165,6 +166,20 @@ class PrinterService {
     return PrintBluetoothThermal.writeBytes(bytes);
   }
 
+  /// Nilai printer efektif (override user → default role → struk outlet →
+  /// fallback hardcoded). Tak pernah melempar — offline / error → default role
+  /// hardcoded supaya cetak tetap jalan.
+  EffectivePrinterConfig _effectiveConfig(OutletReceiptSettings? rs) {
+    // Sinkron: pakai `rs` yang sudah diambil pemanggil + default role yang sudah
+    // termuat (valueOrNull), tanpa menunggu jaringan → aman offline.
+    return EffectivePrinterConfig.resolve(
+      user: _ref.read(printerSettingsProvider),
+      role: _ref.read(rolePrinterConfigProvider).asData?.value ??
+          RolePrinterConfig.fallback,
+      receipt: rs,
+    );
+  }
+
   Future<bool> printReceipt(Sale sale, {bool reprint = false}) async {
     if (!await _ensureConnected()) return false;
     final s = _ref.read(printerSettingsProvider);
@@ -176,11 +191,15 @@ class PrinterService {
     } catch (_) {
       rs = null;
     }
+    // Ukuran kertas & salinan pakai nilai EFEKTIF (override user → default role
+    // → struk outlet). Salinan tak lagi hanya dari rs supaya default role &
+    // override user ikut diperhitungkan.
+    final eff = _effectiveConfig(rs);
     final logo = await _renderLogo();
     final profile = await CapabilityProfile.load();
-    final gen = Generator(s.paperSize, profile);
+    final gen = Generator(eff.paperSize, profile);
     final bytes = _buildReceipt(gen, s, sale, reprint: reprint, logo: logo, rs: rs);
-    final copies = rs?.printCopies ?? s.copies;
+    final copies = eff.copies;
     bool ok = true;
     for (var i = 0; i < copies; i++) {
       final sent = await PrintBluetoothThermal.writeBytes(bytes);
@@ -227,8 +246,10 @@ class PrinterService {
       time: sale.createdAt,
     );
 
+    // Ukuran kertas efektif supaya lebar tiket dapur konsisten dengan struk.
+    final eff = _effectiveConfig(null);
     final profile = await CapabilityProfile.load();
-    final gen = Generator(s.paperSize, profile);
+    final gen = Generator(eff.paperSize, profile);
 
     bool ok = true;
     String? connectedMac; // hindari reconnect berulang ke printer yang sama.
