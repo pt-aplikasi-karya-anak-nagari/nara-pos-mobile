@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -34,24 +35,45 @@ class ProductCard extends HookConsumerWidget {
     final isCompact = density == 1; // High density (small cards)
     final cart = ref.read(cartProvider.notifier);
     final inCart = qty > 0;
+    // Auto-86 (fase 5b/6b): overlay ketersediaan terkini di atas Product yang
+    // dibawa PagingController. Di-set oleh toggle 86 manual & event realtime
+    // product.availability_changed. Fail-open: tak ada override → nilai bawaan.
+    final override = ref.watch(
+      productAvailabilityOverridesProvider.select((m) => m[product.remoteId]),
+    );
+    final effInStock = override?.isInStock ?? product.isInStock;
+    final effPortions = override != null
+        ? override.availablePortions
+        : product.availablePortions;
+    final effOosReason = override?.oosReason ?? product.oosReason;
+    final effLowStock = override?.isLowStock ?? product.isLowStock;
+    final manually86 =
+        override?.manualOutOfStock ?? product.manualOutOfStock;
     // Produk tanpa "kelola stok" tidak menggunakan sistem stok: tidak pernah
     // dianggap habis dan tidak punya batas kuantitas.
     final tracksStock = product.trackStock;
     final stockOut = tracksStock && product.stock <= 0;
-    // Auto-86: bahan resep habis menurut backend. Fail-open — isInStock default
-    // true saat field absen (backend lama / produk tanpa resep) → tak pernah
-    // dianggap habis di sini.
-    final ingredientOut = !product.isInStock;
+    // Auto-86: bahan resep habis / di-86 manual menurut backend. Fail-open —
+    // isInStock default true saat field absen (backend lama / produk tanpa
+    // resep) → tak pernah dianggap habis di sini.
+    final ingredientOut = !effInStock;
     // "Habis" bila kehabisan stok fisik ATAU kehabisan bahan resep. Layer
     // auto-86 di ATAS logika stok fisik yang lama (bukan menggantikan).
     final outOfStock = stockOut || ingredientOut;
     // Auto-86 menipis: backend menandai is_low_stock memakai ambang porsi
     // per-outlet. Badge "sisa N" tampil saat produk ditandai menipis dan
     // belum habis. Angka "N" diambil dari availablePortions (null → "sisa").
-    final portions = product.availablePortions;
-    final lowPortions = product.isLowStock && !outOfStock;
+    final portions = effPortions;
+    final lowPortions = effLowStock && !outOfStock;
     final canAddMore = !outOfStock && (!tracksStock || qty < product.stock);
     final hasVariants = product.variants.isNotEmpty;
+    // Label habis dibedakan berdasar alasan: di-86 manual, bahan habis, atau
+    // habis stok fisik. Fail-open: reason kosong / 'stock' → "Habis" biasa.
+    final outOfStockLabel = switch (effOosReason) {
+      'manual' => ref.t('product.marked_86'),
+      'ingredient' => ref.t('product.ingredient_out'),
+      _ => ref.t('product.out_of_stock'),
+    };
 
     // Auto-86: saat add diblokir karena bahan habis, beri feedback jelas ke
     // kasir (bukan sekadar diam) sesuai spesifikasi UX.
@@ -132,7 +154,195 @@ class ProductCard extends HookConsumerWidget {
       }
     }
 
+    // Auto-86 fase 6b: kasir menandai / memulihkan status "86" (habis manual)
+    // dari lapangan. Panggil endpoint PUT /products/:id/manual-86, lalu overlay
+    // respons otoritatif backend ke kartu supaya grey-out / pulih seketika.
+    Future<void> toggleEightySix(bool markOut) async {
+      final pid = product.remoteId;
+      if (pid == null || pid.isEmpty) return;
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        final updated = await ref
+            .read(outletServiceProvider)
+            .setManualOutOfStock(pid, markOut);
+        ref
+            .read(productAvailabilityOverridesProvider.notifier)
+            .set(
+              pid,
+              ProductAvailability(
+                isInStock: updated.isInStock,
+                availablePortions: updated.availablePortions,
+                oosReason: updated.oosReason,
+                isLowStock: updated.isLowStock,
+                manualOutOfStock: updated.manualOutOfStock,
+              ),
+            );
+        if (!context.mounted) return;
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            duration: const Duration(milliseconds: 1500),
+            content: Text(
+              '${product.name} — ${markOut ? ref.t('product.marked_86_done') : ref.t('product.restored_done')}',
+            ),
+            backgroundColor: markOut ? kDanger : kSuccess,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${ref.t('product.mark_86_failed')}: $e'),
+            backgroundColor: kDanger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
+
+    Future<void> showEightySixSheet() async {
+      // Produk custom (tanpa remoteId) bukan bagian katalog → tak bisa di-86.
+      final pid = product.remoteId;
+      if (pid == null || pid.isEmpty) return;
+      HapticFeedback.mediumImpact();
+      // Arah toggle berlawanan dari status manual saat ini.
+      final markOut = !manually86;
+      final accent = markOut ? kDanger : kSuccess;
+      final title = markOut
+          ? ref.t('product.mark_86')
+          : ref.t('product.restore_86');
+      final hint = markOut
+          ? ref.t('product.mark_86_hint')
+          : ref.t('product.restore_86_hint');
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetCtx) => Container(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            12,
+            24,
+            24 + MediaQuery.of(sheetCtx).padding.bottom,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: kDivider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Gap(20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: HugeIcon(
+                      icon: markOut
+                          ? AppIcons.alertCircle
+                          : AppIcons.checkCircle,
+                      color: accent,
+                      size: 22,
+                    ),
+                  ),
+                  const Gap(12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: kTextDark,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Gap(2),
+                        Text(
+                          hint,
+                          style: TextStyle(fontSize: 12, color: kTextMid),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Gap(20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(sheetCtx);
+                    toggleEightySix(markOut);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+              const Gap(8),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(sheetCtx),
+                  child: Text(
+                    ref.t('common.cancel'),
+                    style: TextStyle(
+                      color: kTextMid,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
+      // Auto-86: tekan lama → sheet tandai/pulihkan "86" manual (fase 6b).
+      onLongPress: showEightySixSheet,
       // Habis-bahan (auto-86): tap tampilkan snackbar "Bahan habis" alih-alih
       // diam. Habis stok fisik biasa tetap no-op seperti sebelumnya.
       onTap: canAddMore
@@ -252,7 +462,7 @@ class ProductCard extends HookConsumerWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  ref.t('product.out_of_stock'),
+                                  outOfStockLabel,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 10,

@@ -36,6 +36,15 @@ class Product {
   // availablePortions). Default false saat field absen → fail-open (backend
   // lama / produk tanpa resep) → tak ada badge menipis.
   bool isLowStock;
+  // manualOutOfStock: kasir menandai produk "86" secara manual (habis di
+  // lapangan walau stok/bahan sistem masih ada). Backend meng-OR-kan ini ke
+  // isInStock. Default false saat field absen → fail-open (produk normal).
+  bool manualOutOfStock;
+  // oosReason: alasan produk tak tersedia — "manual" (di-86 kasir),
+  // "ingredient" (bahan resep habis), "stock" (stok fisik habis), atau ''
+  // (tersedia / field absen). Dipakai kasir untuk membedakan label habis.
+  // Default '' saat field absen → fail-open (dianggap normal).
+  String oosReason;
   // isTaxable: apakah produk kena pajak (PPN/PB1). Default true supaya
   // produk existing tetap dipajaki seperti biasa. Item non-pajak
   // (is_taxable=false) dikecualikan dari basis pajak di kasir & backend.
@@ -70,6 +79,8 @@ class Product {
     this.availablePortions,
     this.isInStock = true,
     this.isLowStock = false,
+    this.manualOutOfStock = false,
+    this.oosReason = '',
     this.isTaxable = true,
     this.discountType = 'none',
     this.discountValue = 0,
@@ -102,6 +113,8 @@ class Product {
     int? availablePortions,
     bool? isInStock,
     bool? isLowStock,
+    bool? manualOutOfStock,
+    String? oosReason,
     bool? isTaxable,
     String? discountType,
     double? discountValue,
@@ -130,6 +143,8 @@ class Product {
       availablePortions: availablePortions ?? this.availablePortions,
       isInStock: isInStock ?? this.isInStock,
       isLowStock: isLowStock ?? this.isLowStock,
+      manualOutOfStock: manualOutOfStock ?? this.manualOutOfStock,
+      oosReason: oosReason ?? this.oosReason,
       isTaxable: isTaxable ?? this.isTaxable,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
@@ -175,6 +190,11 @@ class Product {
       // Auto-86 menipis: backend hitung pakai ambang porsi per-outlet.
       // Fail-open: field absen → false → tak ada badge menipis.
       isLowStock: json['is_low_stock'] as bool? ?? false,
+      // Auto-86 manual: kasir menandai habis. Fail-open: absen → false.
+      manualOutOfStock: json['manual_out_of_stock'] as bool? ?? false,
+      // Alasan habis. omitempty di backend → absen saat produk tersedia.
+      // Fail-open: absen → '' → dianggap normal.
+      oosReason: json['oos_reason'] as String? ?? '',
       // Default true saat field absen → produk lama (payload/cache tanpa
       // is_taxable) tetap dianggap kena pajak.
       isTaxable: json['is_taxable'] as bool? ?? true,
@@ -212,6 +232,8 @@ class Product {
         'available_portions': availablePortions,
         'is_in_stock': isInStock,
         'is_low_stock': isLowStock,
+        'manual_out_of_stock': manualOutOfStock,
+        'oos_reason': oosReason,
         'is_taxable': isTaxable,
         'discount_type': discountType,
         'discount_value': discountValue,

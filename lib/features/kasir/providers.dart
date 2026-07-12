@@ -320,6 +320,57 @@ final categoryNamesProvider = Provider<List<String>>((ref) {
   return cats.map((c) => c.name).toList();
 });
 
+// ─── Live availability overrides (auto-86 fase 5b/6b) ─────────────────────────
+/// Nilai ketersediaan terkini untuk satu produk. Di-set oleh toggle "86"
+/// manual (fase 6b) ATAU event realtime `product.availability_changed`
+/// (fase 5b). Kartu kasir meng-overlay nilai ini di atas Product yang dibawa
+/// PagingController sehingga status habis/pulih tampil seketika tanpa harus
+/// refetch seluruh grid.
+class ProductAvailability {
+  const ProductAvailability({
+    required this.isInStock,
+    this.availablePortions,
+    this.oosReason = '',
+    this.isLowStock,
+    this.manualOutOfStock,
+  });
+
+  final bool isInStock;
+  final int? availablePortions;
+  final String oosReason;
+  // null → pertahankan nilai isLowStock dari Product (event realtime tak
+  // membawa low-stock, hanya ketersediaan habis/pulih).
+  final bool? isLowStock;
+  // null → pertahankan nilai manualOutOfStock dari Product. Di-set eksplisit
+  // oleh toggle 86 manual (dari respons backend); event realtime membiarkan
+  // null karena tak membawa status manual.
+  final bool? manualOutOfStock;
+}
+
+/// Peta productId → ketersediaan terkini. Fail-open: produk yang tak ada di
+/// peta memakai nilai bawaan dari Product (backend lama / tanpa override).
+class ProductAvailabilityOverrides
+    extends Notifier<Map<String, ProductAvailability>> {
+  @override
+  Map<String, ProductAvailability> build() => const {};
+
+  void set(String productId, ProductAvailability availability) {
+    if (productId.isEmpty) return;
+    state = {...state, productId: availability};
+  }
+
+  /// Hapus semua override — dipanggil saat pull-to-refresh menarik data
+  /// otoritatif baru, supaya override lama tak lagi menaungi Product segar.
+  void clear() {
+    if (state.isEmpty) return;
+    state = const {};
+  }
+}
+
+final productAvailabilityOverridesProvider =
+    NotifierProvider<ProductAvailabilityOverrides,
+        Map<String, ProductAvailability>>(ProductAvailabilityOverrides.new);
+
 // ─── Grid Density ─────────────────────────────────────────────────────────────
 /// Menyesuaikan jumlah kolom grid produk (-1, 0, +1, dsb dari default).
 class GridDensityNotifier extends Notifier<int> {

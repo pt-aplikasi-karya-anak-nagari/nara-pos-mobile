@@ -12,6 +12,7 @@ import '../shared/widgets/pending_sync_banner.dart';
 import '../core/i18n.dart';
 import '../core/offline/offline_sync_service.dart';
 import '../core/notifications.dart';
+import '../features/kasir/providers.dart';
 import '../features/notifications/data/notification_history.dart';
 import '../features/printer/data/printer_service.dart';
 import '../features/printer/data/printer_settings.dart';
@@ -333,6 +334,15 @@ class _OrderRefreshListenerState extends ConsumerState<_OrderRefreshListener> {
     if (!mounted) return;
     final data = message.data;
     final type = (data['type'] ?? '').toString();
+    // Auto-86 fase 5b: menu ditandai habis (86) oleh device/pegawai lain.
+    // Update live granular sudah ditangani SSE product.availability_changed;
+    // ini jaring pengaman untuk device yang tak sedang mendengarkan SSE —
+    // refresh katalog produk umum supaya status habis ikut termutakhirkan.
+    // Banner OS/local notif sudah dirender NotificationService secara terpisah.
+    if (type == 'product_86') {
+      ref.invalidate(productsStreamProvider);
+      return;
+    }
     if (type != 'new_menu_order' &&
         type != 'proof_uploaded' &&
         type != 'order_updated') {

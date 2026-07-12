@@ -240,6 +240,20 @@ class OutletService extends BaseApiService {
     await post('/products/$productId/favorite', data: {});
   }
 
+  /// Tandai / pulihkan status "86" (habis manual) sebuah produk dari kasir.
+  /// `outOfStock=true` → produk di-86 (disembunyikan dari penjualan);
+  /// `false` → dipulihkan. Backend meng-OR-kan flag ini ke is_in_stock dan
+  /// mengembalikan Product yang sudah di-enrich (is_in_stock, oos_reason,
+  /// available_portions terkini). Envelope `{ data: ... }` di-unwrap oleh
+  /// [BaseApiService].
+  Future<Product> setManualOutOfStock(String productId, bool outOfStock) async {
+    return put<Product>(
+      '/products/$productId/manual-86',
+      data: {'out_of_stock': outOfStock},
+      converter: (raw) => Product.fromJson(raw as Map<String, dynamic>),
+    );
+  }
+
   /// Upload gambar produk via multipart/form-data.
   /// Backend menyimpan file ke `uploads/products/` dan mengembalikan
   /// path relatif (mis. `/uploads/products/abc.jpg`) yang bisa di-prefix

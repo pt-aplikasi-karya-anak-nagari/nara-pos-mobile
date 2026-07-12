@@ -65,6 +65,50 @@ class KasirPage extends HookConsumerWidget {
       );
     });
 
+    // Auto-86 fase 5b: event realtime product.availability_changed → patch
+    // ketersediaan produk (isInStock / availablePortions / oosReason) di
+    // override provider, keyed by product_id. Kartu yang menampilkan produk
+    // ini akan grey-out / pulih seketika di semua device yang mendengarkan.
+    ref.listen(realtimeEventsProvider, (prev, next) {
+      final ev = next.asData?.value;
+      if (ev == null || ev.type != 'product.availability_changed') return;
+      final pid = (ev.data['product_id'] as String?) ?? '';
+      if (pid.isEmpty) return;
+      // Fail-open: field absen → dianggap tersedia.
+      final isInStock = ev.data['is_in_stock'] as bool? ?? true;
+      final portions = (ev.data['available_portions'] as num?)?.toInt();
+      final reason = (ev.data['oos_reason'] as String?) ?? '';
+      ref
+          .read(productAvailabilityOverridesProvider.notifier)
+          .set(
+            pid,
+            ProductAvailability(
+              isInStock: isInStock,
+              availablePortions: portions,
+              oosReason: reason,
+            ),
+          );
+      // Beri tahu kasir sekilas saat produk menjadi habis (bukan saat pulih,
+      // supaya tidak berisik). Label ikut alasan habisnya.
+      if (!isInStock) {
+        final name = (ev.data['name'] as String?) ?? 'Produk';
+        final label = switch (reason) {
+          'manual' => ref.t('product.marked_86'),
+          'ingredient' => ref.t('product.ingredient_out'),
+          _ => ref.t('product.out_of_stock'),
+        };
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('🚫 $name — $label'),
+            backgroundColor: kDanger,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+
     final category = ref.watch(selectedMainCategoryProvider);
     final scanMode = useState(false);
     final dynamicCats = ref.watch(categoryNamesProvider);
@@ -637,6 +681,9 @@ class KasirPage extends HookConsumerWidget {
         // Refresh stream produk umum yang dipakai layar lain (mis. form
         // produk) supaya data di sana ikut konsisten.
         ref.invalidate(productsStreamProvider);
+        // Data segar dari server otoritatif → buang override auto-86 lama
+        // supaya tak lagi menaungi status ketersediaan yang baru di-fetch.
+        ref.read(productAvailabilityOverridesProvider.notifier).clear();
         // Refresh grid pagination — fetch ulang halaman pertama produk.
         pagingController.refresh();
         // Tahan indikator refresh sampai data kategori baru tiba supaya

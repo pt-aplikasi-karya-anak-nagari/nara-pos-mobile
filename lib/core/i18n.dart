@@ -301,6 +301,28 @@ const Map<String, Map<String, String>> _strings = {
   'product.ingredient_out': {'id': 'Bahan habis', 'en': 'Out of ingredients'},
   // Auto-86: sisa porsi yang masih bisa dibuat dari stok bahan.
   'product.portions_left': {'id': 'sisa', 'en': 'left'},
+  // Auto-86 manual: produk ditandai habis (86) oleh kasir.
+  'product.marked_86': {'id': 'Di-86', 'en': 'Marked 86'},
+  // Aksi kasir: tandai / pulihkan status 86 manual.
+  'product.mark_86': {'id': 'Tandai habis (86)', 'en': 'Mark out (86)'},
+  'product.restore_86': {'id': 'Pulihkan', 'en': 'Restore'},
+  'product.mark_86_hint': {
+    'id': 'Sembunyikan dari penjualan sampai dipulihkan',
+    'en': 'Hide from sale until restored',
+  },
+  'product.restore_86_hint': {
+    'id': 'Tampilkan kembali untuk dijual',
+    'en': 'Show again for sale',
+  },
+  'product.marked_86_done': {
+    'id': 'ditandai habis (86)',
+    'en': 'marked out of stock (86)',
+  },
+  'product.restored_done': {'id': 'dipulihkan', 'en': 'restored'},
+  'product.mark_86_failed': {
+    'id': 'Gagal memperbarui status 86',
+    'en': 'Failed to update 86 status',
+  },
   'scanner.title': {'id': 'Pindai Barcode', 'en': 'Scan Barcode'},
   'scanner.hint': {
     'id': 'Arahkan kamera ke barcode',
