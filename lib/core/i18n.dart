@@ -297,6 +297,10 @@ const Map<String, Map<String, String>> _strings = {
   'product.stock_hint': {'id': 'Contoh: 50', 'en': 'Example: 50'},
   'product.out_of_stock': {'id': 'Habis', 'en': 'Out of Stock'},
   'product.sold': {'id': 'Terjual', 'en': 'Sold'},
+  // Auto-86: bahan resep habis → produk tak bisa dijual.
+  'product.ingredient_out': {'id': 'Bahan habis', 'en': 'Out of ingredients'},
+  // Auto-86: sisa porsi yang masih bisa dibuat dari stok bahan.
+  'product.portions_left': {'id': 'sisa', 'en': 'left'},
   'scanner.title': {'id': 'Pindai Barcode', 'en': 'Scan Barcode'},
   'scanner.hint': {
     'id': 'Arahkan kamera ke barcode',

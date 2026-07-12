@@ -23,6 +23,14 @@ class Product {
   String? imageUrl;
   bool isAvailable;
   bool trackStock;
+  // Auto-86 (out-of-ingredient): dihitung backend dari stok bahan/resep.
+  // availablePortions = maksimum porsi yang masih bisa dibuat. null = tak
+  // dibatasi (produk tanpa resep). 0 = habis. Positif = sisa porsi.
+  int? availablePortions;
+  // isInStock: false → bahan habis, produk tak bisa dijual (di-disable di
+  // kasir). Default true saat field absen → fail-open untuk backend lama /
+  // produk tanpa resep.
+  bool isInStock;
   // isTaxable: apakah produk kena pajak (PPN/PB1). Default true supaya
   // produk existing tetap dipajaki seperti biasa. Item non-pajak
   // (is_taxable=false) dikecualikan dari basis pajak di kasir & backend.
@@ -54,6 +62,8 @@ class Product {
     this.imageUrl,
     this.isAvailable = true,
     this.trackStock = true,
+    this.availablePortions,
+    this.isInStock = true,
     this.isTaxable = true,
     this.discountType = 'none',
     this.discountValue = 0,
@@ -91,6 +101,8 @@ class Product {
     String? imageUrl,
     bool? isAvailable,
     bool? trackStock,
+    int? availablePortions,
+    bool? isInStock,
     bool? isTaxable,
     String? discountType,
     double? discountValue,
@@ -116,6 +128,8 @@ class Product {
       imageUrl: imageUrl ?? this.imageUrl,
       isAvailable: isAvailable ?? this.isAvailable,
       trackStock: trackStock ?? this.trackStock,
+      availablePortions: availablePortions ?? this.availablePortions,
+      isInStock: isInStock ?? this.isInStock,
       isTaxable: isTaxable ?? this.isTaxable,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
@@ -153,6 +167,11 @@ class Product {
       imageUrl: json['image_url'] as String?,
       isAvailable: json['is_available'] as bool? ?? true,
       trackStock: json['track_stock'] as bool? ?? true,
+      // Auto-86: null saat field absen → produk lama / tanpa resep, tak
+      // dibatasi porsi. Terima int/num agar aman terhadap serialisasi.
+      availablePortions: (json['available_portions'] as num?)?.toInt(),
+      // Fail-open: field absen → dianggap tersedia (backend lama / no recipe).
+      isInStock: json['is_in_stock'] as bool? ?? true,
       // Default true saat field absen → produk lama (payload/cache tanpa
       // is_taxable) tetap dianggap kena pajak.
       isTaxable: json['is_taxable'] as bool? ?? true,
@@ -187,6 +206,8 @@ class Product {
         'image_url': imageUrl,
         'is_available': isAvailable,
         'track_stock': trackStock,
+        'available_portions': availablePortions,
+        'is_in_stock': isInStock,
         'is_taxable': isTaxable,
         'discount_type': discountType,
         'discount_value': discountValue,

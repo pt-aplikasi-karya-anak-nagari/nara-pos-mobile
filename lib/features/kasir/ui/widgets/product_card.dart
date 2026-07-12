@@ -20,6 +20,10 @@ import 'qty_button.dart';
 import '../../../../core/outlet_scope.dart';
 import '../../../outlet/data/outlet_service.dart';
 
+// Ambang "menipis" auto-86: bila sisa porsi (dihitung backend dari stok bahan)
+// berada di rentang (0, threshold] tampilkan badge "sisa N".
+const int kAuto86LowThreshold = 5;
+
 class ProductCard extends HookConsumerWidget {
   final Product product;
   const ProductCard({super.key, required this.product});
@@ -37,9 +41,42 @@ class ProductCard extends HookConsumerWidget {
     // Produk tanpa "kelola stok" tidak menggunakan sistem stok: tidak pernah
     // dianggap habis dan tidak punya batas kuantitas.
     final tracksStock = product.trackStock;
-    final outOfStock = tracksStock && product.stock <= 0;
+    final stockOut = tracksStock && product.stock <= 0;
+    // Auto-86: bahan resep habis menurut backend. Fail-open — isInStock default
+    // true saat field absen (backend lama / produk tanpa resep) → tak pernah
+    // dianggap habis di sini.
+    final ingredientOut = !product.isInStock;
+    // "Habis" bila kehabisan stok fisik ATAU kehabisan bahan resep. Layer
+    // auto-86 di ATAS logika stok fisik yang lama (bukan menggantikan).
+    final outOfStock = stockOut || ingredientOut;
+    // availablePortions: null = tak dibatasi (produk tanpa resep). Badge
+    // "sisa N" hanya saat masih ada porsi tapi menipis (0 < n <= threshold)
+    // dan produk belum habis.
+    final portions = product.availablePortions;
+    final lowPortions = !outOfStock &&
+        portions != null &&
+        portions > 0 &&
+        portions <= kAuto86LowThreshold;
     final canAddMore = !outOfStock && (!tracksStock || qty < product.stock);
     final hasVariants = product.variants.isNotEmpty;
+
+    // Auto-86: saat add diblokir karena bahan habis, beri feedback jelas ke
+    // kasir (bukan sekadar diam) sesuai spesifikasi UX.
+    void showBahanHabis() {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(milliseconds: 1500),
+          content: Text('${product.name} — ${ref.t('product.ingredient_out')}'),
+          backgroundColor: kDanger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
 
     final titleSize = isCompact ? 10.sp : 12.sp;
     final priceSize = isCompact ? 10.sp : 12.sp;
@@ -103,7 +140,11 @@ class ProductCard extends HookConsumerWidget {
     }
 
     return GestureDetector(
-      onTap: canAddMore ? addDirect : null,
+      // Habis-bahan (auto-86): tap tampilkan snackbar "Bahan habis" alih-alih
+      // diam. Habis stok fisik biasa tetap no-op seperti sebelumnya.
+      onTap: canAddMore
+          ? addDirect
+          : (ingredientOut ? showBahanHabis : null),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
@@ -227,6 +268,31 @@ class ProductCard extends HookConsumerWidget {
                                 ),
                               ),
                             )
+                          // Auto-86 menipis: sisa porsi (dari stok bahan) sudah
+                          // sedikit tapi belum habis → badge amber "sisa N".
+                          else if (lowPortions)
+                            Positioned(
+                              left: 8,
+                              top: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: kWarning,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${ref.t('product.portions_left')} $portions',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            )
                           else if (tracksStock)
                             Positioned(
                               left: 8,
@@ -253,7 +319,9 @@ class ProductCard extends HookConsumerWidget {
                           if (product.hasDiscount)
                             Positioned(
                               left: 8,
-                              top: outOfStock ? 36 : 8,
+                              // Geser turun bila ada badge Habis / "sisa N" di
+                              // slot kiri-atas supaya tidak bertumpuk.
+                              top: (outOfStock || lowPortions) ? 36 : 8,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
