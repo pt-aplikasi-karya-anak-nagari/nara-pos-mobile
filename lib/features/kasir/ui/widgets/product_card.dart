@@ -20,10 +20,6 @@ import 'qty_button.dart';
 import '../../../../core/outlet_scope.dart';
 import '../../../outlet/data/outlet_service.dart';
 
-// Ambang "menipis" auto-86: bila sisa porsi (dihitung backend dari stok bahan)
-// berada di rentang (0, threshold] tampilkan badge "sisa N".
-const int kAuto86LowThreshold = 5;
-
 class ProductCard extends HookConsumerWidget {
   final Product product;
   const ProductCard({super.key, required this.product});
@@ -49,14 +45,11 @@ class ProductCard extends HookConsumerWidget {
     // "Habis" bila kehabisan stok fisik ATAU kehabisan bahan resep. Layer
     // auto-86 di ATAS logika stok fisik yang lama (bukan menggantikan).
     final outOfStock = stockOut || ingredientOut;
-    // availablePortions: null = tak dibatasi (produk tanpa resep). Badge
-    // "sisa N" hanya saat masih ada porsi tapi menipis (0 < n <= threshold)
-    // dan produk belum habis.
+    // Auto-86 menipis: backend menandai is_low_stock memakai ambang porsi
+    // per-outlet. Badge "sisa N" tampil saat produk ditandai menipis dan
+    // belum habis. Angka "N" diambil dari availablePortions (null → "sisa").
     final portions = product.availablePortions;
-    final lowPortions = !outOfStock &&
-        portions != null &&
-        portions > 0 &&
-        portions <= kAuto86LowThreshold;
+    final lowPortions = product.isLowStock && !outOfStock;
     final canAddMore = !outOfStock && (!tracksStock || qty < product.stock);
     final hasVariants = product.variants.isNotEmpty;
 
@@ -284,7 +277,9 @@ class ProductCard extends HookConsumerWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  '${ref.t('product.portions_left')} $portions',
+                                  portions != null
+                                      ? '${ref.t('product.portions_left')} $portions'
+                                      : ref.t('product.portions_left'),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 9,

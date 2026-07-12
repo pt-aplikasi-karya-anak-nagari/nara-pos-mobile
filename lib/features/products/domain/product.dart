@@ -31,6 +31,11 @@ class Product {
   // kasir). Default true saat field absen → fail-open untuk backend lama /
   // produk tanpa resep.
   bool isInStock;
+  // isLowStock: dihitung backend memakai ambang porsi menipis per-outlet.
+  // true → tampilkan badge amber "sisa N" di kasir (angka diambil dari
+  // availablePortions). Default false saat field absen → fail-open (backend
+  // lama / produk tanpa resep) → tak ada badge menipis.
+  bool isLowStock;
   // isTaxable: apakah produk kena pajak (PPN/PB1). Default true supaya
   // produk existing tetap dipajaki seperti biasa. Item non-pajak
   // (is_taxable=false) dikecualikan dari basis pajak di kasir & backend.
@@ -64,6 +69,7 @@ class Product {
     this.trackStock = true,
     this.availablePortions,
     this.isInStock = true,
+    this.isLowStock = false,
     this.isTaxable = true,
     this.discountType = 'none',
     this.discountValue = 0,
@@ -75,14 +81,6 @@ class Product {
 
   bool get hasDiscount => discountType != 'none' && discountValue > 0;
   bool get isOutOfStock => trackStock && stock <= 0;
-  // isLowStock: true kalau produk track stock, threshold > 0, dan
-  // stock dalam range (0, threshold]. Out-of-stock SUDAH ada
-  // isOutOfStock terpisah — di UI biasanya rendering badge berbeda.
-  bool get isLowStock =>
-      trackStock &&
-      lowStockThreshold > 0 &&
-      stock > 0 &&
-      stock <= lowStockThreshold;
 
   Product copyWith({
     String? remoteId,
@@ -103,6 +101,7 @@ class Product {
     bool? trackStock,
     int? availablePortions,
     bool? isInStock,
+    bool? isLowStock,
     bool? isTaxable,
     String? discountType,
     double? discountValue,
@@ -130,6 +129,7 @@ class Product {
       trackStock: trackStock ?? this.trackStock,
       availablePortions: availablePortions ?? this.availablePortions,
       isInStock: isInStock ?? this.isInStock,
+      isLowStock: isLowStock ?? this.isLowStock,
       isTaxable: isTaxable ?? this.isTaxable,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
@@ -172,6 +172,9 @@ class Product {
       availablePortions: (json['available_portions'] as num?)?.toInt(),
       // Fail-open: field absen → dianggap tersedia (backend lama / no recipe).
       isInStock: json['is_in_stock'] as bool? ?? true,
+      // Auto-86 menipis: backend hitung pakai ambang porsi per-outlet.
+      // Fail-open: field absen → false → tak ada badge menipis.
+      isLowStock: json['is_low_stock'] as bool? ?? false,
       // Default true saat field absen → produk lama (payload/cache tanpa
       // is_taxable) tetap dianggap kena pajak.
       isTaxable: json['is_taxable'] as bool? ?? true,
@@ -208,6 +211,7 @@ class Product {
         'track_stock': trackStock,
         'available_portions': availablePortions,
         'is_in_stock': isInStock,
+        'is_low_stock': isLowStock,
         'is_taxable': isTaxable,
         'discount_type': discountType,
         'discount_value': discountValue,
