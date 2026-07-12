@@ -21,8 +21,25 @@ class AuthStorage {
   String? get userData => _prefs.getString(userDataKey);
 
   Future<void> init() async {
-    _accessToken = await _secureStorage.read(key: accessTokenKey);
-    _refreshToken = await _secureStorage.read(key: refreshTokenKey);
+    // Baca secure-storage bisa throw (BadPaddingException / AEADBadTagException /
+    // "Could not decrypt value") setelah restore backup ke device baru, upgrade
+    // OS, atau key Keystore ter-invalidasi. Kalau dibiarkan naik, ini memblokir
+    // startup (main() → runApp() tak jalan → layar putih). Tangkap: bersihkan
+    // entry korup supaya login berikutnya bisa menulis ulang, lalu lanjut sebagai
+    // logged-out (token null).
+    try {
+      _accessToken = await _secureStorage.read(key: accessTokenKey);
+      _refreshToken = await _secureStorage.read(key: refreshTokenKey);
+    } catch (_) {
+      _accessToken = null;
+      _refreshToken = null;
+      try {
+        await _secureStorage.deleteAll();
+      } catch (_) {
+        // Best-effort — abaikan bila menghapus keystore korup pun gagal.
+      }
+      return;
+    }
 
     final legacyAccessToken = _prefs.getString(accessTokenKey);
     final legacyRefreshToken = _prefs.getString(refreshTokenKey);

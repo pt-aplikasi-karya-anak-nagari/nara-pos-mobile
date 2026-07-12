@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Warna aksen notifikasi FCM (di-tint OS pada small-icon & judul).
+         Merah brand NARA (0xFFB0231F). Dirujuk dari AndroidManifest via
+         com.google.firebase.messaging.default_notification_color. -->
+    <color name="notification_color">#B0231F</color>
+</resources>

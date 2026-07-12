@@ -32,6 +32,23 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Ikon/warna/channel default untuk notifikasi FCM yang dirender OS saat
+             app di BACKGROUND / KILLED (jalur utama alert pesanan baru ke kasir).
+             Tanpa ini, OS fallback ke @mipmap/ic_launcher (logo full-color) yang
+             digambar sebagai kotak putih di status bar — persis bug yang
+             ic_notification.xml dibuat untuk hindari. Small-icon HARUS silhouette
+             putih transparan. channel_id harus cocok dgn _fcmChannelId di
+             lib/core/notifications.dart. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="mako_fcm_v3" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
