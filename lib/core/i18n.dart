@@ -127,7 +127,7 @@ const Map<String, Map<String, String>> _strings = {
     'id': 'Masuk untuk mengelola outlet Anda',
     'en': 'Login to manage your outlet',
   },
-  'login.email': {'id': 'Email', 'en': 'Email'},
+  'login.email': {'id': 'Email atau Username', 'en': 'Email or Username'},
   'login.password': {'id': 'Password', 'en': 'Password'},
   'login.mode_password': {'id': 'Password', 'en': 'Password'},
   'login.mode_otp': {'id': 'Kode OTP', 'en': 'OTP Code'},

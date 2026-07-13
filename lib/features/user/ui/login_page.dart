@@ -585,9 +585,9 @@ class _LoginForm extends ConsumerWidget {
         _InputLabel(ref.t('login.email')),
         _CustomTextField(
           controller: userCtrl,
-          hint: 'user@example.com',
-          icon: Icons.alternate_email_rounded,
-          keyboardType: TextInputType.emailAddress,
+          hint: 'email atau username',
+          icon: Icons.person_outline_rounded,
+          keyboardType: TextInputType.text,
         ),
         Gap(2.5.h),
         ValueListenableBuilder<bool>(
