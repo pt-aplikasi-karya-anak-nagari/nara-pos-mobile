@@ -5,7 +5,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_flavor/flutter_flavor.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 // intl mengekspor TextDirection sendiri (API LTR/RTL) yang bentrok dgn milik
@@ -103,28 +102,7 @@ Future<void> _bootstrap() async {
 
   try {
     AppConfig.assertValid();
-
-    // Flavor runtime (flutter_flavor). Dipilih dari APP_ENV (env/*.json). `name`
-    // dikosongkan untuk PROD → FlavorBanner tidak menampilkan ribbon (app bersih);
-    // untuk DEV → ribbon "DEV" muncul di sudut. variables menyimpan info env untuk
-    // diakses di mana saja (mis. debug panel).
-    FlavorConfig(
-      name: AppConfig.isProd ? '' : AppConfig.flavor.id.toUpperCase(),
-      color: const Color(0xFFB0231F),
-      location: BannerLocation.topEnd,
-      variables: {
-        'env': AppConfig.flavorLabel,
-        'apiBaseUrl': AppConfig.apiBaseUrl,
-      },
-    );
-
-    // Jelaskan environment aktif di log startup + peringatkan misconfig produksi
-    // (mis. build prod tapi masih mengarah ke backend LAN).
-    debugPrint('[NARA] flavor=${AppConfig.flavor.id} '
-        '(${AppConfig.flavorLabel}) · API=${AppConfig.apiBaseUrl}');
-    for (final warn in AppConfig.configWarnings()) {
-      debugPrint('[NARA] ⚠️  $warn');
-    }
+    debugPrint('[NARA] API=${AppConfig.apiBaseUrl}');
 
     // Firebase best-effort. Config prod bisa mismatch, Play Services usang, atau
     // channel gagal → JANGAN blokir startup: app tetap jalan mode tanpa-push.

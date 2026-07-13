@@ -6,7 +6,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sizer/sizer.dart';
 import 'package:toastification/toastification.dart';
-import 'package:flutter_flavor/flutter_flavor.dart';
 import '../shared/widgets/connectivity_banner.dart';
 import '../shared/widgets/pending_sync_banner.dart';
 import '../core/i18n.dart';
@@ -89,10 +88,7 @@ class NaraApp extends ConsumerWidget {
                   ),
                 ),
               );
-              // Ribbon environment (flutter_flavor). FlavorBanner menampilkan
-              // ribbon hanya bila FlavorConfig.name tidak kosong — di PROD name
-              // dikosongkan (lihat main.dart), jadi app produksi bersih.
-              return FlavorBanner(child: app);
+              return app;
             },
           ),
         );

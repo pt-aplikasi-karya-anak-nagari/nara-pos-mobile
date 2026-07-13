@@ -1,5 +1,4 @@
 {
-  "APP_ENV": "dev",
   "API_HOST": "http://192.168.1.10:3000",
   "API_BASE_PATH": "/api/v1",
   "API_SECRET": "REPLACE_WITH_DEV_SECRET",

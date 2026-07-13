@@ -1,9 +1,0 @@
-{
-  "APP_ENV": "prod",
-  "API_HOST": "http://192.0.88.24:3000",
-  "API_BASE_PATH": "/api/v1",
-  "API_SECRET": "mako_api_secret_key_789",
-  "DEV_LOGIN_EMAIL": "admin_pusat@mako.com",
-  "DEV_LOGIN_PASSWORD": "password123",
-  "MAKO_SCAN_QR_BASE_URL": "https://192.0.88.24.com"
-}

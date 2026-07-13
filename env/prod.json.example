@@ -1,9 +1,0 @@
-{
-  "APP_ENV": "prod",
-  "API_HOST": "https://api.your-prod-domain.com",
-  "API_BASE_PATH": "/api/v1",
-  "API_SECRET": "REPLACE_WITH_PROD_SECRET",
-  "DEV_LOGIN_EMAIL": "",
-  "DEV_LOGIN_PASSWORD": "",
-  "MAKO_SCAN_QR_BASE_URL": "https://menu.your-prod-domain.com"
-}
