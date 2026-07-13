@@ -11,6 +11,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../../../core/format.dart';
 import '../../kasir/domain/cart_item.dart';
 import '../../outlet/domain/outlet.dart';
+import '../../products/domain/product.dart';
 import '../../transactions/domain/sale.dart';
 import '../../shifts/domain/shift.dart';
 import '../../../core/outlet_scope.dart';
@@ -206,6 +207,79 @@ class PrinterService {
       ok = ok && sent;
     }
     return ok;
+  }
+
+  /// Cetak label rak: per salinan → nama produk (bold, tengah), harga (tengah),
+  /// lalu barcode Code128 dari [code]. [code] = `product.barcode` bila ada,
+  /// jika tidak `product.sku`; bila keduanya kosong → hanya nama + harga tanpa
+  /// barcode. Encoding Code128 divalidasi paket (bisa melempar) → dibungkus
+  /// try/catch, gagal → kodenya dicetak sebagai teks biasa. [qty] salinan
+  /// dicetak berurutan dengan pemisah kecil, diakhiri feed + potong. Ukuran
+  /// kertas pakai nilai EFEKTIF seperti [printReceipt].
+  Future<bool> printLabel(Product product, {int qty = 1}) async {
+    if (!await _ensureConnected()) return false;
+    // Ukuran kertas efektif (override user → default role → struk outlet).
+    // Null-safe: gagal fetch → default, label tetap tercetak.
+    OutletReceiptSettings? rs;
+    try {
+      rs = await _ref.read(receiptSettingsFutureProvider.future);
+    } catch (_) {
+      rs = null;
+    }
+    final eff = _effectiveConfig(rs);
+    final profile = await CapabilityProfile.load();
+    final gen = Generator(eff.paperSize, profile);
+
+    // Kode barcode: barcode produk diutamakan, fallback ke SKU. Keduanya
+    // kosong → label tanpa barcode.
+    final barcode = product.barcode?.trim() ?? '';
+    final sku = product.sku?.trim() ?? '';
+    final code = barcode.isNotEmpty ? barcode : sku;
+
+    final copies = qty < 1 ? 1 : qty;
+    final bytes = <int>[...gen.reset()];
+    for (var i = 0; i < copies; i++) {
+      bytes.addAll(
+        gen.text(
+          _safe(product.name),
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
+      bytes.addAll(
+        gen.text(
+          formatRupiah(product.price),
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+      if (code.isNotEmpty) {
+        try {
+          // Prefiks '{B' memilih Code128 set B (ASCII penuh) sesuai ESC/POS —
+          // selektor set tidak ikut tercetak pada teks di bawah barcode.
+          bytes.addAll(
+            gen.barcode(
+              Barcode.code128('{B$code'.split('')),
+              textPos: BarcodeText.below,
+            ),
+          );
+        } catch (_) {
+          // Data tak valid untuk Code128 → cetak kodenya sebagai teks biasa.
+          bytes.addAll(
+            gen.text(
+              _safe(code),
+              styles: const PosStyles(align: PosAlign.center),
+            ),
+          );
+        }
+      }
+      // Pemisah antar salinan supaya mudah dipotong/dirobek.
+      if (i < copies - 1) {
+        bytes.addAll(gen.feed(1));
+        bytes.addAll(gen.hr());
+      }
+    }
+    bytes.addAll(gen.feed(2));
+    bytes.addAll(gen.cut());
+    return PrintBluetoothThermal.writeBytes(bytes);
   }
 
   /// E11: cetak tiket dapur/bar per stasiun saat checkout kasir.

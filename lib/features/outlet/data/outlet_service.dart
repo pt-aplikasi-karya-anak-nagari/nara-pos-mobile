@@ -236,6 +236,18 @@ class OutletService extends BaseApiService {
     await delete('/products/$productId');
   }
 
+  /// Generate barcode internal (EAN-13) untuk produk yang belum punya barcode.
+  /// Idempoten di backend — produk yang sudah punya barcode akan mengembalikan
+  /// barcode yang sama. Envelope `{ data: { barcode: ... } }` di-unwrap oleh
+  /// [BaseApiService]; converter menerima objek `data`.
+  Future<String> generateBarcode(String productId) async {
+    return post<String>(
+      '/products/$productId/generate-barcode',
+      converter: (raw) =>
+          (raw is Map ? raw['barcode']?.toString() : null) ?? '',
+    );
+  }
+
   Future<void> toggleFavorite(String productId) async {
     await post('/products/$productId/favorite', data: {});
   }
