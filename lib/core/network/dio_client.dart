@@ -50,6 +50,11 @@ final dioProvider = Provider<Dio>((ref) {
           options.headers['Authorization'] = 'Bearer $token';
         }
 
+        // Tandai semua request berasal dari aplikasi mobile. Backend memakai
+        // header ini untuk memblokir login role Owner/Manager di mobile
+        // (mereka hanya boleh login lewat Dashboard Web).
+        options.headers['X-Client-Platform'] = 'mobile';
+
         _applySecurityHeaders(options, apiSecret, apiBasePath);
 
         return handler.next(options);

@@ -84,9 +84,11 @@ class AuthNotifier extends Notifier<AuthState> {
         return "Invalid response from server";
       }
 
-      // Blokir role 'owner' dari aplikasi mobile
-      if (userData['role'] == 'owner') {
-        return 'Registrasi berhasil, namun Role "Owner" hanya dapat login melalui Dashboard Admin Web.';
+      // Blokir role Owner & Manager dari aplikasi mobile (case-insensitive).
+      final regRole = (userData['role'] as String?)?.trim() ?? '';
+      final regRoleLower = regRole.toLowerCase();
+      if (regRoleLower == 'owner' || regRoleLower == 'manager') {
+        return 'Registrasi berhasil, namun Role "$regRole" hanya dapat login melalui Dashboard Web.';
       }
 
       if (accessToken == null || refreshToken == null) {
@@ -165,9 +167,15 @@ class AuthNotifier extends Notifier<AuthState> {
 
       final user = User.fromJson(userData, outlets: outlets);
 
-      // Blokir role 'owner' dari aplikasi mobile sesuai permintaan
-      if (userData['role'] == 'owner') {
-        return 'Role "Owner" hanya dapat login melalui Dashboard Admin Web.';
+      // Blokir role Owner & Manager dari aplikasi mobile — keduanya hanya boleh
+      // login lewat Dashboard Web. Case-insensitive karena role dari server
+      // memakai huruf kapital (mis. "Owner"/"Manager"). Backend juga menolak
+      // (lewat header X-Client-Platform); cek klien ini defense-in-depth agar
+      // sesi tidak sempat tersimpan bila backend versi lama.
+      final roleName = (userData['role'] as String?)?.trim() ?? '';
+      final roleLower = roleName.toLowerCase();
+      if (roleLower == 'owner' || roleLower == 'manager') {
+        return 'Role "$roleName" hanya dapat login melalui Dashboard Web.';
       }
 
       await _authStorage.saveTokens(
