@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Jalankan app dalam environment PROD (backend produksi, TANPA banner).
-# ⚠️ Pastikan env/prod.json mengarah ke server https produksi yang benar.
+# Jalankan app dalam mode release (tanpa banner debug).
+# Konfigurasi server dibaca dari konstanta di lib/core/config/app_config.dart.
 # Pemakaian: ./scripts/run_prod.sh [argumen flutter run tambahan]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec flutter run \
-  --dart-define-from-file=env/prod.json \
-  "$@"
+exec flutter run --release "$@"

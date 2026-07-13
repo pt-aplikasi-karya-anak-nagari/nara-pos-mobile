@@ -2,36 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "NARA · dev",
+      "name": "NARA (debug)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "flutterMode": "debug",
-      "toolArgs": ["--dart-define-from-file=env/dev.json"]
+      "flutterMode": "debug"
     },
     {
-      "name": "NARA · dev (profile)",
+      "name": "NARA (profile)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "flutterMode": "profile",
-      "toolArgs": ["--dart-define-from-file=env/dev.json"]
+      "flutterMode": "profile"
     },
     {
-      "name": "NARA · prod",
+      "name": "NARA (release)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
-      "flutterMode": "debug",
-      "toolArgs": ["--dart-define-from-file=env/prod.json"]
-    },
-    {
-      "name": "NARA · prod (release)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "flutterMode": "release",
-      "toolArgs": ["--dart-define-from-file=env/prod.json"]
+      "flutterMode": "release"
     }
   ]
 }

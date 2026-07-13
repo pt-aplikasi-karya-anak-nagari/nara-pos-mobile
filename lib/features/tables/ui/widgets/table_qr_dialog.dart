@@ -425,8 +425,8 @@ class _UnconfiguredBanner extends StatelessWidget {
         ? 'Meja ini tidak terhubung ke outlet manapun. Sunting meja & '
               'pastikan area-nya sudah dipasangkan ke outlet sebelum '
               'generate QR.'
-        : 'URL NARA Scan QR belum diset. Tambahkan field '
-              'NARA_SCAN_QR_BASE_URL di env/*.json (mis. '
+        : 'URL NARA Scan QR belum diset. Isi konstanta '
+              'makoScanQrBaseUrl di lib/core/config/app_config.dart (mis. '
               'http://localhost:3000), lalu rebuild aplikasi.';
     return Container(
       padding: const EdgeInsets.all(12),

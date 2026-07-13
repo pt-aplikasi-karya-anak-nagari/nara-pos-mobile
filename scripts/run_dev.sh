@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Jalankan app dalam environment DEV (backend LAN/dev, banner "DEV").
-# Flavor dipilih via APP_ENV di env/dev.json (flutter_flavor runtime).
-# Selaras dengan backend SERVER_ENVIRONMENT=development & web .env.local.
+# Jalankan app dalam mode debug.
+# Konfigurasi server dibaca dari konstanta di lib/core/config/app_config.dart
+# (bukan lagi env / --dart-define). Untuk dev di LAN, set IP dulu:
+#   ./scripts/set_dev_ip.sh
 # Pemakaian: ./scripts/run_dev.sh [argumen flutter run tambahan]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec flutter run \
-  --dart-define-from-file=env/dev.json \
-  "$@"
+exec flutter run "$@"

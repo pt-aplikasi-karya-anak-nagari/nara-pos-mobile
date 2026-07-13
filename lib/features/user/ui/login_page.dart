@@ -23,8 +23,8 @@ class LoginPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Pre-fill kredensial hanya di debug build, dan hanya jika diset di
-    // env/dev.json (DEV_LOGIN_EMAIL / DEV_LOGIN_PASSWORD). Release build
+    // Pre-fill kredensial hanya di debug build (nilai dari
+    // AppConfig.devLoginEmail / AppConfig.devLoginPassword). Release build
     // selalu mulai dengan field kosong.
     final prefillEmail = kDebugMode ? AppConfig.devLoginEmail : '';
     final prefillPass = kDebugMode ? AppConfig.devLoginPassword : '';
