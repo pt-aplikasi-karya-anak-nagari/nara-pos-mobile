@@ -31,6 +31,7 @@ import '../features/customers/ui/customer_form_page.dart';
 import '../features/customers/ui/customer_detail_page.dart';
 import '../features/settings/ui/loyalty_settings_page.dart';
 import '../features/bahan_baku/ui/bahan_baku_page.dart';
+import '../features/bahan_baku/ui/stock_transfer_page.dart';
 import '../features/expenses/ui/expenses_page.dart';
 import '../features/inventory/ui/inventory_page.dart';
 import '../features/tables/ui/table_management_page.dart';
@@ -304,6 +305,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.inventory,
         name: AppRoutes.inventoryName,
         builder: (_, _) => const InventoryPage(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: AppRoutes.stockTransfer,
+        name: AppRoutes.stockTransferName,
+        builder: (_, _) => const StockTransferPage(),
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,

@@ -49,6 +49,8 @@ class AppRoutes {
   static const String expensesName = 'expenses';
   static const String inventory = '/profil/inventory';
   static const String inventoryName = 'inventory';
+  static const String stockTransfer = '/profil/stock-transfer';
+  static const String stockTransferName = 'stock-transfer';
   static const String display = '/profil/display';
   static const String displayName = 'display';
   // PIN otorisasi manajer (self-service set/ubah/hapus PIN sendiri).

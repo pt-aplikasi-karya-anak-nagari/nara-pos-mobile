@@ -390,6 +390,22 @@ class ProfilPage extends HookConsumerWidget {
                     ),
                     selected: selectedMenu == 'inventory',
                   ),
+                // Transfer stok bahan baku antar-outlet (B2). Akses sama dengan
+                // Inventori — kelola produk + fitur inventory_tracking.
+                if (ref.hasPermission(Permission.manageProducts) &&
+                    ref.hasFeature('inventory_tracking'))
+                  _Tile(
+                    spec: _TileSpec(
+                      id: 'stock_transfer',
+                      icon: AppIcons.storefront,
+                      label: 'Transfer Stok',
+                      onTap: () => handleTap(
+                        'stock_transfer',
+                        AppRoutes.stockTransfer,
+                      ),
+                    ),
+                    selected: selectedMenu == 'stock_transfer',
+                  ),
                 // Tampilan card produk (toggle "Terjual: N"). Akses sama
                 // dengan tax — owner / admin outlet.
                 if (ref.hasPermission(Permission.manageTax))

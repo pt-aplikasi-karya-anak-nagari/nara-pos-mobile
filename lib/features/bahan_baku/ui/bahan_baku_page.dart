@@ -4,7 +4,9 @@ import 'package:gap/gap.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/format.dart';
+import '../../../core/outlet_scope.dart';
 import '../data/bahan_baku_service.dart';
+import 'stock_opname_page.dart';
 
 /// Halaman Bahan Baku & Resep (B1 di mobile). Staf/owner bisa cek stok bahan
 /// + restock dari HP, dan lihat resep + HPP (read-only; kelola resep di web).
@@ -107,13 +109,44 @@ class _IngredientsTab extends ConsumerWidget {
     }
   }
 
+  Future<void> _openOpname(
+    BuildContext context,
+    WidgetRef ref,
+    List<Ingredient> items,
+  ) async {
+    final outletId = ref.read(activeOutletIdProvider);
+    if (outletId == null) return;
+    final changed = await Navigator.of(context).push<int>(
+      MaterialPageRoute(
+        builder: (_) => StockOpnamePage(outletId: outletId, ingredients: items),
+      ),
+    );
+    if (changed != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$changed bahan disesuaikan')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(ingredientsProvider);
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Gagal memuat: $e', style: TextStyle(color: kDanger))),
-      data: (items) => RefreshIndicator(
+    final items = async.value ?? const <Ingredient>[];
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: items.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _openOpname(context, ref, items),
+              backgroundColor: kPrimary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Opname'),
+            ),
+      body: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Gagal memuat: $e', style: TextStyle(color: kDanger))),
+        data: (items) => RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(ingredientsProvider);
           await ref.read(ingredientsProvider.future);
@@ -191,6 +224,7 @@ class _IngredientsTab extends ConsumerWidget {
                   );
                 },
               ),
+        ),
       ),
     );
   }
