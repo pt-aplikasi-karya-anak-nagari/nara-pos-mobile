@@ -567,6 +567,11 @@ const Map<String, Map<String, String>> _strings = {
     'id': 'Menerapkan diskon di kasir',
     'en': 'Apply discount at the cashier',
   },
+  'perm.markProducts86': {'id': 'Tandai Habis (86)', 'en': 'Mark Out (86)'},
+  'perm.markProducts86.desc': {
+    'id': 'Menandai produk habis atau memulihkannya di kasir',
+    'en': 'Mark a product sold out or restore it at the cashier',
+  },
 
   // category
   'category.title': {'id': 'Kategori Produk', 'en': 'Product Categories'},

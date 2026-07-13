@@ -20,6 +20,8 @@ import 'modifier_sheet.dart';
 import 'qty_button.dart';
 import '../../../../core/outlet_scope.dart';
 import '../../../outlet/data/outlet_service.dart';
+import '../../../access_rights/domain/permission.dart';
+import '../../../access_rights/data/access_rights_repository.dart';
 
 class ProductCard extends HookConsumerWidget {
   final Product product;
@@ -342,7 +344,10 @@ class ProductCard extends HookConsumerWidget {
 
     return GestureDetector(
       // Auto-86: tekan lama → sheet tandai/pulihkan "86" manual (fase 6b).
-      onLongPress: showEightySixSheet,
+      // Hanya untuk role yang punya izin `products.mark_86` (mis. Kasir).
+      onLongPress: ref.hasPermission(Permission.markProducts86)
+          ? showEightySixSheet
+          : null,
       // Habis-bahan (auto-86): tap tampilkan snackbar "Bahan habis" alih-alih
       // diam. Habis stok fisik biasa tetap no-op seperti sebelumnya.
       onTap: canAddMore

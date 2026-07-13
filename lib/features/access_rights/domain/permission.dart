@@ -29,6 +29,9 @@ enum Permission {
 
   /// Terapkan diskon di kasir.
   giveDiscount,
+
+  /// Tandai produk habis (86) / pulihkan ketersediaan dari kasir.
+  markProducts86,
 }
 
 extension PermissionX on Permission {
@@ -59,6 +62,8 @@ extension PermissionX on Permission {
         return 'transactions.view';
       case Permission.refund:
         return 'transactions.refund';
+      case Permission.markProducts86:
+        return 'products.mark_86';
       case Permission.managePrinter:
       case Permission.giveDiscount:
         return null;

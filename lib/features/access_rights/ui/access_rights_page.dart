@@ -725,6 +725,7 @@ extension _PermCategoryX on _PermCategory {
 _PermCategory _categoryOf(Permission p) => switch (p) {
   Permission.manageProducts => _PermCategory.produk,
   Permission.manageCategories => _PermCategory.produk,
+  Permission.markProducts86 => _PermCategory.produk,
   Permission.viewReports => _PermCategory.transaksi,
   Permission.viewHistory => _PermCategory.transaksi,
   Permission.refund => _PermCategory.transaksi,

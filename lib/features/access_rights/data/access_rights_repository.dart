@@ -19,7 +19,11 @@ Set<Permission> defaultPermissionsFor(UserRole role) {
     case UserRole.adminOutlet:
       return Permission.values.toSet();
     case UserRole.cashier:
-      return {Permission.managePrinter, Permission.viewHistory};
+      return {
+        Permission.managePrinter,
+        Permission.viewHistory,
+        Permission.markProducts86,
+      };
   }
 }
 
