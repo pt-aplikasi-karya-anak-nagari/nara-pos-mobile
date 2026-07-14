@@ -38,6 +38,23 @@ class AuthApiService extends BaseApiService {
     );
   }
 
+  /// Minta OTP registrasi dikirim ke [email] (via email) DAN [phone] (via
+  /// WhatsApp). Dipakai pada langkah 1 form daftar sebelum submit akun.
+  /// Backend menolak (409) bila email/username/phone sudah dipakai, atau
+  /// (400) bila validasi gagal — pesannya di-surface lewat [post] yang
+  /// melempar String message pada respons non-sukses.
+  Future<void> requestRegistrationOtp({
+    required String email,
+    required String phone,
+    required String username,
+  }) async {
+    await post<dynamic>(
+      ApiEndpoint.registerRequestOtp,
+      data: {'email': email, 'phone': phone, 'username': username},
+      converter: (res) => res,
+    );
+  }
+
   Future<Map<String, dynamic>> register({
     required String username,
     required String fullName,
@@ -48,6 +65,8 @@ class AuthApiService extends BaseApiService {
     required String outletName,
     required String outletAddress,
     required String outletPhone,
+    required String emailOtp,
+    required String phoneOtp,
   }) async {
     return post<Map<String, dynamic>>(
       ApiEndpoint.register,
@@ -61,6 +80,8 @@ class AuthApiService extends BaseApiService {
         'outlet_name': outletName,
         'outlet_address': outletAddress,
         'outlet_phone': outletPhone,
+        'email_otp': emailOtp,
+        'phone_otp': phoneOtp,
       },
     );
   }

@@ -3,6 +3,7 @@ class ApiEndpoint {
   static const String loginOtpRequest = '/login/otp/request';
   static const String loginOtpVerify = '/login/otp/verify';
   static const String register = '/register';
+  static const String registerRequestOtp = '/register/request-otp';
   static const String refresh = '/refresh';
   static const String logout = '/logout';
 

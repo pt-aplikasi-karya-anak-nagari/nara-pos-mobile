@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -20,12 +21,18 @@ class RegisterSheet extends HookConsumerWidget {
     final outletNameCtrl = useTextEditingController();
     final outletAddressCtrl = useTextEditingController();
     final outletPhoneCtrl = useTextEditingController();
+    final emailOtpCtrl = useTextEditingController();
+    final phoneOtpCtrl = useTextEditingController();
 
     final outletTypes = useState<List<OutletType>>([]);
     final selectedType = useState<int?>(null);
     final loading = useState(false);
+    final resending = useState(false);
     final error = useState<String?>(null);
+    final info = useState<String?>(null);
     final showPass = useState(false);
+    // 0 = isi form, 1 = masukkan kode verifikasi.
+    final step = useState(0);
 
     useEffect(() {
       ref.read(authProvider.notifier).getOutletTypes().then((types) {
@@ -35,9 +42,11 @@ class RegisterSheet extends HookConsumerWidget {
       return null;
     }, []);
 
-    Future<void> submit() async {
+    // Langkah 1: validasi field, lalu minta OTP dikirim ke email + WhatsApp.
+    Future<void> sendOtp() async {
       if (loading.value) return;
       error.value = null;
+      info.value = null;
 
       if (userCtrl.text.trim().isEmpty ||
           nameCtrl.text.trim().isEmpty ||
@@ -55,6 +64,60 @@ class RegisterSheet extends HookConsumerWidget {
       loading.value = true;
       final msg = await ref
           .read(authProvider.notifier)
+          .requestRegistrationOtp(
+            email: emailCtrl.text.trim(),
+            phone: phoneCtrl.text.trim(),
+            username: userCtrl.text.trim(),
+          );
+      loading.value = false;
+
+      if (msg != null) {
+        error.value = msg;
+      } else {
+        emailOtpCtrl.clear();
+        phoneOtpCtrl.clear();
+        error.value = null;
+        step.value = 1;
+      }
+    }
+
+    // Kirim ulang OTP saat berada di langkah 2.
+    Future<void> resendOtp() async {
+      if (resending.value || loading.value) return;
+      error.value = null;
+      info.value = null;
+      resending.value = true;
+      final msg = await ref
+          .read(authProvider.notifier)
+          .requestRegistrationOtp(
+            email: emailCtrl.text.trim(),
+            phone: phoneCtrl.text.trim(),
+            username: userCtrl.text.trim(),
+          );
+      resending.value = false;
+
+      if (msg != null) {
+        error.value = msg;
+      } else {
+        info.value = 'Kode verifikasi telah dikirim ulang.';
+      }
+    }
+
+    // Langkah 2: kirim register lengkap dengan kedua kode OTP.
+    Future<void> verifyAndRegister() async {
+      if (loading.value) return;
+      error.value = null;
+      info.value = null;
+
+      if (emailOtpCtrl.text.trim().length != 6 ||
+          phoneOtpCtrl.text.trim().length != 6) {
+        error.value = 'Masukkan kode 6 digit dari Email dan WhatsApp';
+        return;
+      }
+
+      loading.value = true;
+      final msg = await ref
+          .read(authProvider.notifier)
           .register(
             username: userCtrl.text.trim(),
             fullName: nameCtrl.text.trim(),
@@ -65,6 +128,8 @@ class RegisterSheet extends HookConsumerWidget {
             outletName: outletNameCtrl.text.trim(),
             outletAddress: outletAddressCtrl.text.trim(),
             outletPhone: outletPhoneCtrl.text.trim(),
+            emailOtp: emailOtpCtrl.text.trim(),
+            phoneOtp: phoneOtpCtrl.text.trim(),
           );
       loading.value = false;
 
@@ -74,6 +139,14 @@ class RegisterSheet extends HookConsumerWidget {
         if (context.mounted) Navigator.pop(context);
       }
     }
+
+    void backToForm() {
+      error.value = null;
+      info.value = null;
+      step.value = 0;
+    }
+
+    final isOtpStep = step.value == 1;
 
     return Container(
       decoration: const BoxDecoration(
@@ -107,19 +180,25 @@ class RegisterSheet extends HookConsumerWidget {
                   ],
                 ),
                 alignment: Alignment.center,
-                child: const Text(
-                  'M',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: isOtpStep
+                    ? const Icon(
+                        Icons.mark_email_read_rounded,
+                        color: Colors.white,
+                        size: 30,
+                      )
+                    : const Text(
+                        'M',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
               ),
             ),
             const Gap(24),
             Text(
-              'Daftar Akun Baru',
+              isOtpStep ? 'Verifikasi Kode' : 'Daftar Akun Baru',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 24,
@@ -130,120 +209,50 @@ class RegisterSheet extends HookConsumerWidget {
             ),
             const Gap(8),
             Text(
-              'Mulai kelola bisnis Anda dengan mudah',
+              isOtpStep
+                  ? 'Masukkan kode yang kami kirim ke Email dan WhatsApp Anda'
+                  : 'Mulai kelola bisnis Anda dengan mudah',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: kTextMid),
             ),
             const Gap(32),
-            _SectionHeader(Icons.person_outline_rounded, 'Informasi Akun'),
-            const Gap(16),
-            _InputLabel('Username'),
-            _CustomField(
-              controller: userCtrl,
-              hint: 'Contoh: udinx',
-              icon: Icons.alternate_email_rounded,
-            ),
-            const Gap(20),
-            _InputLabel('Nama Lengkap'),
-            _CustomField(
-              controller: nameCtrl,
-              hint: 'Contoh: Udin Sedunia',
-              icon: Icons.badge_outlined,
-            ),
-            const Gap(20),
-            _InputLabel('Email'),
-            _CustomField(
-              controller: emailCtrl,
-              hint: 'udinx@gmail.com',
-              icon: Icons.email_outlined,
-            ),
-            const Gap(20),
-            _InputLabel('No. Telepon'),
-            _CustomField(
-              controller: phoneCtrl,
-              hint: '0852567373',
-              icon: Icons.phone_android_outlined,
-            ),
-            const Gap(32),
-            _SectionHeader(Icons.storefront_rounded, 'Informasi Outlet'),
-            const Gap(16),
-            _InputLabel('Tipe Bisnis'),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: kBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: kDivider),
+            if (isOtpStep)
+              ..._buildOtpStep(
+                emailCtrl: emailCtrl,
+                phoneCtrl: phoneCtrl,
+                emailOtpCtrl: emailOtpCtrl,
+                phoneOtpCtrl: phoneOtpCtrl,
+                onEdit: backToForm,
+                onResend: resendOtp,
+                resending: resending,
+              )
+            else
+              ..._buildFormStep(
+                userCtrl: userCtrl,
+                nameCtrl: nameCtrl,
+                emailCtrl: emailCtrl,
+                phoneCtrl: phoneCtrl,
+                passCtrl: passCtrl,
+                outletNameCtrl: outletNameCtrl,
+                outletAddressCtrl: outletAddressCtrl,
+                outletPhoneCtrl: outletPhoneCtrl,
+                outletTypes: outletTypes,
+                selectedType: selectedType,
+                showPass: showPass,
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: selectedType.value,
-                  isExpanded: true,
-                  hint: const Text('Pilih Tipe Bisnis'),
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
+            ValueListenableBuilder<String?>(
+              valueListenable: info,
+              builder: (_, msg, _) {
+                if (msg == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: _NoticeBox(
+                    message: msg,
                     color: kPrimary,
+                    icon: Icons.check_circle_outline_rounded,
                   ),
-                  items: outletTypes.value.map<DropdownMenuItem<int>>((
-                    OutletType t,
-                  ) {
-                    return DropdownMenuItem<int>(
-                      value: t.id,
-                      child: Text(
-                        '${t.name} - ${t.description}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: kTextDark,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) => selectedType.value = val,
-                ),
-              ),
-            ),
-            const Gap(20),
-            _InputLabel('Nama Outlet'),
-            _CustomField(
-              controller: outletNameCtrl,
-              hint: 'Contoh: NARA Coffee Lab',
-              icon: Icons.store_outlined,
-            ),
-            const Gap(20),
-            _InputLabel('Alamat Outlet'),
-            _CustomField(
-              controller: outletAddressCtrl,
-              hint: 'Jl. Sudirman No. 123, Jakarta',
-              icon: Icons.location_on_outlined,
-            ),
-            const Gap(20),
-            _InputLabel('No. Telepon Outlet'),
-            _CustomField(
-              controller: outletPhoneCtrl,
-              hint: '021-555666',
-              icon: Icons.phone_outlined,
-            ),
-            const Gap(32),
-            _SectionHeader(Icons.lock_outline_rounded, 'Keamanan Akun'),
-            const Gap(16),
-            _InputLabel('Password'),
-            ValueListenableBuilder<bool>(
-              valueListenable: showPass,
-              builder: (_, show, _) => _CustomField(
-                controller: passCtrl,
-                hint: '••••••••',
-                icon: Icons.lock_outline,
-                obscure: !show,
-                suffix: IconButton(
-                  onPressed: () => showPass.value = !show,
-                  icon: Icon(
-                    show ? Icons.visibility_off : Icons.visibility,
-                    color: kTextMid,
-                    size: 20,
-                  ),
-                ),
-              ),
+                );
+              },
             ),
             ValueListenableBuilder<String?>(
               valueListenable: error,
@@ -251,36 +260,10 @@ class RegisterSheet extends HookConsumerWidget {
                 if (err == null) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(top: 16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: kDanger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kDanger.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: kDanger,
-                          size: 20,
-                        ),
-                        const Gap(10),
-                        Expanded(
-                          child: Text(
-                            err,
-                            style: const TextStyle(
-                              color: kDanger,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: _NoticeBox(
+                    message: err,
+                    color: kDanger,
+                    icon: Icons.error_outline,
                   ),
                 );
               },
@@ -291,7 +274,9 @@ class RegisterSheet extends HookConsumerWidget {
               builder: (_, isLoading, _) => SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: isLoading ? null : submit,
+                  onPressed: isLoading
+                      ? null
+                      : (isOtpStep ? verifyAndRegister : sendOtp),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kPrimary,
                     foregroundColor: Colors.white,
@@ -309,9 +294,9 @@ class RegisterSheet extends HookConsumerWidget {
                             strokeWidth: 3,
                           ),
                         )
-                      : const Text(
-                          'Daftar Sekarang',
-                          style: TextStyle(
+                      : Text(
+                          isOtpStep ? 'Verifikasi & Daftar' : 'Kirim kode verifikasi',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
@@ -320,29 +305,380 @@ class RegisterSheet extends HookConsumerWidget {
               ),
             ),
             const Gap(24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Sudah punya akun? ',
-                  style: TextStyle(color: kTextMid, fontSize: 13),
+            if (isOtpStep)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.arrow_back_rounded, size: 16, color: kPrimary),
+                  const Gap(6),
+                  GestureDetector(
+                    onTap: backToForm,
+                    child: const Text(
+                      'Ubah data',
+                      style: TextStyle(
+                        color: kPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Sudah punya akun? ',
+                    style: TextStyle(color: kTextMid, fontSize: 13),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Text(
+                      'Masuk',
+                      style: TextStyle(
+                        color: kPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildFormStep({
+    required TextEditingController userCtrl,
+    required TextEditingController nameCtrl,
+    required TextEditingController emailCtrl,
+    required TextEditingController phoneCtrl,
+    required TextEditingController passCtrl,
+    required TextEditingController outletNameCtrl,
+    required TextEditingController outletAddressCtrl,
+    required TextEditingController outletPhoneCtrl,
+    required ValueNotifier<List<OutletType>> outletTypes,
+    required ValueNotifier<int?> selectedType,
+    required ValueNotifier<bool> showPass,
+  }) {
+    return [
+      _SectionHeader(Icons.person_outline_rounded, 'Informasi Akun'),
+      const Gap(16),
+      _InputLabel('Username'),
+      _CustomField(
+        controller: userCtrl,
+        hint: 'Contoh: udinx',
+        icon: Icons.alternate_email_rounded,
+      ),
+      const Gap(20),
+      _InputLabel('Nama Lengkap'),
+      _CustomField(
+        controller: nameCtrl,
+        hint: 'Contoh: Udin Sedunia',
+        icon: Icons.badge_outlined,
+      ),
+      const Gap(20),
+      _InputLabel('Email'),
+      _CustomField(
+        controller: emailCtrl,
+        hint: 'udinx@gmail.com',
+        icon: Icons.email_outlined,
+        keyboardType: TextInputType.emailAddress,
+      ),
+      const Gap(20),
+      _InputLabel('No. Telepon'),
+      _CustomField(
+        controller: phoneCtrl,
+        hint: '0852567373',
+        icon: Icons.phone_android_outlined,
+        keyboardType: TextInputType.phone,
+      ),
+      const Gap(32),
+      _SectionHeader(Icons.storefront_rounded, 'Informasi Outlet'),
+      const Gap(16),
+      _InputLabel('Tipe Bisnis'),
+      ValueListenableBuilder<List<OutletType>>(
+        valueListenable: outletTypes,
+        builder: (_, types, _) => ValueListenableBuilder<int?>(
+          valueListenable: selectedType,
+          builder: (_, selected, _) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: kBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kDivider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: selected,
+                isExpanded: true,
+                hint: const Text('Pilih Tipe Bisnis'),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: kPrimary,
                 ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Text(
-                    'Masuk',
+                items: types.map<DropdownMenuItem<int>>((OutletType t) {
+                  return DropdownMenuItem<int>(
+                    value: t.id,
+                    child: Text(
+                      '${t.name} - ${t.description}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: kTextDark,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) => selectedType.value = val,
+              ),
+            ),
+          ),
+        ),
+      ),
+      const Gap(20),
+      _InputLabel('Nama Outlet'),
+      _CustomField(
+        controller: outletNameCtrl,
+        hint: 'Contoh: NARA Coffee Lab',
+        icon: Icons.store_outlined,
+      ),
+      const Gap(20),
+      _InputLabel('Alamat Outlet'),
+      _CustomField(
+        controller: outletAddressCtrl,
+        hint: 'Jl. Sudirman No. 123, Jakarta',
+        icon: Icons.location_on_outlined,
+      ),
+      const Gap(20),
+      _InputLabel('No. Telepon Outlet'),
+      _CustomField(
+        controller: outletPhoneCtrl,
+        hint: '021-555666',
+        icon: Icons.phone_outlined,
+        keyboardType: TextInputType.phone,
+      ),
+      const Gap(32),
+      _SectionHeader(Icons.lock_outline_rounded, 'Keamanan Akun'),
+      const Gap(16),
+      _InputLabel('Password'),
+      ValueListenableBuilder<bool>(
+        valueListenable: showPass,
+        builder: (_, show, _) => _CustomField(
+          controller: passCtrl,
+          hint: '••••••••',
+          icon: Icons.lock_outline,
+          obscure: !show,
+          suffix: IconButton(
+            onPressed: () => showPass.value = !show,
+            icon: Icon(
+              show ? Icons.visibility_off : Icons.visibility,
+              color: kTextMid,
+              size: 20,
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildOtpStep({
+    required TextEditingController emailCtrl,
+    required TextEditingController phoneCtrl,
+    required TextEditingController emailOtpCtrl,
+    required TextEditingController phoneOtpCtrl,
+    required VoidCallback onEdit,
+    required VoidCallback onResend,
+    required ValueNotifier<bool> resending,
+  }) {
+    return [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kDivider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SummaryRow(
+              icon: Icons.email_outlined,
+              label: 'Email',
+              value: emailCtrl.text.trim(),
+            ),
+            const Gap(12),
+            _SummaryRow(
+              icon: Icons.chat_bubble_outline_rounded,
+              label: 'WhatsApp',
+              value: phoneCtrl.text.trim(),
+            ),
+            const Gap(12),
+            GestureDetector(
+              onTap: onEdit,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.edit_outlined, size: 15, color: kPrimary),
+                  const Gap(6),
+                  const Text(
+                    'Ubah data',
                     style: TextStyle(
                       color: kPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
       ),
+      const Gap(24),
+      _InputLabel('Kode dari Email'),
+      _CustomField(
+        controller: emailOtpCtrl,
+        hint: '6 digit kode',
+        icon: Icons.mark_email_unread_outlined,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(6),
+        ],
+      ),
+      const Gap(20),
+      _InputLabel('Kode dari WhatsApp'),
+      _CustomField(
+        controller: phoneOtpCtrl,
+        hint: '6 digit kode',
+        icon: Icons.chat_bubble_outline_rounded,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(6),
+        ],
+      ),
+      const Gap(16),
+      ValueListenableBuilder<bool>(
+        valueListenable: resending,
+        builder: (_, isResending, _) => Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Belum menerima kode? ',
+              style: TextStyle(color: kTextMid, fontSize: 13),
+            ),
+            if (isResending)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  color: kPrimary,
+                  strokeWidth: 2,
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: onResend,
+                child: const Text(
+                  'Kirim ulang kode',
+                  style: TextStyle(
+                    color: kPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+}
+
+/// Notifikasi inline (error/info) dengan gaya kartu lembut.
+class _NoticeBox extends StatelessWidget {
+  final String message;
+  final Color color;
+  final IconData icon;
+  const _NoticeBox({
+    required this.message,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const Gap(10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _SummaryRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: kPrimary),
+        const Gap(10),
+        SizedBox(
+          width: 74,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: kTextMid,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value.isEmpty ? '-' : value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: kTextDark,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -395,6 +731,8 @@ class _CustomField extends StatelessWidget {
   final IconData icon;
   final bool obscure;
   final Widget? suffix;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _CustomField({
     required this.controller,
@@ -402,6 +740,8 @@ class _CustomField extends StatelessWidget {
     required this.icon,
     this.obscure = false,
     this.suffix,
+    this.keyboardType,
+    this.inputFormatters,
   });
 
   @override
@@ -415,6 +755,8 @@ class _CustomField extends StatelessWidget {
       child: TextField(
         controller: controller,
         obscureText: obscure,
+        keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         style: const TextStyle(fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
