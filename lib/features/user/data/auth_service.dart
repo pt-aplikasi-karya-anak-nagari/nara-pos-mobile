@@ -87,7 +87,9 @@ class AuthNotifier extends Notifier<AuthState> {
       // Blokir role Owner & Manager dari aplikasi mobile (case-insensitive).
       final regRole = (userData['role'] as String?)?.trim() ?? '';
       final regRoleLower = regRole.toLowerCase();
-      if (regRoleLower == 'owner' || regRoleLower == 'manager') {
+      if (regRoleLower == 'owner' ||
+          regRoleLower == 'coowner' ||
+          regRoleLower == 'manager') {
         return 'Registrasi berhasil, namun Role "$regRole" hanya dapat login melalui Dashboard Web.';
       }
 
@@ -174,7 +176,9 @@ class AuthNotifier extends Notifier<AuthState> {
       // sesi tidak sempat tersimpan bila backend versi lama.
       final roleName = (userData['role'] as String?)?.trim() ?? '';
       final roleLower = roleName.toLowerCase();
-      if (roleLower == 'owner' || roleLower == 'manager') {
+      if (roleLower == 'owner' ||
+          roleLower == 'coowner' ||
+          roleLower == 'manager') {
         return 'Role "$roleName" hanya dapat login melalui Dashboard Web.';
       }
 
