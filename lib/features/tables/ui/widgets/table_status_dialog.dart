@@ -949,11 +949,115 @@ class _Actions extends ConsumerWidget {
     }
   }
 
+  // Open bill: tutup meja sekali bayar. Satu MiniPaymentSheet untuk total tab
+  // (ronde yang benar-benar dilunasi backend), satu panggilan settleTable
+  // (atomik), lalu invalidate provider yang sama dengan _payNow + tutup dialog.
+  Future<void> _settleAll(
+    BuildContext context,
+    WidgetRef ref,
+    List<Sale> settleable,
+  ) async {
+    final outletId = activeOutletId;
+    if (outletId == null || settleable.isEmpty) return;
+    final tabTotal = settleable.fold<double>(0, (s, x) => s + x.total);
+
+    final result =
+        await showModalBottomSheet<({String method, double cash, String proofUrl})>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => MiniPaymentSheet(total: tabTotal),
+        );
+    if (result == null) return;
+
+    try {
+      final cashAmount = result.method == 'Tunai' ? result.cash : 0.0;
+      final changeAmount = (result.method == 'Tunai' && result.cash > tabTotal)
+          ? result.cash - tabTotal
+          : 0.0;
+
+      final settled = await ref
+          .read(transactionRepositoryProvider)
+          .settleTable(
+            outletId,
+            table.id,
+            paymentMethod: result.method,
+            cashAmount: cashAmount,
+            changeAmount: changeAmount,
+            paymentProofUrl: result.proofUrl.isEmpty ? null : result.proofUrl,
+          );
+
+      ref.invalidate(activeTableTransactionsProvider(table.id));
+      ref.invalidate(tablesFutureProvider);
+      ref.invalidate(tableGroupsFutureProvider);
+      ref.invalidate(salesFutureProvider);
+      ref.invalidate(activeShiftProvider);
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // meja sudah lunas & bebas → tutup dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Meja ${table.name} ditutup — $settled pesanan dilunasi',
+            ),
+            backgroundColor: kSuccess,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menutup meja: $e'),
+            backgroundColor: kDanger,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Ronde yang boleh ditutup lewat "Bayar Semua" = TEPAT yang dilunasi backend:
+    // belum lunas, bukan refund, dan (kasir ATAU pesanan QR yang SUDAH
+    // dikonfirmasi). Pesanan QR yang masih menunggu konfirmasi/QRIS TIDAK ikut
+    // (diselesaikan per-pesanan) supaya total yang ditagih = yang benar ditutup.
+    final settleable = salesAsync.maybeWhen(
+      data: (s) => s
+          .where(
+            (x) =>
+                !x.isPaid &&
+                !x.isRefunded &&
+                !x.isPartiallyRefunded &&
+                (x.source == 'kasir' || (x.isFromMenuQr && x.isConfirmed)),
+          )
+          .toList(),
+      orElse: () => const <Sale>[],
+    );
+    final settleTotal = settleable.fold<double>(0, (s, x) => s + x.total);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (isOccupied && settleable.isNotEmpty) ...[
+          ElevatedButton.icon(
+            onPressed: () => _settleAll(context, ref, settleable),
+            icon: const Icon(Icons.done_all, size: 18),
+            label: Text(
+              'Bayar Semua • ${formatRupiah(settleTotal)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kSuccess,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+            ),
+          ),
+          const Gap(12),
+        ],
         if (isOccupied)
           ElevatedButton.icon(
             onPressed: () {

@@ -163,6 +163,30 @@ class TransactionApiService extends BaseApiService {
     );
   }
 
+  /// Open bill: lunasi SELURUH tab satu meja (semua ronde unpaid yang tampil di
+  /// tab) sekali bayar. Backend menutup semua ronde secara atomik & membebaskan
+  /// meja. Mengembalikan {table_id, settled_count, tab_total, ...}.
+  Future<Map<String, dynamic>> settleTable(
+    String outletId,
+    String tableId, {
+    required String paymentMethod,
+    double cashAmount = 0,
+    double changeAmount = 0,
+    String? paymentProofUrl,
+  }) async {
+    return await post<Map<String, dynamic>>(
+      '/transactions/outlet/$outletId/tables/$tableId/settle',
+      data: {
+        'payment_method': paymentMethod,
+        'cash_amount': cashAmount,
+        'change_amount': changeAmount,
+        if (paymentProofUrl != null && paymentProofUrl.isNotEmpty)
+          'payment_proof_url': paymentProofUrl,
+      },
+      converter: (res) => res as Map<String, dynamic>,
+    );
+  }
+
   /// Konfirmasi/terima pesanan QR yang SUDAH lunas (pelanggan bayar QRIS di
   /// depan). Tidak ada verifikasi bayar — kasir cukup menerima pesanan.
   Future<Map<String, dynamic>> confirmMenuOrder(String transactionId) async {
@@ -532,6 +556,30 @@ class TransactionRepository {
       paymentProofUrl: paymentProofUrl,
     );
     return Sale.fromJson(res);
+  }
+
+  /// Open bill: tutup meja sekali bayar — lunasi semua ronde tab meja dalam SATU
+  /// transaksi backend (atomik) & bebaskan meja. Backend melunasi TEPAT ronde
+  /// yang tampil di tab (kasir + QR terkonfirmasi), bukan pesanan QR yang masih
+  /// menunggu konfirmasi. Return jumlah ronde yang dilunasi.
+  Future<int> settleTable(
+    String outletId,
+    String tableId, {
+    required String paymentMethod,
+    double cashAmount = 0,
+    double changeAmount = 0,
+    String? paymentProofUrl,
+  }) async {
+    final res = await apiService.settleTable(
+      outletId,
+      tableId,
+      paymentMethod: paymentMethod,
+      cashAmount: cashAmount,
+      changeAmount: changeAmount,
+      paymentProofUrl: paymentProofUrl,
+    );
+    final n = res['settled_count'];
+    return n is int ? n : int.tryParse('${n ?? 0}') ?? 0;
   }
 
   /// Konfirmasi/terima pesanan QR yang sudah lunas. Kasir cukup menerima —
