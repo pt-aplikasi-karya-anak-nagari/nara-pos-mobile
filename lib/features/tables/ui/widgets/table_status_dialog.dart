@@ -289,11 +289,14 @@ class _OrderSection extends StatelessWidget {
       );
     }
 
-    final totalQty = sales.fold<int>(
+    // Ronde yang DIBATALKAN (void) tidak ikut hitung total/jumlah tagihan meja —
+    // ditampilkan (redup) hanya sebagai jejak, bukan bagian bill berjalan.
+    final active = sales.where((s) => !s.isCancelled).toList();
+    final totalQty = active.fold<int>(
       0,
       (s, sale) => s + sale.items.fold<int>(0, (a, it) => a + it.qty),
     );
-    final totalAmount = sales.fold<double>(0, (s, sale) => s + sale.total);
+    final totalAmount = active.fold<double>(0, (s, sale) => s + sale.total);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -312,7 +315,7 @@ class _OrderSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '${sales.length} pesanan · $totalQty item',
+                '${active.length} pesanan · $totalQty item',
                 style: const TextStyle(
                   color: kPrimary,
                   fontSize: 11,
@@ -324,7 +327,11 @@ class _OrderSection extends StatelessWidget {
         ),
         const Gap(12),
         for (int i = 0; i < sales.length; i++) ...[
-          _SaleCard(index: i + 1, sale: sales[i], tableId: tableId),
+          // Ronde void diredupkan supaya jelas bukan bagian tagihan berjalan.
+          Opacity(
+            opacity: sales[i].isCancelled ? 0.55 : 1.0,
+            child: _SaleCard(index: i + 1, sale: sales[i], tableId: tableId),
+          ),
           const Gap(8),
         ],
         const Gap(8),
@@ -645,26 +652,7 @@ class _SaleCard extends ConsumerWidget {
                   style: TextStyle(color: kTextMid, fontSize: 10),
                 ),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: sale.isPaid
-                        ? kSuccess.withValues(alpha: 0.1)
-                        : kWarning.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    sale.isPaid ? 'LUNAS' : 'BELUM BAYAR',
-                    style: TextStyle(
-                      color: sale.isPaid ? kSuccess : kWarning,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                _statusBadge(),
               ],
             ),
           ),
@@ -751,10 +739,10 @@ class _SaleCard extends ConsumerWidget {
               bold: true,
               color: kPrimary,
             ),
-            // Tombol "Bayar" hanya muncul untuk transaksi yang masih
-            // berstatus belum lunas (unpaid/pending). Tx yang sudah lunas
-            // (mis. cash dine-in) ditampilkan info-only.
-            if (!sale.isPaid) ...[
+            // Tombol Bayar/Batalkan HANYA untuk ronde yang benar-benar belum
+            // dibayar (payment_status='unpaid'). Ronde lunas → info-only; ronde
+            // DIBATALKAN (void) / diretur → tanpa tombol (tak bisa dibayar lagi).
+            if (sale.isUnpaid) ...[
               const Gap(12),
               SizedBox(
                 width: double.infinity,
@@ -810,6 +798,33 @@ class _SaleCard extends ConsumerWidget {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  // Badge status ronde: LUNAS / BELUM BAYAR / DIBATALKAN / DIRETUR. Warna &
+  // label mengikuti payment_status supaya ronde void tak tampil "BELUM BAYAR".
+  Widget _statusBadge() {
+    final (String label, Color color) = sale.isPaid
+        ? ('LUNAS', kSuccess)
+        : sale.isCancelled
+        ? ('DIBATALKAN', kTextMid)
+        : (sale.isRefunded || sale.isPartiallyRefunded)
+        ? ('DIRETUR', kDanger)
+        : ('BELUM BAYAR', kWarning);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 8,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 }
 

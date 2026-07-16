@@ -165,6 +165,10 @@ class Sale {
   /// = tepat yang dilunasi backend (backend juga hanya menutup 'unpaid').
   bool get isUnpaid => paymentStatus == 'unpaid';
 
+  /// True bila ronde sudah DIBATALKAN (void, payment_status='cancelled').
+  /// Dipakai UI detail meja agar ronde void tak tampil seolah "belum bayar".
+  bool get isCancelled => paymentStatus == 'cancelled';
+
   /// True bila tipe pesanan Dine In (case-insensitive). Dipakai untuk
   /// kondisional render info meja di UI & struk.
   bool get isDineIn => orderType.trim().toLowerCase() == 'dine in';
