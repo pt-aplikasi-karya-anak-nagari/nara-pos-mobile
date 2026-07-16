@@ -27,6 +27,12 @@ class Sale {
   bool isPaid;
     DateTime? paidAt;
 
+  /// Status pembayaran MENTAH (lowercase) dari backend: unpaid | paid |
+  /// refunded | partially_refunded | cancelled | pending. Sumber kebenaran untuk
+  /// membedakan 'unpaid' dari 'cancelled'/'pending' (sama-sama bukan-lunas) —
+  /// penting untuk tutup-meja: hanya yang persis 'unpaid' yang boleh dilunasi.
+  String paymentStatus;
+
   /// QR self-order: waktu kasir mengonfirmasi/menerima pesanan (confirmed_at).
   /// Null = belum dikonfirmasi. Pesanan QR dibuat SUDAH lunas; nilai ini yang
   /// membedakan antrean kasir ("belum dikonfirmasi").
@@ -119,6 +125,7 @@ class Sale {
     this.orderType = 'Dine In',
     this.invoiceId = '',
     this.isPaid = true,
+    this.paymentStatus = 'unpaid',
     this.paidAt,
     this.confirmedAt,
     this.fulfillmentStatus = 'pending',
@@ -151,6 +158,12 @@ class Sale {
 
   /// True bila pesanan QR sudah dikonfirmasi kasir.
   bool get isConfirmed => confirmedAt != null;
+
+  /// True bila transaksi BENAR-BENAR belum dibayar (persis payment_status=
+  /// 'unpaid') — beda dari `!isPaid` yang juga true untuk 'cancelled' /
+  /// 'refunded' / 'pending'. Dipakai filter tutup-meja agar total yang ditagih
+  /// = tepat yang dilunasi backend (backend juga hanya menutup 'unpaid').
+  bool get isUnpaid => paymentStatus == 'unpaid';
 
   /// True bila tipe pesanan Dine In (case-insensitive). Dipakai untuk
   /// kondisional render info meja di UI & struk.
@@ -227,6 +240,7 @@ class Sale {
       orderType: json['order_type']?.toString() ?? 'Dine In',
       invoiceId: json['invoice_no']?.toString() ?? '',
       isPaid: json['payment_status'] == 'paid',
+      paymentStatus: statusLower ?? 'unpaid',
       paidAt: paidAt,
       confirmedAt: confirmedAt,
       fulfillmentStatus:

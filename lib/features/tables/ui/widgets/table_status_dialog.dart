@@ -1018,17 +1018,18 @@ class _Actions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Ronde yang boleh ditutup lewat "Bayar Semua" = TEPAT yang dilunasi backend:
-    // belum lunas, bukan refund, dan (kasir ATAU pesanan QR yang SUDAH
-    // dikonfirmasi). Pesanan QR yang masih menunggu konfirmasi/QRIS TIDAK ikut
-    // (diselesaikan per-pesanan) supaya total yang ditagih = yang benar ditutup.
+    // Ronde yang boleh ditutup lewat "Bayar Semua" = TEPAT yang dilunasi backend
+    // (SettleTableTab: payment_status='unpaid'). Pakai isUnpaid (predikat POSITIF
+    // persis 'unpaid'), BUKAN !isPaid — karena !isPaid juga true untuk ronde
+    // 'cancelled' (hasil void) / 'pending', yang backend TIDAK tutup → kalau ikut
+    // dihitung, kasir menagih lebih dari yang benar-benar dilunasi. Lalu (kasir
+    // ATAU QR yang SUDAH dikonfirmasi); QR menunggu konfirmasi diselesaikan
+    // per-pesanan.
     final settleable = salesAsync.maybeWhen(
       data: (s) => s
           .where(
             (x) =>
-                !x.isPaid &&
-                !x.isRefunded &&
-                !x.isPartiallyRefunded &&
+                x.isUnpaid &&
                 (x.source == 'kasir' || (x.isFromMenuQr && x.isConfirmed)),
           )
           .toList(),
