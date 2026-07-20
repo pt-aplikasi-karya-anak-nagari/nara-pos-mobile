@@ -13,6 +13,12 @@ class ServerReportSummary {
   final int itemsSold;
   final double average;
   final double discountTotal;
+  /// Jumlah struk yang diretur (penuh maupun sebagian) di periode.
+  final int refundedCount;
+  /// Nominal yang dikembalikan ke pelanggan. `revenue` di atas SUDAH dikurangi
+  /// angka ini — ditampilkan terpisah supaya laporan bisa direkonsiliasi:
+  /// revenue + refundedAmount = nilai jual asli.
+  final double refundedAmount;
 
   const ServerReportSummary({
     required this.revenue,
@@ -20,6 +26,8 @@ class ServerReportSummary {
     required this.itemsSold,
     required this.average,
     required this.discountTotal,
+    this.refundedCount = 0,
+    this.refundedAmount = 0,
   });
 
   factory ServerReportSummary.fromJson(Map<String, dynamic> j) => ServerReportSummary(
@@ -28,6 +36,8 @@ class ServerReportSummary {
     itemsSold: (j['items_sold'] as num?)?.toInt() ?? 0,
     average: (j['average_ticket'] as num?)?.toDouble() ?? 0,
     discountTotal: (j['discount_total'] as num?)?.toDouble() ?? 0,
+    refundedCount: (j['refunded_count'] as num?)?.toInt() ?? 0,
+    refundedAmount: (j['refunded_amount'] as num?)?.toDouble() ?? 0,
   );
 }
 

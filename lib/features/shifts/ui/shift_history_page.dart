@@ -426,7 +426,12 @@ class _TabletDetailPanel extends ConsumerWidget {
     final isNegative = (s.difference ?? 0) < 0;
     final hasDifference = s.difference != null && s.difference != 0;
 
-    // Non-cash sales will be loaded from API when shift detail endpoint is available
+    // BELUM TERHUBUNG: daftar ini masih kosong, jadi rekap tender di bawah dan
+    // struk yang dicetak lewat printShiftReport() selalu menampilkan nol.
+    // Perhitungannya sendiri sudah benar (termasuk netting retur), tinggal
+    // diisi begitu transaksi per-shift diambil dari
+    // GET /outlets/:outletId/shifts — sampai saat itu jangan percaya angka
+    // tender di halaman ini.
     final shiftSales = <Sale>[];
 
     double totalQris = 0;
@@ -441,9 +446,17 @@ class _TabletDetailPanel extends ConsumerWidget {
         refundCount++;
         continue;
       }
-      if (sale.paymentMethod == 'QRIS') totalQris += sale.total;
-      if (sale.paymentMethod == 'Kartu') totalCard += sale.total;
-      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.total;
+      // Retur SEBAGIAN: struknya tetap penjualan, tapi porsi yang dikembalikan
+      // ikut dihitung sebagai refund dan dikeluarkan dari tender. Sebelumnya
+      // struk seperti ini tidak muncul di angka refund sama sekali DAN
+      // menyumbang nilai penuh ke tender — rekap shift tak bisa dicocokkan.
+      if (sale.isPartiallyRefunded) {
+        totalRefund += sale.total - sale.netTotal;
+        refundCount++;
+      }
+      if (sale.paymentMethod == 'QRIS') totalQris += sale.netTotal;
+      if (sale.paymentMethod == 'Kartu') totalCard += sale.netTotal;
+      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.netTotal;
     }
 
     String duration = '-';

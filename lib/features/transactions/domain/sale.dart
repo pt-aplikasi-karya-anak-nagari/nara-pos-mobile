@@ -203,6 +203,59 @@ class Sale {
   int get totalQty => items.fold(0, (sum, it) => sum + it.qty);
   set totalQty(int value) {}
 
+  /// Nilai transaksi setelah dikurangi yang sudah diretur.
+  ///
+  /// Retur TIDAK mengubah [total] — nilai jual asli sengaja dipertahankan
+  /// server, dan yang dikembalikan dicatat terpisah di [refundedAmount]. Jadi
+  /// agregasi omzet WAJIB memakai getter ini, bukan [total].
+  ///
+  /// Retur penuh bernilai nol tanpa membaca [refundedAmount], karena struk yang
+  /// diretur lewat jalur lama menyimpan 0 di kolom itu. Aturan yang sama dipakai
+  /// server (lihat report/refund_netting.go) supaya angka mobile dan web sama.
+  double get netTotal {
+    final net = total - refundedValue;
+    return net > 0 ? net : 0;
+  }
+
+  /// Porsi struk yang sudah diretur, 0..1. Padanan `refundRatio()` di server.
+  /// Retur penuh dipatok 1 tanpa membaca [refundedAmount], karena struk yang
+  /// diretur lewat jalur lama menyimpan 0 di kolom itu.
+  double get refundRatio {
+    if (isRefunded) return 1;
+    if (total <= 0) return 0;
+    final r = refundedAmount > total ? total : refundedAmount;
+    return r / total;
+  }
+
+  /// Nominal yang dikembalikan ke pelanggan. Untuk retur PENUH nilainya seluruh
+  /// [total] — bukan [refundedAmount], yang bisa 0 pada struk lama.
+  double get refundedValue => total * refundRatio;
+
+  /// Diskon yang benar-benar berlaku setelah retur, proporsional terhadap porsi
+  /// yang dikembalikan. Padanan `netAmount(t, 'discount_amount')` di server;
+  /// tanpa ini kartu "Total Diskon" offline berbeda dari angka server.
+  double get netDiscountTotal => discountTotal * (1 - refundRatio);
+
+  /// Kuantitas yang benar-benar terjual: dikurangi unit yang sudah diretur
+  /// (barangnya kembali ke rak). Padanan `quantity - refunded_qty` di server.
+  int get netQty {
+    if (isRefunded) return 0;
+    return items.fold(0, (sum, it) => sum + it.remainingQty);
+  }
+
+  /// True bila transaksi ini terhitung sebagai PENJUALAN.
+  ///
+  /// Yang dihitung: lunas + diretur sebagian (pelanggannya nyata dan tetap
+  /// membayar sebagian). Yang TIDAK: diretur penuh, belum dibayar, dibatalkan.
+  ///
+  /// Sengaja tidak cukup `!isRefunded`: daftar riwayat dari
+  /// `GET /outlets/:id/transactions` memuat SEMUA status (unpaid, cancelled,
+  /// dst) karena mobile memanggilnya tanpa filter status, jadi predikat itu
+  /// akan menghitung bill yang belum dibayar sebagai omzet. Definisi ini
+  /// menyamai server, yang menghitung 'paid' + 'partially_refunded'
+  /// (lihat report/refund_netting.go), supaya angka kasir dan owner sama.
+  bool get countsAsSale => isPaid || isPartiallyRefunded;
+
   /// True bila masih ada minimal satu item yang bisa diretur
   /// (quantity - refunded_qty > 0). Dipakai untuk menampilkan opsi
   /// "Refund sebagian" dan menggate tombol refund pada transaksi yang

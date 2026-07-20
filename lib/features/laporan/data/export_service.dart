@@ -25,10 +25,18 @@ class TopProduct {
   });
 }
 
+/// Produk terlaris. Kuantitas & omzet dihitung BERSIH: unit yang diretur sudah
+/// kembali ke rak, jadi menghitungnya sebagai terjual akan menyesatkan keputusan
+/// pembelian. Padanan server: `SUM(netQty)` dan
+/// `SUM(ti.subtotal / ti.quantity * netQty)` di report/repository.go.
 List<TopProduct> computeTopProducts(List<Sale> sales, {int limit = 10}) {
   final agg = <String, TopProduct>{};
   for (final s in sales) {
+    if (!s.countsAsSale) continue;
     for (final it in s.items) {
+      final netQty = it.remainingQty;
+      if (netQty <= 0) continue;
+      final netRevenue = it.price * netQty;
       final key = it.productRemoteId.isNotEmpty
           ? 'id:${it.productRemoteId}'
           : 'name:${it.productName}';
@@ -38,16 +46,16 @@ List<TopProduct> computeTopProducts(List<Sale> sales, {int limit = 10}) {
           productRemoteId: it.productRemoteId,
           name: it.productName,
           sku: it.productSku,
-          qty: it.qty,
-          revenue: it.subtotal,
+          qty: netQty,
+          revenue: netRevenue,
         );
       } else {
         agg[key] = TopProduct(
           productRemoteId: prev.productRemoteId,
           name: prev.name,
           sku: prev.sku.isEmpty ? it.productSku : prev.sku,
-          qty: prev.qty + it.qty,
-          revenue: prev.revenue + it.subtotal,
+          qty: prev.qty + netQty,
+          revenue: prev.revenue + netRevenue,
         );
       }
     }
@@ -73,13 +81,16 @@ class CashierSummary {
   double get average => transactions > 0 ? revenue / transactions : 0;
 }
 
+/// Kinerja per kasir. Omzet & item dihitung bersih supaya kasir tidak terlihat
+/// berkinerja lebih tinggi dari yang sebenarnya hanya karena strukya diretur.
 List<CashierSummary> computeCashierSummaries(List<Sale> sales) {
   final agg = <String, CashierSummary>{};
   for (final s in sales) {
+    if (!s.countsAsSale) continue;
     final id = s.cashierRemoteId;
     final name = s.cashierName.isEmpty ? 'Tanpa Kasir' : s.cashierName;
     final key = id.isNotEmpty ? 'id:$id' : 'name:$name';
-    final qty = s.totalQty;
+    final qty = s.netQty;
     final prev = agg[key];
     if (prev == null) {
       agg[key] = CashierSummary(
@@ -87,7 +98,7 @@ List<CashierSummary> computeCashierSummaries(List<Sale> sales) {
         cashierName: name,
         transactions: 1,
         itemsSold: qty,
-        revenue: s.total,
+        revenue: s.netTotal,
       );
     } else {
       agg[key] = CashierSummary(
@@ -95,7 +106,7 @@ List<CashierSummary> computeCashierSummaries(List<Sale> sales) {
         cashierName: prev.cashierName,
         transactions: prev.transactions + 1,
         itemsSold: prev.itemsSold + qty,
-        revenue: prev.revenue + s.total,
+        revenue: prev.revenue + s.netTotal,
       );
     }
   }
@@ -137,6 +148,17 @@ class ReportSummary {
 }
 
 class ExportService {
+  /// Label status retur untuk baris ekspor.
+  ///
+  /// Dulu hanya dua arah (`isRefunded ? 'Refund' : 'Normal'`), sehingga struk
+  /// yang diretur SEBAGIAN dicap "Normal" — akuntan yang membaca ekspor tak
+  /// punya cara tahu bahwa sebagian uangnya sudah dikembalikan.
+  static String refundLabel(Sale s) {
+    if (s.isRefunded) return 'Refund';
+    if (s.isPartiallyRefunded) return 'Retur sebagian';
+    return 'Normal';
+  }
+
   /// Nama file aman untuk disimpan/dibagikan.
   String buildFileName(String period, String ext) {
     final safe = period.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
@@ -148,7 +170,7 @@ class ExportService {
   Future<pw.Document> buildPdfDocument(ReportSummary r) async {
     final doc = pw.Document();
     final rows = <List<String>>[
-      ['ID', 'Tanggal', 'Pelanggan', 'Tipe', 'Kasir', 'Metode', 'Status', 'Subtotal', 'Diskon', 'Pajak', 'Total'],
+      ['ID', 'Tanggal', 'Pelanggan', 'Tipe', 'Kasir', 'Metode', 'Status', 'Subtotal', 'Diskon', 'Pajak', 'Total', 'Diretur', 'Total Bersih'],
       ...r.sales.map(
         (s) => [
           '#${s.id.toString().padLeft(3, '0')}',
@@ -157,11 +179,13 @@ class ExportService {
           s.orderType,
           s.cashierName.isEmpty ? '-' : s.cashierName,
           s.paymentMethod,
-          s.isRefunded ? 'Refund' : 'Normal',
+          refundLabel(s),
           formatRupiah(s.subtotal),
           formatRupiah(s.discountTotal),
           formatRupiah(s.tax),
           formatRupiah(s.total),
+          formatRupiah(s.total - s.netTotal),
+          formatRupiah(s.netTotal),
         ],
       ),
     ];
@@ -349,6 +373,11 @@ class ExportService {
                 8: pw.Alignment.centerRight,
                 9: pw.Alignment.centerRight,
                 10: pw.Alignment.centerRight,
+                // Kolom "Diretur" & "Total Bersih" — ikut rata kanan seperti
+                // kolom rupiah lainnya; tanpa entri ini keduanya jatuh ke rata
+                // kiri dan angkanya tidak sejajar dengan kolom di sebelahnya.
+                11: pw.Alignment.centerRight,
+                12: pw.Alignment.centerRight,
               },
               data: rows,
             ),
@@ -416,6 +445,8 @@ class ExportService {
       'Diskon',
       'Pajak',
       'Total',
+      'Diretur',
+      'Total Bersih',
       'Detail Item',
     ]);
     for (final s in r.sales) {
@@ -431,11 +462,13 @@ class ExportService {
         s.orderType,
         s.cashierName.isEmpty ? '-' : s.cashierName,
         s.paymentMethod,
-        s.isRefunded ? 'Refund' : 'Normal',
+        refundLabel(s),
         s.subtotal,
         s.discountTotal,
         s.tax,
         s.total,
+        s.total - s.netTotal,
+        s.netTotal,
         itemsStr,
       ]);
     }

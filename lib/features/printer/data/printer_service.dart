@@ -518,12 +518,15 @@ class PrinterService {
     double totalTransfer = 0;
     double totalCash = 0;
 
+    // netTotal, bukan total: struk yang diretur sebagian hanya menyumbang porsi
+    // yang benar-benar diterima. Kalau memakai nilai penuh, rekap tender yang
+    // dicetak tidak akan cocok dengan uang di laci maupun dengan Z-report server.
     for (final sale in sales) {
-      if (sale.isRefunded) continue;
-      if (sale.paymentMethod == 'QRIS') totalQris += sale.total;
-      if (sale.paymentMethod == 'Kartu') totalCard += sale.total;
-      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.total;
-      if (sale.paymentMethod == 'Tunai') totalCash += sale.total;
+      if (!sale.countsAsSale) continue;
+      if (sale.paymentMethod == 'QRIS') totalQris += sale.netTotal;
+      if (sale.paymentMethod == 'Kartu') totalCard += sale.netTotal;
+      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.netTotal;
+      if (sale.paymentMethod == 'Tunai') totalCash += sale.netTotal;
     }
 
     final bytes = <int>[
@@ -988,6 +991,15 @@ class PrinterService {
       bytes.addAll(
         gen.text(
           '*** REFUNDED ***',
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
+    } else if (sale.isPartiallyRefunded) {
+      // Tanpa penanda ini, struk cetak ulang atas transaksi yang sebagian
+      // barangnya sudah dikembalikan terlihat identik dengan struk normal.
+      bytes.addAll(
+        gen.text(
+          '*** RETUR SEBAGIAN ***',
           styles: const PosStyles(align: PosAlign.center, bold: true),
         ),
       );

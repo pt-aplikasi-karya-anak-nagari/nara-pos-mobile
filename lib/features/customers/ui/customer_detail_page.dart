@@ -68,8 +68,12 @@ class CustomerDetailView extends ConsumerWidget {
     // Statistik nilai pelanggan TIDAK menghitung transaksi yang di-refund
     // (uang dikembalikan) — kalau ikut, lifetime spend, jumlah transaksi, &
     // rata-rata menggelembung salah. Daftar transaksi di bawah tetap semua.
-    final paidSales = sales.where((s) => !s.isRefunded).toList();
-    final totalSpent = paidSales.fold(0.0, (sum, s) => sum + s.total);
+    //
+    // Retur SEBAGIAN tetap dihitung, tapi sebesar netTotal saja: pelanggan
+    // memang membelanjakan sisanya. Memakai total mentah akan menggelembungkan
+    // lifetime spend sebesar nilai yang sudah dikembalikan ke pelanggan.
+    final paidSales = sales.where((s) => s.countsAsSale).toList();
+    final totalSpent = paidSales.fold(0.0, (sum, s) => sum + s.netTotal);
     final avgSpent = paidSales.isEmpty ? 0.0 : totalSpent / paidSales.length;
 
     return Builder(

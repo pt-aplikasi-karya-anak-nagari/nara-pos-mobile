@@ -71,8 +71,13 @@ class ShiftRepository {
   }
 
   double calculateExpectedCash(Shift shift, List<Sale> sales) {
-    final totalSales =
-        sales.where((s) => s.isPaid).fold(0.0, (sum, s) => sum + s.total);
+    // isPaid hanya true untuk status 'paid', sehingga struk yang diretur
+    // SEBAGIAN dulu gugur seluruhnya dari ekspektasi kas — persis kelas bug
+    // yang sudah diperbaiki di server (shift.cashSalesSubquery). Yang benar:
+    // struknya tetap dihitung, sebesar porsi yang tidak diretur.
+    final totalSales = sales
+        .where((s) => s.isPaid || s.isPartiallyRefunded)
+        .fold(0.0, (sum, s) => sum + s.netTotal);
     return shift.startingCash + totalSales;
   }
 }

@@ -143,24 +143,47 @@ class LaporanPage extends HookConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('$e')),
                 data: (sales) {
-                  final filtered = _filter(
-                    sales,
-                    period.value,
-                    anchor.value,
-                  ).where((s) => !s.isRefunded).toList();
+                  // Struk yang diretur SEBAGIAN tetap ikut — pelanggannya nyata
+                  // dan tetap membayar sebagian. Yang dibuang hanya retur penuh
+                  // (countsAsSale). Nilainya dihitung bersih lewat netTotal /
+                  // netQty; memakai total mentah akan menghitung struk retur
+                  // sebagian 100% dan membuat angka mobile berbeda dari server.
+                  final inPeriod = _filter(sales, period.value, anchor.value);
+                  final filtered =
+                      inPeriod.where((s) => s.countsAsSale).toList();
                   // Agregasi klien (fallback offline / detail export).
-                  final clientRevenue = filtered.fold(0.0, (s, x) => s + x.total);
+                  final clientRevenue =
+                      filtered.fold(0.0, (s, x) => s + x.netTotal);
                   final clientCount = filtered.length;
-                  final clientItems = filtered.fold(0, (s, x) => s + x.totalQty);
+                  final clientItems = filtered.fold(0, (s, x) => s + x.netQty);
+                  // Diskon ikut proporsional terhadap porsi yang diretur —
+                  // server memakai netAmount(discount_amount), jadi memakai
+                  // diskon kotor di sini akan berbeda dari angka server.
                   final clientDiscounts = filtered.fold(
                     0.0,
-                    (s, x) => s + x.discountTotal,
+                    (s, x) => s + x.netDiscountTotal,
                   );
                   // Prioritaskan angka server (konsisten dgn web); fallback klien.
                   final revenue = serverSummary?.revenue ?? clientRevenue;
                   final count = serverSummary?.transactions ?? clientCount;
                   final items = serverSummary?.itemsSold ?? clientItems;
                   final discounts = serverSummary?.discountTotal ?? clientDiscounts;
+                  // Retur yang SUDAH dikurangkan dari omzet di atas. Ditampilkan
+                  // supaya angkanya bisa dicocokkan dengan struk fisik:
+                  // omzet + retur = nilai jual asli.
+                  //
+                  // Dihitung dari `inPeriod`, BUKAN `filtered`: filtered sudah
+                  // membuang struk yang diretur PENUH (countsAsSale false),
+                  // justru struk dengan nilai retur terbesar. Server menghitung
+                  // keduanya — 'refunded' dan 'partially_refunded'.
+                  final returan = inPeriod
+                      .where((x) => x.isRefunded || x.isPartiallyRefunded)
+                      .toList();
+                  final clientRefunded =
+                      returan.fold(0.0, (s, x) => s + x.refundedValue);
+                  final refunded = serverSummary?.refundedAmount ?? clientRefunded;
+                  final refundedCount =
+                      serverSummary?.refundedCount ?? returan.length;
                   final avg = serverSummary?.average ??
                       (clientCount > 0 ? clientRevenue / clientCount : 0.0);
 
@@ -233,6 +256,14 @@ class LaporanPage extends HookConsumerWidget {
                       formatRupiah(discounts),
                       AppIcons.discount,
                       kDanger,
+                    ),
+                    _StatCard(
+                      refundedCount > 0
+                          ? 'Retur ($refundedCount struk)'
+                          : 'Retur',
+                      formatRupiah(refunded),
+                      AppIcons.receipt,
+                      kWarning,
                     ),
                   ];
                   final statColumns = context.responsive<int>(
@@ -1346,6 +1377,9 @@ class _Breakdown extends StatelessWidget {
     );
   }
 
+  /// Titik-titik grafik omzet. Memakai netTotal — sama seperti kartu metrik di
+  /// atasnya. Kalau grafik memakai total mentah sementara kartu memakai
+  /// netTotal, keduanya saling bertentangan pada hari yang ada retur sebagian.
   List<({String label, double revenue})> _rows() {
     switch (period) {
       case _Period.harian:
@@ -1353,8 +1387,8 @@ class _Breakdown extends StatelessWidget {
         for (final s in sales) {
           buckets.update(
             s.createdAt.hour,
-            (v) => v + s.total,
-            ifAbsent: () => s.total,
+            (v) => v + s.netTotal,
+            ifAbsent: () => s.netTotal,
           );
         }
         final keys = buckets.keys.toList()..sort();
@@ -1367,8 +1401,8 @@ class _Breakdown extends StatelessWidget {
         for (final s in sales) {
           buckets.update(
             s.createdAt.day,
-            (v) => v + s.total,
-            ifAbsent: () => s.total,
+            (v) => v + s.netTotal,
+            ifAbsent: () => s.netTotal,
           );
         }
         final keys = buckets.keys.toList()..sort();
@@ -1384,8 +1418,8 @@ class _Breakdown extends StatelessWidget {
         for (final s in sales) {
           buckets.update(
             s.createdAt.month,
-            (v) => v + s.total,
-            ifAbsent: () => s.total,
+            (v) => v + s.netTotal,
+            ifAbsent: () => s.netTotal,
           );
         }
         final keys = buckets.keys.toList()..sort();
