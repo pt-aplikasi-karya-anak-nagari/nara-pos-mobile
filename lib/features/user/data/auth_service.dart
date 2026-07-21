@@ -112,7 +112,6 @@ class AuthNotifier extends Notifier<AuthState> {
       final regRole = (userData['role'] as String?)?.trim() ?? '';
       final regRoleLower = regRole.toLowerCase();
       if (regRoleLower == 'owner' ||
-          regRoleLower == 'coowner' ||
           regRoleLower == 'manager') {
         return 'Registrasi berhasil, namun Role "$regRole" hanya dapat login melalui Dashboard Web.';
       }
@@ -201,7 +200,6 @@ class AuthNotifier extends Notifier<AuthState> {
       final roleName = (userData['role'] as String?)?.trim() ?? '';
       final roleLower = roleName.toLowerCase();
       if (roleLower == 'owner' ||
-          roleLower == 'coowner' ||
           roleLower == 'manager') {
         return 'Role "$roleName" hanya dapat login melalui Dashboard Web.';
       }
