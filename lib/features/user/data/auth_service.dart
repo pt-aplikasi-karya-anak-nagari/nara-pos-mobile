@@ -111,8 +111,7 @@ class AuthNotifier extends Notifier<AuthState> {
       // Blokir role Owner & Manager dari aplikasi mobile (case-insensitive).
       final regRole = (userData['role'] as String?)?.trim() ?? '';
       final regRoleLower = regRole.toLowerCase();
-      if (regRoleLower == 'owner' ||
-          regRoleLower == 'manager') {
+      if (regRoleLower == 'owner' || regRoleLower == 'manager') {
         return 'Registrasi berhasil, namun Role "$regRole" hanya dapat login melalui Dashboard Web.';
       }
 
@@ -192,12 +191,20 @@ class AuthNotifier extends Notifier<AuthState> {
     required String email,
     required String password,
     required String outletId,
+    String deviceLabel = '',
   }) {
     return _authApi.startStaffSession(
       email: email.trim(),
       password: password,
       outletId: outletId,
+      deviceLabel: deviceLabel,
     );
+  }
+
+  /// Langkah 1 alternatif — perangkat yang sudah disahkan melewati password
+  /// pengelola. Sesi tetap hanya terbit setelah OTP/PIN di langkah 3.
+  Future<StaffSessionStart> resumeStaffSession({required String deviceToken}) {
+    return _authApi.resumeStaffSession(deviceToken: deviceToken);
   }
 
   /// Langkah 2 — kirim kode ke email pengotorisasi.
@@ -253,8 +260,7 @@ class AuthNotifier extends Notifier<AuthState> {
       // sesi tidak sempat tersimpan bila backend versi lama.
       final roleName = (userData['role'] as String?)?.trim() ?? '';
       final roleLower = roleName.toLowerCase();
-      if (roleLower == 'owner' ||
-          roleLower == 'manager') {
+      if (roleLower == 'owner' || roleLower == 'manager') {
         return 'Role "$roleName" hanya dapat login melalui Dashboard Web.';
       }
 

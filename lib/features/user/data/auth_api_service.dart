@@ -195,9 +195,8 @@ class AuthApiService extends BaseApiService {
   Future<bool> getMyPinStatus() async {
     final data = await get<Map<String, dynamic>>(
       ApiEndpoint.mePin,
-      converter: (res) => res is Map
-          ? Map<String, dynamic>.from(res)
-          : <String, dynamic>{},
+      converter: (res) =>
+          res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{},
     );
     return data['has_pin'] as bool? ?? false;
   }
@@ -210,11 +209,37 @@ class AuthApiService extends BaseApiService {
     required String email,
     required String password,
     required String outletId,
+    String deviceLabel = '',
   }) async {
     final data = await post<Map<String, dynamic>>(
       ApiEndpoint.staffSessionStart,
-      data: {'email': email, 'password': password, 'outlet_id': outletId},
+      data: {
+        'email': email,
+        'password': password,
+        'outlet_id': outletId,
+        'device_label': deviceLabel,
+      },
     );
+    return _staffSessionStartFromJson(data);
+  }
+
+  /// Lanjutkan di perangkat yang sudah disahkan, tanpa password pengelola.
+  ///
+  /// Server menentukan outlet & pengotorisasi dari baris perangkatnya sendiri —
+  /// perangkat tidak boleh menentukan siapa yang menyetujui sesinya.
+  Future<StaffSessionStart> resumeStaffSession({
+    required String deviceToken,
+  }) async {
+    final data = await post<Map<String, dynamic>>(
+      ApiEndpoint.staffSessionResume,
+      data: {'device_token': deviceToken},
+    );
+    return _staffSessionStartFromJson(data);
+  }
+
+  /// Bentuk respons start & resume identik, jadi parsernya satu — supaya
+  /// penambahan field tak pernah terpasang hanya di salah satu jalur.
+  StaffSessionStart _staffSessionStartFromJson(Map<String, dynamic> data) {
     final list = (data['staff'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map(StaffCandidate.fromJson)
@@ -230,6 +255,7 @@ class AuthApiService extends BaseApiService {
       outletId: data['outlet_id']?.toString() ?? '',
       outlets: outlets,
       staff: list,
+      deviceToken: data['device_token']?.toString() ?? '',
     );
   }
 
@@ -288,7 +314,6 @@ int _readRetryAfterSeconds(Map<String, dynamic>? data, {int fallback = 60}) {
 
 final authApiServiceProvider = Provider<AuthApiService>((ref) {
   return AuthApiService(ref.watch(dioProvider));
-
 });
 
 // ── Sesi staf di perangkat kasir bersama ────────────────────────────────
@@ -310,12 +335,12 @@ class StaffCandidate {
   final bool hasPin;
 
   factory StaffCandidate.fromJson(Map<String, dynamic> j) => StaffCandidate(
-        id: j['id']?.toString() ?? '',
-        fullName: j['full_name']?.toString() ?? '',
-        username: j['username']?.toString() ?? '',
-        role: j['role']?.toString() ?? '',
-        hasPin: j['has_pin'] == true,
-      );
+    id: j['id']?.toString() ?? '',
+    fullName: j['full_name']?.toString() ?? '',
+    username: j['username']?.toString() ?? '',
+    role: j['role']?.toString() ?? '',
+    hasPin: j['has_pin'] == true,
+  );
 }
 
 /// Hasil langkah 1: pengotorisasi terverifikasi + daftar staf.
@@ -339,10 +364,12 @@ class StaffSessionStart {
     required this.outletId,
     required this.outlets,
     required this.staff,
+    this.deviceToken = '',
   });
 
   final String challengeId;
   final String authorizerName;
+
   /// Kosong bila pengotorisasi punya >1 outlet dan belum memilih.
   final String outletId;
   final List<StaffOutletOption> outlets;
@@ -351,4 +378,9 @@ class StaffSessionStart {
   /// jadi alamat lengkap atasan memang tak dikirim ke perangkat.
   final String authorizerEmail;
   final List<StaffCandidate> staff;
+
+  /// Token perangkat — HANYA terisi pada [startStaffSession] yang outletnya
+  /// sudah pasti. Kosong pada resume (perangkat sudah memegang miliknya) dan
+  /// saat pengelola masih harus memilih outlet.
+  final String deviceToken;
 }

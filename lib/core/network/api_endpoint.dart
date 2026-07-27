@@ -7,6 +7,7 @@ class ApiEndpoint {
   // kehadiran, memilih staf yang bertugas, lalu menyetujui lewat kode email
   // atau PIN. Sesi terbit ATAS NAMA STAF — pengotorisasi tak pernah dapat sesi.
   static const String staffSessionStart = '/staff-session/start';
+  static const String staffSessionResume = '/staff-session/resume';
   static const String staffSessionOtp = '/staff-session/otp';
   static const String staffSessionVerify = '/staff-session/verify';
   static const String register = '/register';

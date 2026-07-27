@@ -188,6 +188,7 @@ bool _isBearerSkipped(String path) {
       // Sesi kasir: ketiganya berjalan SEBELUM ada token — pengotorisasi
       // membuktikan diri lewat email+password, bukan lewat sesi.
       normalized == ApiEndpoint.staffSessionStart ||
+      normalized == ApiEndpoint.staffSessionResume ||
       normalized == ApiEndpoint.staffSessionOtp ||
       normalized == ApiEndpoint.staffSessionVerify ||
       normalized == ApiEndpoint.register ||
@@ -202,6 +203,7 @@ bool _isAuthEndpoint(String path) {
       // 401 dari alur sesi kasir berarti "kredensial/kode salah", bukan
       // "token kedaluwarsa" — jangan picu refresh-token & logout paksa.
       normalized == ApiEndpoint.staffSessionStart ||
+      normalized == ApiEndpoint.staffSessionResume ||
       normalized == ApiEndpoint.staffSessionOtp ||
       normalized == ApiEndpoint.staffSessionVerify ||
       normalized == ApiEndpoint.register ||
