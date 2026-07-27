@@ -2,6 +2,13 @@ class ApiEndpoint {
   static const String login = '/login';
   static const String loginOtpRequest = '/login/otp/request';
   static const String loginOtpVerify = '/login/otp/verify';
+
+  // Sesi staf di perangkat kasir bersama: Pemilik/Manajer membuktikan
+  // kehadiran, memilih staf yang bertugas, lalu menyetujui lewat kode email
+  // atau PIN. Sesi terbit ATAS NAMA STAF — pengotorisasi tak pernah dapat sesi.
+  static const String staffSessionStart = '/staff-session/start';
+  static const String staffSessionOtp = '/staff-session/otp';
+  static const String staffSessionVerify = '/staff-session/verify';
   static const String register = '/register';
   static const String registerRequestOtp = '/register/request-otp';
   static const String refresh = '/refresh';

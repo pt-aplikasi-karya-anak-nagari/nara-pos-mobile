@@ -179,6 +179,60 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
+  // ── Sesi staf di perangkat kasir bersama ────────────────────────────
+  //
+  // Pemilik/Manajer membuktikan kehadiran, memilih staf yang bertugas, lalu
+  // menyetujui lewat kode email atau PIN. Sesi terbit ATAS NAMA STAF, sehingga
+  // jejak transaksi & shift menunjuk orang yang benar-benar bekerja.
+
+  /// Langkah 1. Melempar pesan error apa adanya dari server supaya alasan
+  /// penolakan (kredensial salah, bukan penyelia, outlet bukan miliknya)
+  /// sampai ke layar tanpa disamarkan jadi "gagal".
+  Future<StaffSessionStart> startStaffSession({
+    required String email,
+    required String password,
+    required String outletId,
+  }) {
+    return _authApi.startStaffSession(
+      email: email.trim(),
+      password: password,
+      outletId: outletId,
+    );
+  }
+
+  /// Langkah 2 — kirim kode ke email pengotorisasi.
+  Future<String> requestStaffSessionOtp({
+    required String challengeId,
+    required String staffUserId,
+  }) {
+    return _authApi.requestStaffSessionOtp(
+      challengeId: challengeId,
+      staffUserId: staffUserId,
+    );
+  }
+
+  /// Langkah 3 — verifikasi kode/PIN lalu simpan sesi staf.
+  /// Mengembalikan null bila berhasil, atau pesan error.
+  Future<String?> verifyStaffSession({
+    required String challengeId,
+    required String staffUserId,
+    required String code,
+  }) async {
+    try {
+      final data = await _authApi.verifyStaffSession(
+        challengeId: challengeId,
+        staffUserId: staffUserId,
+        code: code.trim(),
+      );
+      // Payload-nya sesi biasa, jadi disimpan lewat jalur yang sama —
+      // termasuk blokade role-nya, yang tak akan terpicu karena yang terbit
+      // adalah sesi STAF, bukan pengotorisasi.
+      return await _storeLoginPayload(data);
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   Future<String?> _storeLoginPayload(Map<String, dynamic> data) async {
     try {
       final accessToken = data['access_token'] as String?;

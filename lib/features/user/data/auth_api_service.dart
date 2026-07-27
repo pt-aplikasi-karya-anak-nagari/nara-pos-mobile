@@ -201,6 +201,68 @@ class AuthApiService extends BaseApiService {
     );
     return data['has_pin'] as bool? ?? false;
   }
+
+  // ── Sesi staf di perangkat kasir bersama ──────────────────────────────
+
+  /// Langkah 1: Pemilik/Manajer membuktikan kehadiran. TIDAK menerbitkan sesi
+  /// untuk mereka — hanya mengembalikan daftar staf yang boleh bertugas.
+  Future<StaffSessionStart> startStaffSession({
+    required String email,
+    required String password,
+    required String outletId,
+  }) async {
+    final data = await post<Map<String, dynamic>>(
+      ApiEndpoint.staffSessionStart,
+      data: {'email': email, 'password': password, 'outlet_id': outletId},
+    );
+    final list = (data['staff'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(StaffCandidate.fromJson)
+        .toList();
+    final outlets = (data['outlets'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(StaffOutletOption.fromJson)
+        .toList();
+    return StaffSessionStart(
+      challengeId: data['challenge_id']?.toString() ?? '',
+      authorizerName: data['authorizer_name']?.toString() ?? '',
+      authorizerEmail: data['authorizer_email']?.toString() ?? '',
+      outletId: data['outlet_id']?.toString() ?? '',
+      outlets: outlets,
+      staff: list,
+    );
+  }
+
+  /// Langkah 2: kirim kode ke email pengotorisasi. Mengembalikan alamat yang
+  /// sudah disamarkan supaya ia tahu kotak masuk mana yang harus dibuka.
+  Future<String> requestStaffSessionOtp({
+    required String challengeId,
+    required String staffUserId,
+  }) async {
+    final data = await post<Map<String, dynamic>>(
+      ApiEndpoint.staffSessionOtp,
+      data: {'challenge_id': challengeId, 'staff_user_id': staffUserId},
+    );
+    return data['sent_to']?.toString() ?? '';
+  }
+
+  /// Langkah 3: [code] boleh kode email 6 digit ATAU PIN otorisasi milik
+  /// pengotorisasi — server yang membedakan. Balasannya payload sesi biasa,
+  /// atas nama STAF.
+  Future<Map<String, dynamic>> verifyStaffSession({
+    required String challengeId,
+    required String staffUserId,
+    required String code,
+  }) async {
+    return post<Map<String, dynamic>>(
+      ApiEndpoint.staffSessionVerify,
+      data: {
+        'challenge_id': challengeId,
+        'staff_user_id': staffUserId,
+        'code': code,
+      },
+    );
+  }
 }
 
 Map<String, dynamic> _asMap(dynamic value) {
@@ -226,4 +288,67 @@ int _readRetryAfterSeconds(Map<String, dynamic>? data, {int fallback = 60}) {
 
 final authApiServiceProvider = Provider<AuthApiService>((ref) {
   return AuthApiService(ref.watch(dioProvider));
+
 });
+
+// ── Sesi staf di perangkat kasir bersama ────────────────────────────────
+
+/// Satu staf yang boleh bertugas di perangkat ini.
+class StaffCandidate {
+  const StaffCandidate({
+    required this.id,
+    required this.fullName,
+    required this.username,
+    required this.role,
+    required this.hasPin,
+  });
+
+  final String id;
+  final String fullName;
+  final String username;
+  final String role;
+  final bool hasPin;
+
+  factory StaffCandidate.fromJson(Map<String, dynamic> j) => StaffCandidate(
+        id: j['id']?.toString() ?? '',
+        fullName: j['full_name']?.toString() ?? '',
+        username: j['username']?.toString() ?? '',
+        role: j['role']?.toString() ?? '',
+        hasPin: j['has_pin'] == true,
+      );
+}
+
+/// Hasil langkah 1: pengotorisasi terverifikasi + daftar staf.
+class StaffOutletOption {
+  const StaffOutletOption({required this.id, required this.name});
+  final String id;
+  final String name;
+
+  factory StaffOutletOption.fromJson(Map<String, dynamic> j) =>
+      StaffOutletOption(
+        id: j['id']?.toString() ?? '',
+        name: j['name']?.toString() ?? '',
+      );
+}
+
+class StaffSessionStart {
+  const StaffSessionStart({
+    required this.challengeId,
+    required this.authorizerName,
+    required this.authorizerEmail,
+    required this.outletId,
+    required this.outlets,
+    required this.staff,
+  });
+
+  final String challengeId;
+  final String authorizerName;
+  /// Kosong bila pengotorisasi punya >1 outlet dan belum memilih.
+  final String outletId;
+  final List<StaffOutletOption> outlets;
+
+  /// Sudah disamarkan server ("bud***@gmail.com"). Layar ini dilihat kasir,
+  /// jadi alamat lengkap atasan memang tak dikirim ke perangkat.
+  final String authorizerEmail;
+  final List<StaffCandidate> staff;
+}

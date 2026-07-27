@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:sizer/sizer.dart';
 import 'widgets/register_sheet.dart';
 import 'widgets/forgot_password_sheet.dart';
+import 'staff_session_page.dart';
 
 import '../../../app/theme.dart';
 import '../../../app/theme_mode_provider.dart';
@@ -801,6 +802,40 @@ class _LoginForm extends ConsumerWidget {
             );
           },
         ),
+
+                // Perangkat bersama: Pemilik/Manajer menyetujui siapa yang
+                // bertugas, lalu sesi terbit atas nama STAF — bukan atas nama
+                // mereka. Dipisah dari form di atas supaya kasir tak bingung
+                // mengira harus punya akun sendiri.
+                const Gap(6),
+                Align(
+                  alignment: Alignment.center,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final mulai = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => const StaffSessionPage(),
+                        ),
+                      );
+                      if (mulai == true && context.mounted) {
+                        // Sesi staf sudah tersimpan oleh halaman itu; router
+                        // yang mengamati auth state akan memindahkan layar.
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Sesi kasir dimulai.')),
+                        );
+                      }
+                    },
+                    icon: HugeIcon(icon: AppIcons.person, color: kPrimary, size: 16),
+                    label: const Text(
+                      'Mulai sesi kasir (disetujui Pemilik/Manajer)',
+                      style: TextStyle(
+                        color: kPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
         const Gap(32),
         ValueListenableBuilder<String?>(
           valueListenable: info,
