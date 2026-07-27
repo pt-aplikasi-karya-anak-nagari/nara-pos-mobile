@@ -20,8 +20,31 @@ import '../data/auth_service.dart';
 ///
 /// Sesi yang terbit ATAS NAMA STAF — jadi jejak transaksi, shift, dan alert
 /// anti-fraud menunjuk orang yang benar-benar bekerja.
-class StaffSessionPage extends HookConsumerWidget {
+class StaffSessionPage extends StatelessWidget {
   const StaffSessionPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Mulai Sesi Kasir')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: StaffSessionFlow(onSelesai: () => Navigator.of(context).pop(true)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Alur tiga langkah tanpa Scaffold, supaya bisa disematkan langsung di
+/// halaman login (perangkat kasir tak punya jalan masuk lain) maupun dibuka
+/// sebagai halaman tersendiri.
+class StaffSessionFlow extends HookConsumerWidget {
+  const StaffSessionFlow({super.key, required this.onSelesai});
+
+  /// Dipanggil setelah sesi staf berhasil dibuat & tersimpan.
+  final VoidCallback onSelesai;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -105,67 +128,59 @@ class StaffSessionPage extends HookConsumerWidget {
         return;
       }
       HapticFeedback.mediumImpact();
-      if (context.mounted) Navigator.of(context).pop(true);
+      onSelesai();
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mulai Sesi Kasir'),
-        leading: IconButton(
-          icon: HugeIcon(icon: AppIcons.chevronLeft, color: kTextDark),
-          onPressed: () {
-            if (langkah.value == 0) {
-              Navigator.of(context).pop();
-            } else {
-              // Mundur satu langkah, bukan keluar — supaya salah pilih staf
-              // tidak memaksa mengetik ulang password.
-              error.value = null;
-              kodeCtrl.clear();
-              langkah.value = langkah.value - 1;
-            }
-          },
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Langkah(aktif: langkah.value),
-              const Gap(20),
-              if (error.value != null) ...[
-                _Peringatan(pesan: error.value!),
-                const Gap(14),
-              ],
-              if (langkah.value == 0)
-                ..._kredensial(
-                  context: context,
-                  emailCtrl: emailCtrl,
-                  passCtrl: passCtrl,
-                  loading: loading.value,
-                  outlets: sesi.value?.outlets ?? const [],
-                  onLanjut: () => mulai(),
-                  onPilihOutlet: (id) => mulai(pilihOutlet: id),
-                )
-              else if (langkah.value == 1)
-                ..._daftarStaf(
-                  sesi: sesi.value!,
-                  loading: loading.value,
-                  onPilih: mintaKode,
-                )
-              else
-                ..._verifikasi(
-                  staf: stafTerpilih.value!,
-                  dikirimKe: dikirimKe.value,
-                  kodeCtrl: kodeCtrl,
-                  loading: loading.value,
-                  onVerifikasi: verifikasi,
-                ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Langkah(aktif: langkah.value),
+        const Gap(20),
+        if (error.value != null) ...[
+          _Peringatan(pesan: error.value!),
+          const Gap(14),
+        ],
+        if (langkah.value == 0)
+          ..._kredensial(
+            context: context,
+            emailCtrl: emailCtrl,
+            passCtrl: passCtrl,
+            loading: loading.value,
+            outlets: sesi.value?.outlets ?? const [],
+            onLanjut: () => mulai(),
+            onPilihOutlet: (id) => mulai(pilihOutlet: id),
+          )
+        else if (langkah.value == 1)
+          ..._daftarStaf(
+            sesi: sesi.value!,
+            loading: loading.value,
+            onPilih: mintaKode,
+          )
+        else
+          ..._verifikasi(
+            staf: stafTerpilih.value!,
+            dikirimKe: dikirimKe.value,
+            kodeCtrl: kodeCtrl,
+            loading: loading.value,
+            onVerifikasi: verifikasi,
           ),
-        ),
-      ),
+        if (langkah.value > 0) ...[
+          const Gap(10),
+          TextButton(
+            // Mundur satu langkah, bukan keluar — salah pilih staf tak boleh
+            // memaksa mengetik ulang password.
+            onPressed: loading.value
+                ? null
+                : () {
+                    error.value = null;
+                    kodeCtrl.clear();
+                    langkah.value = langkah.value - 1;
+                  },
+            child: const Text('Kembali'),
+          ),
+        ],
+      ],
     );
   }
 }
