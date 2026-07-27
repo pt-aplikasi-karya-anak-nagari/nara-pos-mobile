@@ -8,6 +8,7 @@ import '../auth_storage.dart';
 import '../config/app_config.dart';
 import '../../features/user/data/auth_service.dart';
 import 'api_endpoint.dart';
+import 'toast_throttle.dart';
 import 'package:toastification/toastification.dart';
 
 /// Host backend (tanpa trailing slash). Dipakai untuk membangun URL absolut
@@ -107,7 +108,13 @@ final dioProvider = Provider<Dio>((ref) {
             e.type == DioExceptionType.sendTimeout ||
             e.type == DioExceptionType.receiveTimeout;
         if (!authToastShown && !isConnError) {
-          _showErrorToast(_errorMessage(e));
+          _showErrorToast(
+            _errorMessage(e),
+            kondisiMenetap: kondisiMenetapDariRespons(
+              e.response?.statusCode,
+              e.response?.data,
+            ),
+          );
         }
         return handler.next(e);
       },
@@ -318,6 +325,10 @@ Future<void> _clearAuth(Ref ref, AuthStorage authStorage) async {
   try {
     await authStorage.clear();
     ref.invalidate(authProvider);
+    // Sesi berganti (mis. kasir lain mulai bertugas di perangkat yang sama):
+    // lupakan catatan peredam, supaya kondisi milik sesi sebelumnya tidak
+    // membungkam toast yang relevan untuk pengguna baru.
+    _peredamToast.reset();
   } catch (_) {
     // ignore
   }
@@ -342,7 +353,13 @@ String _errorMessage(DioException e) {
   return 'Terjadi kesalahan sistem';
 }
 
-void _showErrorToast(String message) {
+/// Peredam bersama untuk semua toast error jaringan. Tanpa ini, satu kondisi
+/// yang menggagalkan beberapa endpoint sekaligus (mis. langganan outlet habis)
+/// menumpuk toast identik tiap putaran polling halaman kasir.
+final _peredamToast = ToastThrottle();
+
+void _showErrorToast(String message, {bool kondisiMenetap = false}) {
+  if (!_peredamToast.boleh(message, kondisiMenetap: kondisiMenetap)) return;
   toastification.show(
     type: ToastificationType.error,
     style: ToastificationStyle.fillColored,
