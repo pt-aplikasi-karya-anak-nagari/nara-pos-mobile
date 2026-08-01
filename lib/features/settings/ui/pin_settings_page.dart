@@ -154,7 +154,7 @@ class PinSettingsPage extends HookConsumerWidget {
                 title: 'PIN Otorisasi',
                 subtitle:
                     'PIN 4-6 digit untuk mengesahkan void/refund saat outlet '
-                    'mensyaratkan otorisasi manajer.',
+                    'mensyaratkan otorisasi.',
               ),
               // Kartu status PIN saat ini.
               statusAsync.when(

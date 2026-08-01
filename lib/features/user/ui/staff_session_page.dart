@@ -321,7 +321,7 @@ List<Widget> _kredensial({
   final perluPilihOutlet = outlets.length > 1;
   return [
     Text(
-      perluPilihOutlet ? 'Pilih outlet' : 'Masuk sebagai Pemilik / Manajer',
+      perluPilihOutlet ? 'Pilih outlet' : 'Masuk sebagai Pemilik',
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
     ),
     const Gap(6),
@@ -571,7 +571,7 @@ class _PerangkatTerdaftar extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Lepas perangkat ini?'),
         content: const Text(
-          'Pemilik atau manajer harus memasukkan email dan password lagi untuk '
+          'Pemilik harus memasukkan email dan password lagi untuk '
           'membuka sesi kasir berikutnya di perangkat ini.',
         ),
         actions: [

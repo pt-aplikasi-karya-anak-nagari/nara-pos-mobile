@@ -55,7 +55,7 @@ Future<String?> _promptManagerPin(
         final pin = pinController.text.trim();
         final pinValid = pin.length >= 4 && pin.length <= 6;
         return AlertDialog(
-          title: const Text('Otorisasi Manajer'),
+          title: const Text('Otorisasi'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,8 +78,8 @@ Future<String?> _promptManagerPin(
               ),
               const Gap(12),
               const Text(
-                'Diskon melampaui batas kasir. Masukkan PIN otorisasi manajer '
-                'berwenang untuk melanjutkan transaksi.',
+                'Diskon melampaui batas kasir. Minta PIN otorisasi dari '
+                'Pemilik atau penyelia yang berwenang untuk melanjutkan.',
               ),
               const Gap(12),
               TextField(
@@ -91,7 +91,7 @@ Future<String?> _promptManagerPin(
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (_) => setLocal(() {}),
                 decoration: InputDecoration(
-                  labelText: 'PIN Otorisasi Manajer',
+                  labelText: 'PIN Otorisasi',
                   hintText: '4-6 digit',
                   counterText: '',
                   border: OutlineInputBorder(

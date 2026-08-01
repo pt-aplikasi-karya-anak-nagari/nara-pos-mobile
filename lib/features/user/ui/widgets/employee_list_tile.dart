@@ -56,7 +56,15 @@ class EmployeeListTile extends StatelessWidget {
             ),
         ],
       ),
-      subtitle: Text('@${employee.username} • $outletName'),
+      // Username hanya ditampilkan kalau memang ada. Karyawan tak punya
+      // username sejak dipisah ke tabel `employees` (Fase 5), jadi baris ini
+      // dulu terbaca "@ • Nama Outlet" — sebuah "at" yang menggantung tanpa
+      // apa pun sesudahnya.
+      subtitle: Text(
+        employee.username.isEmpty
+            ? outletName
+            : '@${employee.username} • $outletName',
+      ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(

@@ -116,7 +116,7 @@ class ProfilPage extends HookConsumerWidget {
                 _ProfileHeader(
                   initial: initial,
                   name: user?.name ?? '-',
-                  username: user?.username ?? '-',
+                  username: user?.username ?? '',
                   roleLabel: role.label,
                   outletName: outletName,
                 ),
@@ -644,7 +644,14 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
           const Gap(2),
-          Text('@$username', style: TextStyle(fontSize: 12, color: kTextMid)),
+          // Disembunyikan kalau kosong, bukan diganti '-'. Pemegang sesi
+          // kasir adalah karyawan, dan karyawan tak punya username: yang lama
+          // menampilkan "@" sendirian di bawah namanya.
+          if (username.isNotEmpty)
+            Text(
+              '@$username',
+              style: TextStyle(fontSize: 12, color: kTextMid),
+            ),
           const Gap(8),
           Wrap(
             alignment: WrapAlignment.center,

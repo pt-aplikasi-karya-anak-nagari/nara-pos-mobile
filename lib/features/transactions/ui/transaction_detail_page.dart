@@ -428,8 +428,8 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                         onChanged: (_) => setLocal(() {}),
                         decoration: InputDecoration(
                           labelText: requirePin
-                              ? 'PIN Otorisasi Manajer'
-                              : 'PIN Otorisasi Manajer (bila diminta)',
+                              ? 'PIN Otorisasi'
+                              : 'PIN Otorisasi (bila diminta)',
                           hintText: '4-6 digit',
                           counterText: '',
                           border: OutlineInputBorder(
