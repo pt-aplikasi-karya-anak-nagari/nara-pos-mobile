@@ -97,6 +97,11 @@ const Map<String, Map<String, String>> _strings = {
     'en': 'No products in this category yet',
   },
   'product.delete_q': {'id': 'Hapus produk?', 'en': 'Delete product?'},
+  // Dipakai sebagai lanjutan kalimat: '"Nama Produk" — <teks ini>'.
+  'product.delete_perm': {
+    'id': 'dihapus permanen dan tidak bisa dikembalikan.',
+    'en': 'will be permanently deleted and cannot be restored.',
+  },
   'category.add_subtitle': {
     'id': 'Tambahkan kategori baru untuk produk',
     'en': 'Add a new category for products',
@@ -262,6 +267,13 @@ const Map<String, Map<String, String>> _strings = {
 
   // common
   'common.save': {'id': 'Simpan', 'en': 'Save'},
+  // Ketiga kunci di bawah DIPAKAI UI tapi tak pernah didaftarkan, jadi tr()
+  // mengembalikannya apa adanya dan layar benar-benar menampilkan tulisan
+  // "common.active" / "common.required" / "product.delete_perm" kepada
+  // penggunanya. Tak ada crash, tak ada log, tak ada peringatan — lihat
+  // test/i18n_kunci_test.dart yang menutup kelasnya, bukan cuma ketiganya.
+  'common.active': {'id': 'Aktif', 'en': 'Active'},
+  'common.required': {'id': 'Wajib diisi', 'en': 'Required'},
   'common.cancel': {'id': 'Batal', 'en': 'Cancel'},
   'common.delete': {'id': 'Hapus', 'en': 'Delete'},
   'common.loading': {'id': 'Memuat...', 'en': 'Loading...'},

@@ -16,6 +16,19 @@ class AuthState {
   bool get isAuthenticated => user != null && token != null;
 }
 
+/// Peran yang masuk lewat Dashboard Web, bukan aplikasi kasir.
+///
+/// Cerminan entity.PeranDashboard di server (nara-pos-be). Server-lah yang
+/// otoritatif dan menolaknya sebelum sesi terbit; pemeriksaan di klien ini
+/// lapis kedua, supaya sesi tak sempat tersimpan bila backend versi lama yang
+/// dihubungi.
+///
+/// Huruf kecil semua karena dicocokkan dengan role yang sudah di-toLowerCase.
+/// 'manager' & 'coowner' ikut disebut walau perannya sudah dihapus: barisnya
+/// bisa tertinggal di suatu environment akibat `migrate down` atau restore
+/// snapshot, dan membiarkannya masuk persis kebalikan dari maksud menghapusnya.
+const _peranDashboard = {'owner', 'superadminsystem', 'manager', 'coowner'};
+
 class AuthNotifier extends Notifier<AuthState> {
   late AuthStorage _authStorage;
   late AuthApiService _authApi;
@@ -111,7 +124,7 @@ class AuthNotifier extends Notifier<AuthState> {
       // Blokir role Owner & Manager dari aplikasi mobile (case-insensitive).
       final regRole = (userData['role'] as String?)?.trim() ?? '';
       final regRoleLower = regRole.toLowerCase();
-      if (regRoleLower == 'owner' || regRoleLower == 'manager') {
+      if (_peranDashboard.contains(regRoleLower)) {
         return 'Registrasi berhasil, namun Role "$regRole" hanya dapat login melalui Dashboard Web.';
       }
 
@@ -260,7 +273,7 @@ class AuthNotifier extends Notifier<AuthState> {
       // sesi tidak sempat tersimpan bila backend versi lama.
       final roleName = (userData['role'] as String?)?.trim() ?? '';
       final roleLower = roleName.toLowerCase();
-      if (roleLower == 'owner' || roleLower == 'manager') {
+      if (_peranDashboard.contains(roleLower)) {
         return 'Role "$roleName" hanya dapat login melalui Dashboard Web.';
       }
 
