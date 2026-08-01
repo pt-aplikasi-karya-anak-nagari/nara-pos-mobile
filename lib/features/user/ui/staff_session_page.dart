@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -62,6 +64,15 @@ class StaffSessionFlow extends HookConsumerWidget {
     final dikirimKe = useState<String?>(null);
     final loading = useState(false);
     final error = useState<String?>(null);
+    /// Kabar baik yang berumur pendek ("kode baru dikirim"), dipisah dari
+    /// [error] supaya keduanya tak pernah tampil sebagai satu kotak yang sama.
+    final catatan = useState<String?>(null);
+    /// Sisa detik sebelum kode boleh diminta lagi.
+    ///
+    /// Server TIDAK membatasi endpoint ini — beda dari OTP login biasa yang
+    /// punya cooldown bertingkat. Tanpa jeda di sini, satu ketukan berulang
+    /// mengirim email sungguhan sebanyak ketukannya.
+    final jeda = useState(0);
 
     // Nama outlet perangkat yang tersimpan. Non-null berarti perangkat ini
     // sudah disahkan, sehingga langkah password dilewati.
@@ -171,6 +182,17 @@ class StaffSessionFlow extends HookConsumerWidget {
       return () => dibatalkan = true;
     }, const []);
 
+    // Hitung mundur jeda kirim ulang. Dependensinya sengaja "sedang berjalan
+    // atau tidak", bukan angkanya: timer dibuat sekali saat jeda menyala dan
+    // dibatalkan sekali saat ia habis, bukan dibongkar-pasang tiap detik.
+    useEffect(() {
+      if (jeda.value <= 0) return null;
+      final t = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (jeda.value > 0) jeda.value = jeda.value - 1;
+      });
+      return t.cancel;
+    }, [jeda.value > 0]);
+
     Future<void> mintaKode(StaffCandidate staf) async {
       loading.value = true;
       error.value = null;
@@ -191,6 +213,42 @@ class StaffSessionFlow extends HookConsumerWidget {
         dikirimKe.value = null;
         error.value = _pesan(e);
         langkah.value = 2;
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    /// Minta kode baru tanpa meninggalkan layar ini.
+    ///
+    /// Sebelumnya satu-satunya cara adalah menekan "Kembali", memilih ulang
+    /// stafnya, lalu mengetik ulang — dan pada perangkat yang belum disahkan
+    /// itu berarti mengetik ulang password Pemilik. Kode yang telat sampai
+    /// atau terlanjur terhapus jadi jalan buntu.
+    ///
+    /// Server MEMPERTAHANKAN sisa waktu tantangan, tidak memperpanjangnya.
+    /// Jadi tombol ini menolong kasus "kodenya tak sampai", bukan
+    /// "waktunya habis" — untuk yang kedua server menjawab "ulangi dari awal",
+    /// dan pesan itu diteruskan apa adanya.
+    Future<void> kirimUlang() async {
+      final staf = stafTerpilih.value;
+      final s = sesi.value;
+      if (staf == null || s == null || jeda.value > 0 || loading.value) return;
+
+      loading.value = true;
+      error.value = null;
+      catatan.value = null;
+      try {
+        final ke = await ref
+            .read(authProvider.notifier)
+            .requestStaffSessionOtp(challengeId: s.challengeId, staffUserId: staf.id);
+        dikirimKe.value = ke;
+        // Kode lama sudah tak berlaku begitu yang baru terbit — membiarkannya
+        // terketik akan membuat percobaan pertama pasti gagal.
+        kodeCtrl.clear();
+        catatan.value = 'Kode baru dikirim ke $ke.';
+        jeda.value = 30;
+      } catch (e) {
+        error.value = _pesan(e);
       } finally {
         loading.value = false;
       }
@@ -269,6 +327,9 @@ class StaffSessionFlow extends HookConsumerWidget {
             kodeCtrl: kodeCtrl,
             loading: loading.value,
             onVerifikasi: verifikasi,
+            catatan: catatan.value,
+            jeda: jeda.value,
+            onKirimUlang: kirimUlang,
           ),
         // "Kembali" hanya bermakna kalau ada langkah sebelumnya yang bisa
         // dituju. Pada perangkat yang sudah disahkan, langkah 1 adalah yang
@@ -283,6 +344,7 @@ class StaffSessionFlow extends HookConsumerWidget {
                 ? null
                 : () {
                     error.value = null;
+                    catatan.value = null;
                     kodeCtrl.clear();
                     langkah.value = langkah.value - 1;
                   },
@@ -426,6 +488,9 @@ List<Widget> _verifikasi({
   required TextEditingController kodeCtrl,
   required bool loading,
   required VoidCallback onVerifikasi,
+  required String? catatan,
+  required int jeda,
+  required VoidCallback onKirimUlang,
 }) {
   return [
     Text(
@@ -451,12 +516,41 @@ List<Widget> _verifikasi({
         hintText: '••••••',
       ),
     ),
+    // Kabar "kode baru dikirim" berdiri sendiri, tidak menumpang kotak error.
+    // Menampilkan keberhasilan dengan warna kegagalan membuat orang mengira
+    // permintaannya gagal padahal emailnya sudah di jalan.
+    if (catatan != null) ...[
+      const Gap(10),
+      Row(
+        children: [
+          Icon(Icons.check_circle_outline, size: 16, color: kSuccess),
+          const Gap(6),
+          Expanded(
+            child: Text(
+              catatan,
+              style: TextStyle(fontSize: 12, color: kSuccess),
+            ),
+          ),
+        ],
+      ),
+    ],
     const Gap(20),
     FilledButton(
       onPressed: loading ? null : onVerifikasi,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Text(loading ? 'Memverifikasi…' : 'Mulai sesi'),
+      ),
+    ),
+    const Gap(4),
+    // Jeda 30 detik supaya satu ketukan berulang tidak mengirim email
+    // sungguhan sebanyak ketukannya — endpoint ini tak dibatasi server.
+    // Hitungannya ditulis di label, bukan disembunyikan: tombol mati tanpa
+    // alasan terbaca sebagai aplikasi yang macet.
+    TextButton(
+      onPressed: (loading || jeda > 0) ? null : onKirimUlang,
+      child: Text(
+        jeda > 0 ? 'Kirim ulang kode dalam $jeda dtk' : 'Kirim ulang kode',
       ),
     ),
   ];
