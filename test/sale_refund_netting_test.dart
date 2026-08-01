@@ -11,6 +11,10 @@ import 'package:nara_pos_mobile/features/laporan/data/export_service.dart';
 // dikembalikan dicatat terpisah di `refundedAmount` dan `SaleItem.refundedQty`.
 // Jadi setiap agregasi omzet/qty WAJIB lewat netTotal/netQty.
 
+// cashierName / cashierRemoteId ditambahkan belakangan untuk menguji cabang
+// penggabungan computeCashierSummaries. Keduanya opsional dan default-nya
+// string kosong — sama persis dengan default Sale — jadi seluruh pemanggil
+// lama tak berubah perilakunya.
 Sale _sale({
   required double total,
   double refundedAmount = 0,
@@ -18,6 +22,8 @@ Sale _sale({
   bool isPartiallyRefunded = false,
   bool isPaid = true,
   List<SaleItem> items = const [],
+  String cashierName = '',
+  String cashierRemoteId = '',
 }) =>
     Sale(
       createdAt: DateTime(2026, 7, 20),
@@ -29,13 +35,26 @@ Sale _sale({
       isRefunded: isRefunded,
       isPartiallyRefunded: isPartiallyRefunded,
       refundedAmount: refundedAmount,
+      cashierName: cashierName,
+      cashierRemoteId: cashierRemoteId,
     )..items = List<SaleItem>.from(items);
 
-SaleItem _item({required int qty, required int refundedQty}) => SaleItem(
-      productName: 'Kopi',
+// productRemoteId / productName / productSku / price sama: opsional, dengan
+// default yang identik dengan nilai yang dulu di-hardcode di sini.
+SaleItem _item({
+  required int qty,
+  required int refundedQty,
+  String productRemoteId = '',
+  String productName = 'Kopi',
+  String productSku = '',
+  double price = 50000,
+}) => SaleItem(
+      productRemoteId: productRemoteId,
+      productName: productName,
       productEmoji: '',
+      productSku: productSku,
       qty: qty,
-      price: 50000,
+      price: price,
       refundedQty: refundedQty,
     );
 
@@ -262,6 +281,227 @@ void _mainEkspor() {
             _sale(total: 1, isRefunded: true, isPaid: false)),
         'Refund',
       );
+    });
+  });
+
+  // Cabang PENGGABUNGAN kedua fungsi agregasi. Tes di atas sudah mengunci sisi
+  // netting returnya; yang di sini soal bagaimana baris dari struk-struk yang
+  // berbeda dilebur jadi satu baris laporan.
+  //
+  // Kuncinya dipilih berjenjang: remote ID kalau ada, nama kalau tidak. Itu
+  // dua cabang yang gagalnya berlawanan — kunci yang terlalu longgar melebur
+  // dua produk berbeda jadi satu, kunci yang terlalu ketat memecah satu produk
+  // jadi banyak baris. Keduanya sama-sama tak menimbulkan error.
+  //
+  // Catatan pelaksanaan: List.sort di Dart TIDAK dijamin stabil, jadi setiap
+  // tes urutan di bawah memakai qty (dan omzet, untuk kasir) yang semuanya
+  // BERBEDA. Data yang seri akan membuat tesnya berubah warna tanpa ada
+  // perubahan kode sama sekali.
+  group('computeTopProducts — penggabungan lintas struk', () {
+    test('produk sama di dua struk jadi SATU baris', () {
+      final hasil = computeTopProducts([
+        _sale(
+          total: 100000,
+          items: [_item(qty: 2, refundedQty: 0, productRemoteId: 'P1')],
+        ),
+        _sale(
+          total: 150000,
+          items: [_item(qty: 3, refundedQty: 0, productRemoteId: 'P1')],
+        ),
+      ]);
+
+      expect(hasil, hasLength(1));
+      expect(hasil.first.qty, 5);
+      expect(hasil.first.revenue, 250000); // 50.000 × 5
+    });
+
+    test('nama sama tapi ID berbeda TIDAK dilebur', () {
+      // Dua gerai bisa punya "Kopi" masing-masing dengan ID sendiri. Meleburnya
+      // membuat laporan produk terlaris salah, dan salahnya tak kelihatan
+      // karena namanya memang sama.
+      final hasil = computeTopProducts([
+        _sale(
+          total: 1,
+          items: [
+            _item(qty: 5, refundedQty: 0, productRemoteId: 'P1', productName: 'Kopi'),
+            _item(qty: 2, refundedQty: 0, productRemoteId: 'P2', productName: 'Kopi'),
+          ],
+        ),
+      ]);
+
+      expect(hasil, hasLength(2));
+      expect(hasil.map((e) => e.qty), [5, 2]); // terurut qty menurun
+    });
+
+    test('produk tanpa ID dilebur berdasar nama', () {
+      // Produk kustom (ketik manual di kasir) tak punya remote ID. Tanpa
+      // cadangan nama, tiap barisnya jadi baris laporan sendiri.
+      final hasil = computeTopProducts([
+        _sale(total: 1, items: [_item(qty: 2, refundedQty: 0, productName: 'Titipan')]),
+        _sale(total: 1, items: [_item(qty: 4, refundedQty: 0, productName: 'Titipan')]),
+      ]);
+
+      expect(hasil, hasLength(1));
+      expect(hasil.first.qty, 6);
+    });
+
+    test('produk tanpa ID dengan nama BERBEDA tetap terpisah', () {
+      final hasil = computeTopProducts([
+        _sale(
+          total: 1,
+          items: [
+            _item(qty: 3, refundedQty: 0, productName: 'Titipan A'),
+            _item(qty: 1, refundedQty: 0, productName: 'Titipan B'),
+          ],
+        ),
+      ]);
+
+      expect(hasil, hasLength(2));
+    });
+
+    test('SKU yang semula kosong terisi dari kemunculan berikutnya', () {
+      // Struk lama bisa tak menyimpan SKU. Kalau baris pertama yang menang
+      // mutlak, SKU-nya hilang selamanya dari laporan walau struk berikutnya
+      // membawanya.
+      final hasil = computeTopProducts([
+        _sale(total: 1, items: [_item(qty: 1, refundedQty: 0, productRemoteId: 'P1')]),
+        _sale(
+          total: 1,
+          items: [
+            _item(qty: 1, refundedQty: 0, productRemoteId: 'P1', productSku: 'SKU-9'),
+          ],
+        ),
+      ]);
+
+      expect(hasil.first.sku, 'SKU-9');
+    });
+
+    test('terurut qty menurun dan dipotong di limit', () {
+      // Sebelas produk dengan qty 1..11 — semuanya BERBEDA, supaya urutannya
+      // tak bergantung pada kestabilan sort.
+      final items = [
+        for (var i = 1; i <= 11; i++)
+          _item(qty: i, refundedQty: 0, productRemoteId: 'P$i'),
+      ];
+      final hasil = computeTopProducts([_sale(total: 1, items: items)]);
+
+      expect(hasil, hasLength(10)); // limit default
+      expect(hasil.first.qty, 11);
+      expect(hasil.last.qty, 2);
+      // Yang terkecil (qty 1) memang terpotong — bukan hilang karena bug.
+      expect(hasil.map((e) => e.qty), isNot(contains(1)));
+    });
+
+    test('limit bisa dinaikkan dan semuanya ikut', () {
+      final items = [
+        for (var i = 1; i <= 11; i++)
+          _item(qty: i, refundedQty: 0, productRemoteId: 'P$i'),
+      ];
+      expect(computeTopProducts([_sale(total: 1, items: items)], limit: 20), hasLength(11));
+    });
+
+    test('omzet memakai qty BERSIH, bukan qty asli', () {
+      // Bertetangga dengan tes netting di atas, tapi mengunci sisi UANG-nya:
+      // 5 terjual, 2 diretur → 3 × 50.000.
+      final hasil = computeTopProducts([
+        _sale(
+          total: 250000,
+          isPartiallyRefunded: true,
+          refundedAmount: 100000,
+          items: [_item(qty: 5, refundedQty: 2, productRemoteId: 'P1')],
+        ),
+      ]);
+
+      expect(hasil.first.qty, 3);
+      expect(hasil.first.revenue, 150000);
+    });
+  });
+
+  group('computeCashierSummaries — penggabungan lintas struk', () {
+    test('kasir sama di dua struk: transaksi dihitung, omzet dijumlah', () {
+      final hasil = computeCashierSummaries([
+        _sale(
+          total: 100000,
+          cashierRemoteId: 'K1',
+          cashierName: 'putra',
+          items: [_item(qty: 2, refundedQty: 0)],
+        ),
+        _sale(
+          total: 50000,
+          cashierRemoteId: 'K1',
+          cashierName: 'putra',
+          items: [_item(qty: 1, refundedQty: 0)],
+        ),
+      ]);
+
+      expect(hasil, hasLength(1));
+      expect(hasil.first.transactions, 2);
+      expect(hasil.first.itemsSold, 3);
+      expect(hasil.first.revenue, 150000);
+    });
+
+    test('nama berubah tapi ID sama tetap SATU kasir', () {
+      // Nama bisa diperbaiki ejaannya di tengah jalan. Yang mengikat adalah
+      // ID-nya; nama pertama yang dipakai untuk pelabelan.
+      final hasil = computeCashierSummaries([
+        _sale(total: 10000, cashierRemoteId: 'K1', cashierName: 'putra'),
+        _sale(total: 20000, cashierRemoteId: 'K1', cashierName: 'Putra Nagari'),
+      ]);
+
+      expect(hasil, hasLength(1));
+      expect(hasil.first.cashierName, 'putra');
+      expect(hasil.first.revenue, 30000);
+    });
+
+    test('kasir tanpa ID dilebur berdasar nama', () {
+      final hasil = computeCashierSummaries([
+        _sale(total: 10000, cashierName: 'putra'),
+        _sale(total: 20000, cashierName: 'putra'),
+        _sale(total: 5000, cashierName: 'uudin'),
+      ]);
+
+      expect(hasil, hasLength(2));
+      expect(hasil.first.cashierName, 'putra'); // omzet tertinggi di depan
+      expect(hasil.first.revenue, 30000);
+    });
+
+    test('struk tanpa kasir sama sekali dikumpulkan jadi "Tanpa Kasir"', () {
+      // Struk lama sebelum sesi kasir dicatat. Membiarkannya bernama kosong
+      // membuat barisnya tak bisa dibaca di laporan.
+      final hasil = computeCashierSummaries([
+        _sale(total: 10000),
+        _sale(total: 20000),
+      ]);
+
+      expect(hasil, hasLength(1));
+      expect(hasil.first.cashierName, 'Tanpa Kasir');
+      expect(hasil.first.transactions, 2);
+    });
+
+    test('terurut omzet menurun', () {
+      final hasil = computeCashierSummaries([
+        _sale(total: 10000, cashierRemoteId: 'K1', cashierName: 'kecil'),
+        _sale(total: 90000, cashierRemoteId: 'K2', cashierName: 'besar'),
+        _sale(total: 50000, cashierRemoteId: 'K3', cashierName: 'sedang'),
+      ]);
+
+      expect(hasil.map((e) => e.cashierName), ['besar', 'sedang', 'kecil']);
+    });
+
+    test('struk yang diretur penuh tidak menambah hitungan transaksi', () {
+      final hasil = computeCashierSummaries([
+        _sale(total: 100000, cashierRemoteId: 'K1', cashierName: 'putra'),
+        _sale(
+          total: 50000,
+          cashierRemoteId: 'K1',
+          cashierName: 'putra',
+          isRefunded: true,
+          isPaid: false,
+        ),
+      ]);
+
+      expect(hasil.first.transactions, 1);
+      expect(hasil.first.revenue, 100000);
     });
   });
 }
