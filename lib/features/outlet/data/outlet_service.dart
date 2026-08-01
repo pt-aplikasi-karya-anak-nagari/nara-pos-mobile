@@ -121,6 +121,22 @@ class OutletService extends BaseApiService {
     await put('${ApiEndpoint.outletEmployees(outletId)}/$userId', data: data);
   }
 
+  /// Mengaktifkan / men-suspend karyawan.
+  ///
+  /// Endpointnya sendiri, bukan bagian dari updateEmployee: handler
+  /// UpdateEmployee di server hanya mengikat `{role}` dan membuang sisanya,
+  /// jadi `is_active` yang dulu ikut dikirim bersama role tak pernah terbaca.
+  Future<void> setEmployeeActive(
+    String outletId,
+    String userId,
+    bool active,
+  ) async {
+    await patch(
+      ApiEndpoint.outletEmployeeActive(outletId, userId),
+      data: {'active': active},
+    );
+  }
+
   Future<void> deleteEmployee(String outletId, String userId) async {
     await delete('${ApiEndpoint.outletEmployees(outletId)}/$userId');
   }

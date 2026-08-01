@@ -151,8 +151,27 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
           await ref.read(outletServiceProvider).updateEmployee(
                 outletId,
                 existing.remoteId!,
-                {'role': role.value},
+                {
+                  'role': role.value,
+                  // Nama ikut dikirim. Sampai commit ini tak ada satu pun
+                  // endpoint di seluruh sistem yang bisa memperbaiki nama
+                  // karyawan — salah ketik saat mendaftarkan orang jadi
+                  // permanen. Handler membacanya sebagai opsional: kosong
+                  // berarti "jangan diubah".
+                  'full_name': name,
+                },
               );
+          // Saklar aktif punya endpoint sendiri. Dulu `is_active` ikut
+          // dititipkan bersama role dan tak pernah terbaca — handler
+          // UpdateEmployee hanya mengikat `{role}`. Dikirim hanya bila memang
+          // berubah, supaya tak ada permintaan sia-sia tiap kali menyimpan.
+          if (active.value != existing.active) {
+            await ref.read(outletServiceProvider).setEmployeeActive(
+                  outletId,
+                  existing.remoteId!,
+                  active.value,
+                );
+          }
           if (isEditingSelf) ref.read(authProvider.notifier).refresh();
         }
         ref.invalidate(outletEmployeesProvider(outletId));

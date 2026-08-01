@@ -45,6 +45,13 @@ class ApiEndpoint {
   static String outletEmployeeCreate(String outletId) =>
       '/outlets/$outletId/employees/create';
 
+  /// Aktif / suspend karyawan. Endpoint TERPISAH dari update role —
+  /// `PUT /employees/:userId` hanya membaca `{role}` dan mengabaikan
+  /// `is_active`, jadi saklar aktif harus lewat sini atau ia tak berbuat apa
+  /// pun.
+  static String outletEmployeeActive(String outletId, String userId) =>
+      '/outlets/$outletId/employees/$userId/active';
+
   /// Daftar peran yang boleh diberikan, sudah disaring server.
   static String outletEmployeeRoles(String outletId) =>
       '/outlets/$outletId/employee-roles';
