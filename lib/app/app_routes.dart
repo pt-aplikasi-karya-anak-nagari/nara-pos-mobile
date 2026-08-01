@@ -12,8 +12,6 @@ class AppRoutes {
   static const String riwayatDetail = '/riwayat/:id';
   static const String riwayatDetailName = 'riwayat-detail';
 
-  static const String laporan = '/laporan';
-  static const String laporanName = 'laporan';
 
   static const String profil = '/profil';
   static const String profilName = 'profil';

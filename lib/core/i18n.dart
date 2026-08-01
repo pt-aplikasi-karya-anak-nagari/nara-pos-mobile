@@ -48,7 +48,6 @@ const Map<String, Map<String, String>> _strings = {
   'nav.kasir': {'id': 'Kasir', 'en': 'Cashier'},
   'nav.riwayat': {'id': 'Riwayat', 'en': 'History'},
   'nav.notifikasi': {'id': 'Notifikasi', 'en': 'Inbox'},
-  'nav.laporan': {'id': 'Laporan', 'en': 'Reports'},
   'nav.profil': {'id': 'Profil', 'en': 'Profile'},
 
   // categories
@@ -412,37 +411,6 @@ const Map<String, Map<String, String>> _strings = {
   // common
 
   // laporan
-  'report.title': {'id': 'Laporan Penjualan', 'en': 'Sales Report'},
-  'report.daily': {'id': 'Harian', 'en': 'Daily'},
-  'report.monthly': {'id': 'Bulanan', 'en': 'Monthly'},
-  'report.yearly': {'id': 'Tahunan', 'en': 'Yearly'},
-  'report.revenue': {'id': 'Pendapatan', 'en': 'Revenue'},
-  'report.transactions': {'id': 'Transaksi', 'en': 'Transactions'},
-  'report.items_sold': {'id': 'Produk Terjual', 'en': 'Items Sold'},
-  'report.average': {'id': 'Rata-rata', 'en': 'Average'},
-  'report.per_hour': {'id': 'Per Jam', 'en': 'Per Hour'},
-  'report.per_day': {'id': 'Per Hari', 'en': 'Per Day'},
-  'report.per_month': {'id': 'Per Bulan', 'en': 'Per Month'},
-  'report.export': {'id': 'Ekspor', 'en': 'Export'},
-  'report.export_title': {'id': 'Ekspor Laporan', 'en': 'Export Report'},
-  'report.export_pdf': {'id': 'PDF', 'en': 'PDF'},
-  'report.export_excel': {'id': 'CSV', 'en': 'CSV'},
-  'report.empty': {
-    'id': 'Tidak ada transaksi pada periode ini',
-    'en': 'No transactions in this period',
-  },
-  'report.top_products': {'id': 'Produk Terlaris', 'en': 'Top Products'},
-  'report.qty_sold': {'id': 'Terjual', 'en': 'Sold'},
-  'report.revenue_short': {'id': 'Omzet', 'en': 'Revenue'},
-  'report.cashier_performance': {
-    'id': 'Kinerja Kasir',
-    'en': 'Cashier Performance',
-  },
-  'report.cashier_trx': {'id': 'Transaksi', 'en': 'Transactions'},
-  'report.cashier_empty': {
-    'id': 'Belum ada transaksi kasir',
-    'en': 'No cashier transactions yet',
-  },
 
   // riwayat
   'history.title': {'id': 'Riwayat Transaksi', 'en': 'Transaction History'},

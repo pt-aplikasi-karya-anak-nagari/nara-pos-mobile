@@ -9,7 +9,6 @@ import '../features/user/ui/employee_form_page.dart';
 import '../features/user/ui/employee_list_page.dart';
 import '../features/user/ui/login_page.dart';
 import '../features/kasir/ui/kasir_page.dart';
-import '../features/laporan/ui/laporan_page.dart';
 import '../features/outlet/ui/outlet_form_page.dart';
 import '../features/outlet/ui/outlet_list_page.dart';
 import '../features/printer/ui/printer_settings_page.dart';
@@ -93,15 +92,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: AppRoutes.notifications,
                 name: AppRoutes.notificationsName,
                 builder: (_, _) => const NotificationListPage(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoutes.laporan,
-                name: AppRoutes.laporanName,
-                builder: (_, _) => const LaporanPage(),
               ),
             ],
           ),

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
-import 'package:gap/gap.dart';
 
 import '../../app/theme.dart';
 import '../../core/app_icons.dart';
@@ -11,7 +11,6 @@ import '../../core/i18n.dart';
 import '../../core/responsive.dart';
 import '../../features/notifications/data/notification_history.dart';
 import '../../features/profil/data/profil_state.dart';
-
 import '../../features/user/data/auth_service.dart';
 import '../../features/user/domain/user_role.dart';
 
@@ -19,6 +18,7 @@ class _NavItem {
   final IconAsset icon;
   final String labelKey;
   final int branch;
+
   /// Opsional. Bila di-set, badge angka muncul di sudut kanan-atas icon —
   /// di-watch reactive lewat WidgetRef. Return 0 = badge hidden.
   final int Function(WidgetRef ref)? badgeBuilder;
@@ -52,23 +52,14 @@ class MainShell extends HookConsumerWidget {
         branch: 2,
         badgeBuilder: (ref) => ref.watch(unreadNotificationCountProvider),
       ),
-      const _NavItem(
-        icon: AppIcons.barChart,
-        labelKey: 'nav.laporan',
-        branch: 3,
-      ),
-      const _NavItem(
-        icon: AppIcons.person,
-        labelKey: 'nav.profil',
-        branch: 4,
-      ),
+      const _NavItem(icon: AppIcons.person, labelKey: 'nav.profil', branch: 4),
     ];
   }
 
   // Branch index untuk tab Profil (geser dari 3 setelah Notifikasi disisipkan
   // di branch 2). Disimpan const supaya kalau order tab berubah lagi nanti,
   // ada satu titik tunggal yang harus di-update.
-  static const int _profileBranchIndex = 4;
+  static const int _profileBranchIndex = 3;
 
   void _onTap(int visualIndex, List<_NavItem> items, WidgetRef ref) {
     final item = items[visualIndex];
@@ -105,11 +96,6 @@ class MainShell extends HookConsumerWidget {
       reverseDuration: const Duration(milliseconds: 240),
       initialValue: 1.0,
     );
-    final navSize = useMemoized(
-      () => CurvedAnimation(parent: navAnim, curve: Curves.easeInOutCubic),
-      [navAnim],
-    );
-    useEffect(() => navSize.dispose, [navSize]);
 
     // Pastikan nav kembali tampil ketika user pindah tab/branch
     // (mis. setelah hidden lalu navigasi programatik).
@@ -138,9 +124,7 @@ class MainShell extends HookConsumerWidget {
           Positioned.fill(
             child: Image.asset('assets/images/bg.jpg', fit: BoxFit.cover),
           ),
-          Positioned.fill(
-            child: Container(color: kBg.withValues(alpha: 0.85)),
-          ),
+          Positioned.fill(child: Container(color: kBg.withValues(alpha: 0.85))),
           NotificationListener<ScrollNotification>(
             onNotification: (notification) {
               // Auto-hide hanya aktif di tab Kasir (branch 0). Tab lain
@@ -173,134 +157,121 @@ class MainShell extends HookConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: SizeTransition(
-        sizeFactor: navSize,
-        // axisAlignment deprecated post-v3.41 — pakai `alignment` yang
-        // memberi kontrol penuh untuk dua sumbu. Untuk mempertahankan
-        // perilaku lama (-1.0 axisAlignment → anchor di bottom),
-        // alignment vertikal di-set ke +1.0 (kebawah) supaya panel
-        // muncul "tumbuh ke atas" saat sizeFactor → 1.
-        alignment: const Alignment(0, 1),
-        child: DecoratedBox(
-          // Hairline separator khas tab bar iOS, di-paint di atas glass.
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: Colors.black.withValues(alpha: 0.06),
-                width: 0.5,
-              ),
+      bottomNavigationBar: DecoratedBox(
+        // Hairline separator khas tab bar iOS, di-paint di atas glass.
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: Colors.black.withValues(alpha: 0.06),
+              width: 0.5,
             ),
           ),
-          position: DecorationPosition.foreground,
-          child: Container(
-            decoration: BoxDecoration(color: kCard),
-            padding: const EdgeInsets.only(top: 16, bottom: 8),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final totalW = constraints.maxWidth;
+        ),
+        position: DecorationPosition.foreground,
+        child: Container(
+          decoration: BoxDecoration(color: kCard),
+          padding: const EdgeInsets.only(top: 16, bottom: 8),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final totalW = constraints.maxWidth;
 
-                  final double itemW;
-                  final double pillLeft;
+                final double itemW;
+                final double pillLeft;
 
-                  if (isTablet) {
-                    itemW = tabletItemW;
-                    final innerW = totalW - 2 * hPad;
-                    final rowOffset =
-                        (innerW - totalVisualItems * tabletItemW) / 2;
-                    pillLeft =
-                        hPad + rowOffset + activeVisualIndex * tabletItemW;
-                  } else {
-                    itemW = (totalW - 2 * hPad) / totalVisualItems;
-                    pillLeft = hPad + activeVisualIndex * itemW;
-                  }
+                if (isTablet) {
+                  itemW = tabletItemW;
+                  final innerW = totalW - 2 * hPad;
+                  final rowOffset =
+                      (innerW - totalVisualItems * tabletItemW) / 2;
+                  pillLeft = hPad + rowOffset + activeVisualIndex * tabletItemW;
+                } else {
+                  itemW = (totalW - 2 * hPad) / totalVisualItems;
+                  pillLeft = hPad + activeVisualIndex * itemW;
+                }
 
-                  return SizedBox(
-                    height: navH,
-                    child: Stack(
-                      children: [
-                        // ── Sliding highlight pill ─────────────────────────
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          left: pillLeft,
-                          width: itemW,
-                          top: 6,
-                          bottom: 6,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: kPrimary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                return SizedBox(
+                  height: navH,
+                  child: Stack(
+                    children: [
+                      // ── Sliding highlight pill ─────────────────────────
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        left: pillLeft,
+                        width: itemW,
+                        top: 6,
+                        bottom: 6,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: kPrimary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
+                      ),
 
-                        // ── Nav items ──────────────────────────────────────
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: hPad),
-                          child: Row(
-                            mainAxisAlignment: isTablet
-                                ? MainAxisAlignment.center
-                                : MainAxisAlignment.start,
-                            children: List.generate(totalVisualItems, (vi) {
-                              final item = visibleItems[vi];
+                      // ── Nav items ──────────────────────────────────────
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: hPad),
+                        child: Row(
+                          mainAxisAlignment: isTablet
+                              ? MainAxisAlignment.center
+                              : MainAxisAlignment.start,
+                          children: List.generate(totalVisualItems, (vi) {
+                            final item = visibleItems[vi];
 
-                              // ── Regular nav items ──
-                              final active = vi == activeVisualIndex;
+                            // ── Regular nav items ──
+                            final active = vi == activeVisualIndex;
 
-                              final tile = GestureDetector(
-                                onTap: () => _onTap(vi, visibleItems, ref),
-                                behavior: HitTestBehavior.opaque,
-                                child: SizedBox(
-                                  height: navH,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      AnimatedScale(
-                                        scale: active ? 1.1 : 1.0,
-                                        duration: const Duration(
-                                          milliseconds: 250,
-                                        ),
-                                        curve: Curves.easeOut,
-                                        child: _NavIconWithBadge(
-                                          item: item,
-                                          active: active,
-                                        ),
+                            final tile = GestureDetector(
+                              onTap: () => _onTap(vi, visibleItems, ref),
+                              behavior: HitTestBehavior.opaque,
+                              child: SizedBox(
+                                height: navH,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    AnimatedScale(
+                                      scale: active ? 1.1 : 1.0,
+                                      duration: const Duration(
+                                        milliseconds: 250,
                                       ),
-                                      const Gap(3),
-                                      AnimatedDefaultTextStyle(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: active
-                                              ? FontWeight.w700
-                                              : FontWeight.w400,
-                                          color: active ? kPrimary : kTextMid,
-                                        ),
-                                        child: Text(ref.t(item.labelKey)),
+                                      curve: Curves.easeOut,
+                                      child: _NavIconWithBadge(
+                                        item: item,
+                                        active: active,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const Gap(3),
+                                    AnimatedDefaultTextStyle(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: active
+                                            ? FontWeight.w700
+                                            : FontWeight.w400,
+                                        color: active ? kPrimary : kTextMid,
+                                      ),
+                                      child: Text(ref.t(item.labelKey)),
+                                    ),
+                                  ],
                                 ),
-                              );
+                              ),
+                            );
 
-                              if (isTablet) {
-                                return SizedBox(
-                                  width: tabletItemW,
-                                  child: tile,
-                                );
-                              }
-                              return Expanded(child: tile);
-                            }),
-                          ),
+                            if (isTablet) {
+                              return SizedBox(width: tabletItemW, child: tile);
+                            }
+                            return Expanded(child: tile);
+                          }),
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),
