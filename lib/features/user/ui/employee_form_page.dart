@@ -30,15 +30,12 @@ class EmployeeFormPage extends HookConsumerWidget {
     final outlets = ref.watch(outletsProvider).value ?? [];
 
     final nameCtrl = useTextEditingController(text: existing?.name ?? '');
-    final userCtrl = useTextEditingController(text: existing?.username ?? '');
-    final passCtrl = useTextEditingController();
     final role = useState<UserRole>(existing?.role ?? UserRole.cashier);
     final selectedOutletRemoteIds = useState<Set<String>>(
       existing?.outletRemoteIds.toSet() ??
           (outlets.isNotEmpty ? {outlets.first.remoteId!} : {}),
     );
     final active = useState<bool>(existing?.active ?? true);
-    final showPass = useState(false);
 
     final currentUser = ref.read(authProvider).user;
     final isEditingSelf =
@@ -46,33 +43,30 @@ class EmployeeFormPage extends HookConsumerWidget {
 
     Future<void> save() async {
       final name = nameCtrl.text.trim();
-      final username = userCtrl.text.trim();
       final outletId = ref.read(activeOutletIdProvider);
 
       if (outletId == null) {
         _snack(context, 'Outlet aktif tidak ditemukan');
         return;
       }
-      if (name.isEmpty || username.isEmpty) {
-        _snack(context, 'Nama dan username wajib diisi');
-        return;
-      }
-      if (existing == null && passCtrl.text.isEmpty) {
-        _snack(context, 'Password wajib diisi untuk pengguna baru');
+      if (name.isEmpty) {
+        _snack(context, 'Nama karyawan wajib diisi');
         return;
       }
 
+      // Tanpa username & password.
+      //
+      // Karyawan tak punya keduanya sejak dipisah ke tabel `employees`
+      // (Fase 5): mereka masuk lewat sesi kasir atas persetujuan Pemilik,
+      // bukan dengan kredensial sendiri. Server MEMBUANG kedua field itu
+      // diam-diam — jadi yang lama memaksa penggunanya mengarang username dan
+      // password yang tak pernah tersimpan dan tak pernah bisa dipakai.
       final payload = {
         'full_name': name,
-        'username': username,
         'role': role.value.name,
         'is_active': active.value,
         'outlet_ids': selectedOutletRemoteIds.value.toList(),
       };
-
-      if (passCtrl.text.isNotEmpty) {
-        payload['password'] = passCtrl.text;
-      }
 
       try {
         if (existing == null) {
@@ -157,28 +151,20 @@ class EmployeeFormPage extends HookConsumerWidget {
             decoration: InputDecoration(labelText: ref.t('employee.name')),
           ),
           const Gap(12),
-          TextField(
-            controller: userCtrl,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: ref.t('employee.username'),
-              hintText: ref.t('employee.username_hint'),
+          // Pengganti kolom username & password: keduanya dibuang karena
+          // karyawan memang tak punya keduanya. Diberi tahu terang-terangan,
+          // bukan dibiarkan jadi pertanyaan "kok tidak ada isian login-nya".
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kPrimary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ),
-          const Gap(12),
-          TextField(
-            controller: passCtrl,
-            obscureText: !showPass.value,
-            decoration: InputDecoration(
-              labelText: existing == null
-                  ? ref.t('login.password')
-                  : ref.t('employee.password_hint'),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  showPass.value ? Icons.visibility_off : Icons.visibility,
-                ),
-                onPressed: () => showPass.value = !showPass.value,
-              ),
+            child: Text(
+              'Karyawan tidak punya username maupun password. '
+              'Kehadirannya di kasir disahkan Pemilik lewat kode OTP '
+              'tiap kali mulai bertugas.',
+              style: TextStyle(fontSize: 12, color: kTextMid),
             ),
           ),
           const Gap(16),

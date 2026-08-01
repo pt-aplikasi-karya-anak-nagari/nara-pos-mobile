@@ -4,7 +4,6 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:collection/collection.dart';
-import 'package:hugeicons/hugeicons.dart';
 import '../../../app/app_routes.dart';
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
@@ -103,15 +102,12 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
     final isEdit = existing != null;
 
     final nameCtrl = useTextEditingController(text: existing?.name ?? '');
-    final userCtrl = useTextEditingController(text: existing?.username ?? '');
-    final passCtrl = useTextEditingController();
     final role = useState<UserRole>(existing?.role ?? UserRole.cashier);
     final selectedOutletIds = useState<Set<String>>(
       existing?.outletRemoteIds.toSet() ??
           (outlets.isNotEmpty ? {outlets.first.remoteId!} : {}),
     );
     final active = useState<bool>(existing?.active ?? true);
-    final showPass = useState(false);
 
     final currentUser = ref.watch(authProvider).user;
     final isEditingSelf =
@@ -119,19 +115,14 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
 
     void save() async {
       final name = nameCtrl.text.trim();
-      final username = userCtrl.text.trim();
       final outletId = ref.read(activeOutletIdProvider);
 
       if (outletId == null) {
         _snack(context, 'Outlet aktif tidak ditemukan');
         return;
       }
-      if (name.isEmpty || username.isEmpty) {
-        _snack(context, 'Nama dan username wajib diisi');
-        return;
-      }
-      if (existing == null && passCtrl.text.isEmpty) {
-        _snack(context, 'Password wajib diisi untuk pengguna baru');
+      if (name.isEmpty) {
+        _snack(context, 'Nama karyawan wajib diisi');
         return;
       }
       if (selectedOutletIds.value.isEmpty) {
@@ -139,17 +130,15 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
         return;
       }
 
+      // Tanpa username & password — karyawan tak punya keduanya sejak
+      // dipisah ke tabel `employees` (Fase 5), dan server MEMBUANG kedua field
+      // itu diam-diam. Lihat employee_form_page.dart untuk alasan lengkapnya.
       final payload = {
         'full_name': name,
-        'username': username,
         'role': role.value.name,
         'is_active': active.value,
         'outlet_ids': selectedOutletIds.value.toList(),
       };
-
-      if (passCtrl.text.isNotEmpty) {
-        payload['password'] = passCtrl.text;
-      }
 
       try {
         if (existing == null) {
@@ -244,26 +233,17 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
                         hint: 'Nama Lengkap',
                       ),
                       const Gap(16),
-                      const TabletFieldLabel(label: 'Username'),
-                      TabletStyledTextField(
-                        controller: userCtrl,
-                        icon: HugeIcons.strokeRoundedUser,
-                        hint: 'Username',
-                      ),
-                      const Gap(16),
-                      const TabletFieldLabel(label: 'Password'),
-                      TabletStyledTextField(
-                        controller: passCtrl,
-                        icon: HugeIcons.strokeRoundedLockPassword,
-                        hint: isEdit ? 'Kosongkan jika tak diubah' : 'Password',
-                        obscureText: !showPass.value,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            showPass.value
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
-                          onPressed: () => showPass.value = !showPass.value,
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: kPrimary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Karyawan tidak punya username maupun password. '
+                          'Kehadirannya di kasir disahkan Pemilik lewat kode '
+                          'OTP tiap kali mulai bertugas.',
+                          style: TextStyle(fontSize: 12, color: kTextMid),
                         ),
                       ),
                       const Gap(24),
