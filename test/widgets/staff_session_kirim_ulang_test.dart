@@ -48,6 +48,8 @@ class _AuthPalsu extends AuthNotifier {
   int permintaanKode = 0;
   String? galat;
   bool stafPunyaPin = false;
+  /// Kode yang diterima verifyStaffSession. String kosong = tanpa bukti kedua.
+  final List<String> kodeDiverifikasi = [];
 
   @override
   AuthState build() => const AuthState();
@@ -72,6 +74,25 @@ class _AuthPalsu extends AuthNotifier {
         ),
       ],
     );
+  }
+
+  @override
+  Future<StaffSessionStart> startStaffSession({
+    required String email,
+    required String password,
+    required String outletId,
+    String deviceLabel = '',
+  }) async =>
+      resumeStaffSession(deviceToken: 'x');
+
+  @override
+  Future<String?> verifyStaffSession({
+    required String challengeId,
+    required String staffUserId,
+    required String code,
+  }) async {
+    kodeDiverifikasi.add(code);
+    return galat;
   }
 
   @override
@@ -226,5 +247,69 @@ void main() {
 
     expect(find.textContaining('Kode 6 digit dikirim ke'), findsOneWidget);
     expect(find.textContaining('Masukkan PIN putra'), findsNothing);
+  });
+
+  // ── Pemilik hadir: pilih staf, langsung masuk ────────────────────────────
+  //
+  // Perangkat TANPA device_token berarti Pemilik baru saja mengetik email +
+  // passwordnya di sini. Ia ada di depan mesin dan sudah membuktikan dirinya;
+  // meminta kode ke emailnya sendiri sesudah itu berarti menyuruh orang yang
+  // sama membuktikan hal yang sama dua kali.
+
+  Future<_AuthPalsu> bukaTanpaPerangkat(WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final auth = _AuthPalsu();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          // Tanpa token: perangkat ini belum pernah disahkan.
+          staffDeviceStorageProvider.overrideWithValue(_StoragePalsu()),
+          authProvider.overrideWith(() => auth),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: StaffSessionFlow(onSelesai: () {})),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    return auth;
+  }
+
+  testWidgets('Pemilik hadir → pilih staf langsung masuk, TANPA kode',
+      (tester) async {
+    final auth = await bukaTanpaPerangkat(tester);
+
+    // Pemilik mengetik kredensialnya.
+    final isian = find.byType(TextField);
+    await tester.enterText(isian.at(0), 'owner@uji.invalid');
+    await tester.enterText(isian.at(1), 'rahasia');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pump();
+
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    // Kode TIDAK diminta — tak ada email yang dikirim.
+    expect(auth.permintaanKode, 0);
+    // Dan verifikasinya dipanggil dengan kode KOSONG: itulah penanda
+    // "tanpa bukti kedua" yang dibaca server.
+    expect(auth.kodeDiverifikasi, ['']);
+  });
+
+  testWidgets('perangkat yang diingat TETAP meminta bukti', (tester) async {
+    // Sisi sebaliknya, dan ini yang menjaga PIN tetap berarti. Di perangkat
+    // yang cuma mengingat pengesahan lama, Pemilik TIDAK hadir — membiarkan
+    // siapa pun memilih nama lalu masuk akan membuat PIN jadi hiasan.
+    final auth = await _buka(tester);
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    expect(auth.permintaanKode, 1);
+    expect(auth.kodeDiverifikasi, isEmpty);
+    expect(find.textContaining('Setujui sesi putra'), findsOneWidget);
   });
 }

@@ -193,6 +193,40 @@ class StaffSessionFlow extends HookConsumerWidget {
       return t.cancel;
     }, [jeda.value > 0]);
 
+    /// Masuk LANGSUNG, tanpa bukti kedua.
+    ///
+    /// Dipakai saat Pemilik baru saja mengetik email + passwordnya di perangkat
+    /// ini: ia ada di sini, dan sudah membuktikan dirinya. Meminta kode ke
+    /// emailnya sendiri sesudah itu berarti menyuruh orang yang sama
+    /// membuktikan hal yang sama dua kali — untuk membuka sesi yang
+    /// wewenangnya jauh di bawah apa yang sudah dipegang passwordnya.
+    ///
+    /// Pada perangkat yang hanya MENGINGAT pengesahan lama (Pemilik tak
+    /// hadir), jalur ini tidak dipakai — di sana PIN staf tetap diminta.
+    Future<void> masukLangsung(StaffCandidate staf) async {
+      loading.value = true;
+      error.value = null;
+      stafTerpilih.value = staf;
+      final msg = await ref
+          .read(authProvider.notifier)
+          .verifyStaffSession(
+            challengeId: sesi.value!.challengeId,
+            staffUserId: staf.id,
+            code: '', // kosong = tanpa bukti kedua; server yang memutuskan
+          );
+      loading.value = false;
+      if (msg != null) {
+        HapticFeedback.vibrate();
+        // Kalau server menolak, JANGAN buntu: antar ke layar verifikasi supaya
+        // PIN atau kode email tetap bisa dipakai.
+        error.value = msg;
+        langkah.value = 2;
+        return;
+      }
+      HapticFeedback.mediumImpact();
+      onSelesai();
+    }
+
     Future<void> mintaKode(StaffCandidate staf) async {
       loading.value = true;
       error.value = null;
@@ -318,7 +352,9 @@ class StaffSessionFlow extends HookConsumerWidget {
           ..._daftarStaf(
             sesi: sesi.value!,
             loading: loading.value,
-            onPilih: mintaKode,
+            // Pemilik hadir (baru mengetik password) → langsung masuk.
+            // Perangkat yang cuma mengingat pengesahan lama → minta bukti.
+            onPilih: perangkatDisahkan ? mintaKode : masukLangsung,
           )
         else
           ..._verifikasi(
