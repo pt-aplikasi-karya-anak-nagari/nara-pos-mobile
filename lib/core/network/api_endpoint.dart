@@ -35,6 +35,19 @@ class ApiEndpoint {
       '/billing/invoices/$invoiceId/download';
   static String outletEmployees(String outletId) =>
       '/outlets/$outletId/employees';
+
+  /// Membuat karyawan BARU sekaligus mengaitkannya ke outlet.
+  ///
+  /// Berbeda dari [outletEmployees] yang POST-nya adalah `AddEmployee` —
+  /// endpoint itu mengaitkan user yang SUDAH ADA dan menuntut `user_id`.
+  /// Mobile dulu menembak ke sana dengan payload `full_name`, jadi
+  /// permintaannya tak pernah bisa berhasil.
+  static String outletEmployeeCreate(String outletId) =>
+      '/outlets/$outletId/employees/create';
+
+  /// Daftar peran yang boleh diberikan, sudah disaring server.
+  static String outletEmployeeRoles(String outletId) =>
+      '/outlets/$outletId/employee-roles';
   static String outletCategories(String outletId) =>
       '/outlets/$outletId/categories';
   static String outletDetail(String outletId) => '/outlets/$outletId';

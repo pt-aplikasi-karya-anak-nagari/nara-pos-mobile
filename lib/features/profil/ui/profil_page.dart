@@ -38,6 +38,7 @@ import '../../shifts/ui/shift_history_page.dart';
 import '../../shifts/ui/shift_management_dialog.dart';
 import '../../payments/ui/payment_method_management_page.dart';
 import '../data/profil_state.dart';
+import '../../user/domain/assignable_role.dart';
 
 class ProfilPage extends HookConsumerWidget {
   const ProfilPage({super.key});
@@ -117,7 +118,12 @@ class ProfilPage extends HookConsumerWidget {
                   initial: initial,
                   name: user?.name ?? '-',
                   username: user?.username ?? '',
-                  roleLabel: role.label,
+                  // Nama peran dari server bila ada — role (UserRole) cuma
+                  // keranjang izin berisi empat nilai untuk sepuluh peran,
+                  // jadi ia menulis "Kasir" untuk enam peran yang berbeda.
+                  roleLabel: (user?.roleName ?? '').isNotEmpty
+                      ? labelPeran(user!.roleName)
+                      : role.label,
                   outletName: outletName,
                 ),
                 const Gap(12),

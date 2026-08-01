@@ -5,12 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../app/theme.dart';
-import '../../outlet/domain/outlet.dart';
 import '../../outlet/data/outlet_service.dart';
 import '../data/auth_service.dart';
 import '../../../core/outlet_scope.dart';
 import 'package:collection/collection.dart';
-import '../domain/user_role.dart';
+import '../domain/assignable_role.dart';
 import '../../../core/i18n.dart';
 
 class EmployeeFormPage extends HookConsumerWidget {
@@ -29,12 +28,18 @@ class EmployeeFormPage extends HookConsumerWidget {
 
     final outlets = ref.watch(outletsProvider).value ?? [];
 
+    // Daftar peran datang dari server, bukan dari enum lokal. Enum UserRole
+    // hanya punya empat nilai untuk sepuluh peran yang benar-benar ada, dan
+    // nama yang dihasilkannya ('cashier' huruf kecil) tak dikenal server sama
+    // sekali — GetRoleByName mencocokkan persis dengan 'Cashier'.
+    final rolesAsync = activeOutletId == null
+        ? const AsyncValue<List<AssignableRole>>.data([])
+        : ref.watch(assignableRolesProvider(activeOutletId));
+    final roles = rolesAsync.value ?? const <AssignableRole>[];
+
     final nameCtrl = useTextEditingController(text: existing?.name ?? '');
-    final role = useState<UserRole>(existing?.role ?? UserRole.cashier);
-    final selectedOutletRemoteIds = useState<Set<String>>(
-      existing?.outletRemoteIds.toSet() ??
-          (outlets.isNotEmpty ? {outlets.first.remoteId!} : {}),
-    );
+    // Menyimpan NAMA peran dari server apa adanya — inilah yang dikirim balik.
+    final role = useState<String>(existing?.roleName ?? '');
     final active = useState<bool>(existing?.active ?? true);
 
     final currentUser = ref.read(authProvider).user;
@@ -53,6 +58,13 @@ class EmployeeFormPage extends HookConsumerWidget {
         _snack(context, 'Nama karyawan wajib diisi');
         return;
       }
+      if (role.value.isEmpty) {
+        // Bisa terjadi kalau daftar peran gagal dimuat. Lebih baik berhenti di
+        // sini daripada mengirim peran kosong yang pasti ditolak server dengan
+        // pesan yang tak berarti apa-apa bagi penggunanya.
+        _snack(context, 'Pilih peran karyawan dulu');
+        return;
+      }
 
       // Tanpa username & password.
       //
@@ -61,21 +73,22 @@ class EmployeeFormPage extends HookConsumerWidget {
       // bukan dengan kredensial sendiri. Server MEMBUANG kedua field itu
       // diam-diam — jadi yang lama memaksa penggunanya mengarang username dan
       // password yang tak pernah tersimpan dan tak pernah bisa dipakai.
-      final payload = {
-        'full_name': name,
-        'role': role.value.name,
-        'is_active': active.value,
-        'outlet_ids': selectedOutletRemoteIds.value.toList(),
-      };
-
+      //
+      // Isi payload mengikuti apa yang benar-benar dibaca server:
+      //   POST /employees/create → dto.CreateEmployeeRequest {full_name, phone, role}
+      //   PUT  /employees/:id    → {role}
+      // Outletnya diambil server dari path URL, bukan dari badan permintaan.
       try {
         if (existing == null) {
-          await ref.read(outletServiceProvider).createEmployee(outletId, payload);
+          await ref.read(outletServiceProvider).createEmployee(outletId, {
+            'full_name': name,
+            'role': role.value,
+          });
         } else {
           await ref.read(outletServiceProvider).updateEmployee(
                 outletId,
                 existing.remoteId!,
-                payload,
+                {'role': role.value},
               );
           if (isEditingSelf) ref.read(authProvider.notifier).refresh();
         }
@@ -173,97 +186,92 @@ class EmployeeFormPage extends HookConsumerWidget {
             style: TextStyle(fontWeight: FontWeight.w600, color: kTextDark),
           ),
           const Gap(8),
-          Wrap(
-            spacing: 8,
-            children: UserRole.values
-                .where((r) => r != UserRole.owner && r != UserRole.admin)
-                .map((r) {
-              final selected = r == role.value;
-              return ChoiceChip(
-                label: Text(r.label),
-                selected: selected,
-                onSelected: isEditingSelf && r != role.value
-                    ? null
-                    : (_) => role.value = r,
-                selectedColor: kPrimary,
-                labelStyle: TextStyle(
-                  color: selected ? Colors.white : kTextDark,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
-          ),
-          const Gap(16),
-          Text(
-            'Outlet',
-            style: TextStyle(fontWeight: FontWeight.w600, color: kTextDark),
-          ),
-          const Gap(8),
-          if (outlets.isEmpty)
+          // Owner & SuperAdminSystem tidak perlu disaring di sini — server
+          // sudah menyingkirkannya lewat filterAssignableRoles, berikut peran
+          // yang sudah dihapus dari katalog. Menyaring ulang di aplikasi cuma
+          // menciptakan aturan kedua yang bisa berselisih dengan yang pertama.
+          if (rolesAsync.isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (roles.isEmpty)
+            // Sengaja tanpa daftar cadangan lokal. Menawarkan tebakan di sini
+            // berarti mengundang penyimpanan yang pasti ditolak server —
+            // persis kegagalan senyap yang sedang diperbaiki.
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: kDanger.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(
-                ref.t('outlet.empty_error'),
-                style: const TextStyle(color: kDanger, fontSize: 13),
+              child: const Text(
+                'Daftar peran belum bisa dimuat. Periksa koneksi, lalu buka '
+                'ulang halaman ini.',
+                style: TextStyle(color: kDanger, fontSize: 13),
               ),
-            )
-          else if (role.value != UserRole.cashier)
-            // Multi-select for Owner
-            Column(
-              children: outlets.map((o) {
-                final isSelected = selectedOutletRemoteIds.value.contains(
-                  o.remoteId,
-                );
-                return CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(o.name, style: const TextStyle(fontSize: 14)),
-                  value: isSelected,
-                  activeColor: kPrimary,
-                  onChanged: (v) {
-                    if (v == true) {
-                      selectedOutletRemoteIds.value = {
-                        ...selectedOutletRemoteIds.value,
-                        o.remoteId!,
-                      };
-                    } else {
-                      selectedOutletRemoteIds.value = selectedOutletRemoteIds
-                          .value
-                          .where((id) => id != o.remoteId)
-                          .toSet();
-                    }
-                  },
-                );
-              }).toList(),
             )
           else
-            // Single-select for Kasir/Admin
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: DropdownButton<String>(
-                value: selectedOutletRemoteIds.value.firstOrNull,
-                isExpanded: true,
-                underline: const SizedBox.shrink(),
-                items: outlets
-                    .map(
-                      (Outlet o) => DropdownMenuItem(
-                        value: o.remoteId,
-                        child: Text(o.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) selectedOutletRemoteIds.value = {v};
-                },
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: roles.map((r) {
+                final selected = r.name == role.value;
+                return ChoiceChip(
+                  label: Text(r.label),
+                  tooltip: r.penjelasan.isEmpty ? null : r.penjelasan,
+                  selected: selected,
+                  onSelected: isEditingSelf && r.name != role.value
+                      ? null
+                      : (_) => role.value = r.name,
+                  selectedColor: kPrimary,
+                  labelStyle: TextStyle(
+                    color: selected ? Colors.white : kTextDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              }).toList(),
+            ),
+          const Gap(16),
+          Text(
+            'Outlet',
+            style: TextStyle(fontWeight: FontWeight.w600, color: kTextDark),
+          ),
+          const Gap(8),
+          // Ditampilkan, bukan dipilih.
+          //
+          // Sebelumnya di sini ada pemilih outlet — dropdown untuk kasir dan
+          // daftar centang "Multi-select for Owner". Keduanya tak berpengaruh
+          // apa pun: server mengambil outlet dari path URL
+          // (`/outlets/{id}/employees/create`), dan dto.CreateEmployeeRequest
+          // tak punya field outlet sama sekali. Cabang multi-outletnya bahkan
+          // sudah mati lebih dulu, karena Owner memang tak pernah bisa dipilih
+          // dari form ini.
+          //
+          // Pemilih yang tak mengubah apa pun lebih buruk daripada tidak ada:
+          // ia membuat orang mengira karyawannya sudah ditempatkan di cabang
+          // lain, padahal tidak.
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kPrimary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              outlets.isEmpty
+                  ? ref.t('outlet.empty_error')
+                  : 'Karyawan ditambahkan ke outlet yang sedang aktif: '
+                        '${outlets.firstWhereOrNull((o) => o.remoteId == activeOutletId)?.name ?? '-'}',
+              style: TextStyle(
+                color: outlets.isEmpty ? kDanger : kTextMid,
+                fontSize: 13,
               ),
             ),
+          ),
           const Gap(16),
           SwitchListTile.adaptive(
             value: active.value,

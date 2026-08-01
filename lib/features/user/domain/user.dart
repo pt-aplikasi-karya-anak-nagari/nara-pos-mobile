@@ -7,6 +7,19 @@ class User {
   String? email;
   String? phone;
   String passwordHash;
+
+  /// Nama peran PERSIS seperti di server ("Cashier", "Barista", "Waiter", …).
+  ///
+  /// [roleIndex]/[role] tetap ada sebagai keranjang izin yang kasar — empat
+  /// nilai untuk sepuluh peran server — dan itu memang cukup untuk gerbang
+  /// lokal saat offline. Yang TIDAK cukup adalah memakainya untuk menampilkan
+  /// peran orang: enam dari sepuluh peran server jatuh ke keranjang kasir,
+  /// sehingga Barista, Dapur, Pramusaji, Gudang, Finance, dan Supervisor
+  /// semuanya tertulis "Kasir" di layar.
+  ///
+  /// Field ini menyimpan yang sebenarnya, untuk ditampilkan dan untuk dikirim
+  /// balik saat menyimpan.
+  String roleName;
   int roleIndex;
   bool active;
   List<String> outletRemoteIds = [];
@@ -19,6 +32,7 @@ class User {
     this.email,
     this.phone,
     required this.passwordHash,
+    this.roleName = '',
     this.roleIndex = 2,
     this.active = true,
     this.outletRemoteIds = const [],
@@ -70,6 +84,11 @@ class User {
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       passwordHash: '',
+      // Apa adanya dari server — bukan turunan huruf kecilnya, dan bukan
+      // hasil pemetaan ke enum lokal yang kehilangan enam peran.
+      roleName: (json['role'] as String?)?.trim() ??
+          (json['role_name'] as String?)?.trim() ??
+          '',
       roleIndex: role.index,
       active: json['is_active'] as bool? ?? true,
       outletRemoteIds: outletIds,
@@ -96,6 +115,7 @@ class User {
       'id': remoteId,
       'full_name': name,
       'username': username,
+      'role_name': roleName,
       'email': email,
       'phone': phone,
       'role_id': backendRoleId,

@@ -7,6 +7,7 @@ import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
 import '../../user/data/auth_service.dart';
 import '../../user/domain/user.dart';
+import '../../user/domain/assignable_role.dart';
 import '../../products/domain/category.dart';
 import '../../../core/offline/entity_cache.dart';
 import '../domain/outlet.dart';
@@ -81,11 +82,35 @@ class OutletService extends BaseApiService {
     await delete(ApiEndpoint.outletDetail(outlet.remoteId!));
   }
 
+  /// Membuat karyawan baru di outlet ini.
+  ///
+  /// Menembak `/employees/create` (handler CreateEmployee), BUKAN
+  /// `/employees` — yang terakhir itu handler AddEmployee, yang mengaitkan
+  /// user yang sudah ada dan menuntut `user_id`. Mobile dulu menembak ke sana
+  /// dengan payload `full_name`, jadi permintaannya selalu gagal.
   Future<void> createEmployee(
     String outletId,
     Map<String, dynamic> data,
   ) async {
-    await post(ApiEndpoint.outletEmployees(outletId), data: data);
+    await post(ApiEndpoint.outletEmployeeCreate(outletId), data: data);
+  }
+
+  /// Daftar peran yang boleh diberikan ke karyawan di outlet ini.
+  ///
+  /// Server yang menyaringnya — Owner & SuperAdminSystem tak pernah muncul,
+  /// begitu pula peran yang sudah dihapus dari katalog. Aplikasi tak menebak
+  /// aturan itu sendiri.
+  Future<List<AssignableRole>> getAssignableRoles(String outletId) async {
+    return get(
+      ApiEndpoint.outletEmployeeRoles(outletId),
+      converter: (data) {
+        final List<dynamic> list = data ?? const [];
+        return list
+            .map((e) => AssignableRole.fromJson(e as Map<String, dynamic>))
+            .where((r) => r.name.isNotEmpty)
+            .toList();
+      },
+    );
   }
 
   Future<void> updateEmployee(
@@ -625,6 +650,16 @@ final outletsProvider = AsyncNotifierProvider<OutletsNotifier, List<Outlet>>(
     return OutletsNotifier();
   },
 );
+
+/// Peran yang boleh diberikan di outlet ini, langsung dari server.
+///
+/// Sengaja TIDAK diberi nilai cadangan lokal: kalau daftarnya gagal dimuat,
+/// form karyawan harus mengatakannya terang-terangan, bukan menawarkan
+/// tebakan yang berpeluang ditolak server saat disimpan.
+final assignableRolesProvider =
+    FutureProvider.family<List<AssignableRole>, String>((ref, outletId) async {
+  return ref.watch(outletServiceProvider).getAssignableRoles(outletId);
+});
 
 final outletEmployeesProvider = FutureProvider.family<List<User>, String>((
   ref,

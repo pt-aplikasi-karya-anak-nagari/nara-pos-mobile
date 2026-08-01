@@ -81,6 +81,28 @@ void main() {
       expect(roleFromIndex(-1), UserRole.cashier);
       expect(roleFromIndex(999), UserRole.cashier);
     });
+
+    test('roleName menyimpan nama peran server APA ADANYA', () {
+      // UserRole cuma punya empat nilai untuk sepuluh peran server, jadi
+      // Barista/Kitchen/Waiter/Inventory/Finance/Supervisor semuanya jatuh ke
+      // keranjang kasir. Itu cukup untuk gerbang izin lokal, tapi TIDAK cukup
+      // untuk menampilkan peran orang — dan itulah kenapa nama aslinya
+      // disimpan terpisah.
+      final u = User.fromJson({'id': 'E1', 'role': 'Barista'});
+
+      expect(u.roleName, 'Barista');
+      expect(u.role, UserRole.cashier); // keranjang izin, sengaja kasar
+    });
+
+    test('roleName tidak dipaksa huruf kecil maupun dipetakan', () {
+      for (final r in ['Cashier', 'Waiter', 'Supervisor', 'Finance']) {
+        expect(User.fromJson({'role': r}).roleName, r);
+      }
+    });
+
+    test('roleName kosong bila server tak mengirimnya', () {
+      expect(User.fromJson({'id': 'E1'}).roleName, '');
+    });
   });
 
   group('outlet: tiga sumber berbeda untuk satu field', () {
@@ -192,6 +214,25 @@ void main() {
       final asli = User(name: 'putra', username: '', passwordHash: '');
       final pulih = User.fromJson(asli.toJson());
       expect(pulih.username, '');
+    });
+
+    test('roleName bertahan lewat penyimpanan — dan lewat kunci role_name', () {
+      // Sengaja BUKAN kunci 'role'. fromJson mendahulukan 'role' dan
+      // mencocokkannya dengan huruf kecil, jadi menulisnya ke sana akan
+      // membuat pemulihan sesi mengecilkan orangnya jadi kasir — persis
+      // perangkap yang dijaga tes di atas.
+      final asli = User(
+        name: 'putra',
+        username: '',
+        passwordHash: '',
+        roleName: 'Barista',
+        roleIndex: UserRole.cashier.index,
+      );
+      final json = asli.toJson();
+
+      expect(json['role_name'], 'Barista');
+      expect(json.containsKey('role'), isFalse);
+      expect(User.fromJson(json).roleName, 'Barista');
     });
   });
 }

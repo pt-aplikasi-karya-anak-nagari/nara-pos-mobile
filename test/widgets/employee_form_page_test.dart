@@ -7,8 +7,8 @@ import 'package:nara_pos_mobile/core/outlet_scope.dart';
 import 'package:nara_pos_mobile/core/shared_prefs.dart';
 import 'package:nara_pos_mobile/features/outlet/data/outlet_service.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_service.dart';
+import 'package:nara_pos_mobile/features/user/domain/assignable_role.dart';
 import 'package:nara_pos_mobile/features/user/domain/user.dart';
-import 'package:nara_pos_mobile/features/user/domain/user_role.dart';
 import 'package:nara_pos_mobile/features/user/ui/employee_form_page.dart';
 
 // REGRESI commit 8ee0ce7 — form karyawan tak boleh meminta username & password.
@@ -20,17 +20,19 @@ import 'package:nara_pos_mobile/features/user/ui/employee_form_page.dart';
 // pernah tersimpan dan tak pernah bisa dipakai. Tak ada error yang muncul,
 // jadi tak ada yang menyadarinya.
 //
-// # YANG SENGAJA TIDAK DIUJI DI SINI
+// # DAFTAR PERAN DARI SERVER
 //
-// Isi payload yang dikirim ke server — khususnya nilai 'role'-nya — TIDAK
-// dipaku di berkas ini, walau secara teknis bisa. Penyelidikan saat menulis
-// tes ini menemukan jalur simpannya memang sedang rusak: form menembak
-// POST /outlets/{id}/employees (handler AddEmployee, yang menuntut `user_id`)
-// alih-alih /employees/create, dan mengirim 'role' berisi 'cashier' huruf
-// kecil sementara tabel roles di server hanya berisi 'Cashier'.
+// Versi pertama berkas ini sengaja tidak memaku isi payload, karena jalur
+// simpannya memang sedang rusak: form menembak POST /outlets/{id}/employees
+// (handler AddEmployee, yang menuntut `user_id`) alih-alih /employees/create,
+// dan mengirim 'role' berisi "cashier" huruf kecil sementara tabel roles di
+// server hanya berisi "Cashier". Memaku nilai yang salah berarti membekukan
+// cacatnya jadi kontrak.
 //
-// Memaku nilai-nilai itu sekarang berarti membekukan cacatnya jadi kontrak.
-// Yang dikunci di sini hanya yang memang sudah benar.
+// Keduanya sudah diperbaiki, jadi sekarang justru sebaliknya: yang dikunci
+// adalah daftar perannya datang dari server, dan chip-nya menampilkan sebutan
+// dari deskripsi server — bukan dari enum UserRole lokal yang cuma punya empat
+// nilai untuk sepuluh peran.
 
 class _FakeAuth extends AuthNotifier {
   final AuthState awal;
@@ -39,7 +41,25 @@ class _FakeAuth extends AuthNotifier {
   AuthState build() => awal;
 }
 
-Future<void> _buka(WidgetTester tester, {AuthState? sesi}) async {
+/// Peran seperti yang benar-benar dijawab server: nama BERKAPITAL, dengan
+/// deskripsi yang memuat sebutan Indonesia di depan em-dash.
+const _peranServer = [
+  AssignableRole(
+    name: 'Cashier',
+    description: 'Kasir — proses transaksi, buka/tutup shift.',
+  ),
+  AssignableRole(
+    name: 'Barista',
+    description: 'Barista — operator dapur minuman & display order minuman.',
+  ),
+  AssignableRole(name: 'Waiter', description: 'Pramusaji — ambil pesanan.'),
+];
+
+Future<void> _buka(
+  WidgetTester tester, {
+  AuthState? sesi,
+  List<AssignableRole>? peran,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
 
@@ -55,6 +75,9 @@ Future<void> _buka(WidgetTester tester, {AuthState? sesi}) async {
         selectedOutletIdProvider.overrideWith((ref) => 'o1'),
         // Aslinya memanggil outletService.getEmployees lewat dio → butuh token.
         outletEmployeesProvider.overrideWith((ref, id) async => <User>[]),
+        assignableRolesProvider.overrideWith(
+          (ref, id) async => peran ?? _peranServer,
+        ),
       ],
       child: const MaterialApp(home: EmployeeFormPage()),
     ),
@@ -102,19 +125,46 @@ void main() {
     );
   });
 
-  testWidgets('peran yang ditawarkan tidak memuat Owner maupun Admin', (tester) async {
+  testWidgets('pilihan peran dibangun dari daftar server', (tester) async {
     await _buka(tester);
 
-    // Owner lahir dari registrasi mandiri (1 email = 1 owner) dan server
-    // menolaknya terang-terangan lewat validateRoleAssignment. Menawarkannya
-    // di sini berarti mengundang klik yang pasti gagal.
-    expect(find.text(UserRole.owner.label), findsNothing); // "Owner"
-    expect(find.text(UserRole.admin.label), findsNothing); // "Admin"
+    // Ketiganya berasal dari _peranServer, bukan dari UserRole. Barista dan
+    // Pramusaji khususnya: keduanya TIDAK ADA di enum lokal, jadi keduanya tak
+    // akan pernah muncul kalau daftarnya masih dibangun dari sana.
+    expect(find.text('Kasir'), findsOneWidget);
+    expect(find.text('Barista'), findsOneWidget);
+    expect(find.text('Pramusaji'), findsOneWidget);
+  });
 
-    // Sisi positifnya diperiksa juga — kalau daftar perannya ternyata kosong
-    // sama sekali, kedua pernyataan di atas benar tanpa arti.
-    expect(find.text(UserRole.cashier.label), findsOneWidget); // "Kasir"
-    expect(find.text(UserRole.adminOutlet.label), findsOneWidget);
+  testWidgets('"Admin Outlet" tak lagi ditawarkan — server tak punya peran itu',
+      (tester) async {
+    await _buka(tester);
+
+    // Chip lama yang tak punya padanan apa pun di sepuluh peran server.
+    // Menawarkannya berarti mengundang simpan yang pasti ditolak.
+    expect(find.text('Admin Outlet'), findsNothing);
+  });
+
+  testWidgets('daftar peran gagal dimuat → dikatakan, bukan ditebak',
+      (tester) async {
+    await _buka(tester, peran: const []);
+
+    // Tanpa daftar cadangan lokal. Menawarkan tebakan berarti mengundang
+    // penyimpanan yang ditolak server dengan pesan yang tak berarti apa pun
+    // bagi penggunanya — persis kegagalan senyap yang sedang diperbaiki.
+    expect(find.textContaining('Daftar peran belum bisa dimuat'), findsOneWidget);
+    expect(find.byType(ChoiceChip), findsNothing);
+  });
+
+  testWidgets('outlet dinyatakan, bukan dipilih', (tester) async {
+    await _buka(tester);
+
+    // Server mengambil outlet dari path URL; dto.CreateEmployeeRequest tak
+    // punya field outlet sama sekali. Pemilih outlet di sini dulu tak
+    // berpengaruh apa pun — dan itu lebih buruk daripada tidak ada, karena
+    // membuat orang mengira karyawannya ditempatkan di cabang lain.
+    expect(find.byType(DropdownButton<String>), findsNothing);
+    expect(find.byType(CheckboxListTile), findsNothing);
   });
 
   testWidgets('halaman terbuka tanpa sesi login tanpa melempar', (tester) async {

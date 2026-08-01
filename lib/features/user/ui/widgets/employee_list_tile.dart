@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../domain/user.dart';
 import '../../domain/user_role.dart';
+import '../../domain/assignable_role.dart';
 import '../../../../app/theme.dart';
 import '../../../../shared/widgets/app_list_tile.dart';
 
@@ -71,8 +72,13 @@ class EmployeeListTile extends StatelessWidget {
           color: _roleColor(employee.role).withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(8),
         ),
+        // Nama peran dari server bila ada. UserRole hanya punya empat nilai
+        // untuk sepuluh peran server, jadi Barista/Dapur/Pramusaji/Gudang/
+        // Finance/Supervisor semuanya dulu tertulis "Kasir" di sini.
         child: Text(
-          employee.role.label,
+          employee.roleName.isNotEmpty
+              ? labelPeran(employee.roleName)
+              : employee.role.label,
           style: TextStyle(
             color: _roleColor(employee.role),
             fontWeight: FontWeight.w700,
