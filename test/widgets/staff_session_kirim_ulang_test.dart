@@ -47,6 +47,7 @@ class _StoragePalsu extends StaffDeviceStorage {
 class _AuthPalsu extends AuthNotifier {
   int permintaanKode = 0;
   String? galat;
+  bool stafPunyaPin = false;
 
   @override
   AuthState build() => const AuthState();
@@ -61,13 +62,13 @@ class _AuthPalsu extends AuthNotifier {
       authorizerEmail: 'pem***@uji.invalid',
       outletId: 'OUT1',
       outlets: const [StaffOutletOption(id: 'OUT1', name: 'Outlet Uji')],
-      staff: const [
+      staff: [
         StaffCandidate(
           id: 'E1',
           fullName: 'putra',
           role: 'Cashier',
           username: '',
-          hasPin: false,
+          hasPin: stafPunyaPin,
         ),
       ],
     );
@@ -84,10 +85,16 @@ class _AuthPalsu extends AuthNotifier {
   }
 }
 
-Future<_AuthPalsu> _buka(WidgetTester tester, {String? galat}) async {
+Future<_AuthPalsu> _buka(
+  WidgetTester tester, {
+  String? galat,
+  bool stafPunyaPin = false,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
-  final auth = _AuthPalsu()..galat = galat;
+  final auth = _AuthPalsu()
+    ..galat = galat
+    ..stafPunyaPin = stafPunyaPin;
 
   await tester.pumpWidget(
     ProviderScope(
@@ -194,5 +201,30 @@ void main() {
     // dan orangnya menyangka kode barunya yang salah.
     final field = tester.widget<TextField>(find.byType(TextField).last);
     expect(field.controller?.text, isEmpty);
+  });
+
+  testWidgets('staf BER-PIN diarahkan memakai PIN-nya sendiri', (tester) async {
+    // Sebelum ini layar selalu menyuruh memakai "PIN otorisasi Anda" — yang
+    // dimaksud PIN PEMILIK, bukan PIN staf. Staf yang sudah diberi PIN dari
+    // dashboard tak punya cara tahu bahwa PIN itulah yang diminta.
+    await _buka(tester, stafPunyaPin: true);
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    expect(find.textContaining('Masukkan PIN putra'), findsOneWidget);
+    // Kode email tetap disebut sebagai jalan cadangan — bukan dihilangkan.
+    expect(find.textContaining('Belum punya PIN atau lupa'), findsOneWidget);
+  });
+
+  testWidgets('staf TANPA PIN tetap diarahkan ke kode email', (tester) async {
+    // Sisi sebaliknya. Perbaikan yang menyuruh semua orang mengetik "PIN Anda"
+    // akan menyesatkan staf yang memang belum diberi PIN — mereka akan mencoba
+    // menebak PIN yang tak pernah ada.
+    await _buka(tester, stafPunyaPin: false);
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    expect(find.textContaining('Kode 6 digit dikirim ke'), findsOneWidget);
+    expect(find.textContaining('Masukkan PIN putra'), findsNothing);
   });
 }

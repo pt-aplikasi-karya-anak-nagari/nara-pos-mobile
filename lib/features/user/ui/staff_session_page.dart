@@ -256,7 +256,7 @@ class StaffSessionFlow extends HookConsumerWidget {
 
     Future<void> verifikasi() async {
       if (kodeCtrl.text.trim().isEmpty) {
-        error.value = 'Masukkan kode dari email atau PIN otorisasi.';
+        error.value = 'Masukkan PIN Anda, atau kode dari email Pemilik.';
         return;
       }
       loading.value = true;
@@ -498,11 +498,24 @@ List<Widget> _verifikasi({
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
     ),
     const Gap(6),
+    // Tiga cara sah, dan urutan kalimatnya mengikuti yang PALING SERING
+    // dipakai — bukan yang paling kuat. Staf yang sudah diberi PIN oleh
+    // Pemilik cukup mengetik PIN-nya; kode email hanya jalan cadangan saat ia
+    // belum punya PIN atau lupa.
+    //
+    // PIN staf hanya berlaku di perangkat yang sudah disahkan Pemilik, dan
+    // layar ini memang cuma tercapai dari perangkat seperti itu.
     Text(
-      dikirimKe != null
-          ? 'Kode 6 digit dikirim ke $dikirimKe. Masukkan kode itu, atau PIN '
-                'otorisasi Anda kalau email belum bisa dibuka.'
-          : 'Kode tidak terkirim. Masukkan PIN otorisasi Anda untuk melanjutkan.',
+      staf.hasPin
+          ? (dikirimKe != null
+                ? 'Masukkan PIN ${staf.fullName}. Belum punya PIN atau lupa? '
+                      'Pakai kode 6 digit yang dikirim ke $dikirimKe.'
+                : 'Masukkan PIN ${staf.fullName} untuk mulai bertugas.')
+          : (dikirimKe != null
+                ? 'Kode 6 digit dikirim ke $dikirimKe. Masukkan kode itu, atau '
+                      'PIN otorisasi Pemilik.'
+                : 'Kode tidak terkirim. Masukkan PIN otorisasi Pemilik untuk '
+                      'melanjutkan.'),
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
     const Gap(18),
@@ -511,8 +524,8 @@ List<Widget> _verifikasi({
       keyboardType: TextInputType.number,
       obscureText: true,
       enabled: !loading,
-      decoration: const InputDecoration(
-        labelText: 'Kode email atau PIN',
+      decoration: InputDecoration(
+        labelText: staf.hasPin ? 'PIN Anda atau kode email' : 'Kode email atau PIN',
         hintText: '••••••',
       ),
     ),
