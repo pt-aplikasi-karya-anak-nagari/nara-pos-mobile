@@ -62,24 +62,21 @@ class PaymentMethodManagementPage extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        maxChildSize: 0.95,
-        minChildSize: 0.5,
-        expand: false,
-        builder: (ctx, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: _PaymentMethodDetailPanel(
-              method: pm,
-              isAdding: false,
-              onSaved: () => Navigator.pop(ctx),
-              onDeleted: () => Navigator.pop(ctx),
-            ),
+      // Tanpa DraggableScrollableSheet: tingginya mengikuti isi. Sheet ini
+      // dulu selalu terbuka setinggi 85% layar walau panel detailnya pendek.
+      // SingleChildScrollView memang sudah mengukur anaknya sendiri — yang
+      // memaksa tinggi tetap hanyalah sheet seret di luarnya.
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SingleChildScrollView(
+          child: _PaymentMethodDetailPanel(
+            method: pm,
+            isAdding: false,
+            onSaved: () => Navigator.pop(ctx),
+            onDeleted: () => Navigator.pop(ctx),
           ),
         ),
       ),

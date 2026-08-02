@@ -74,13 +74,16 @@ class _StockTransferPageState extends ConsumerState<StockTransferPage>
       return;
     }
 
-    final items = <({String fromIngredientId, String toIngredientId, double qty})>[];
+    final items =
+        <({String fromIngredientId, String toIngredientId, double qty})>[];
     for (final l in _lines) {
       final qty = double.tryParse(l.qty.text.replaceAll(',', '.')) ?? 0;
       if (l.fromId == null || l.toId == null || qty <= 0) continue;
-      items.add(
-        (fromIngredientId: l.fromId!, toIngredientId: l.toId!, qty: qty),
-      );
+      items.add((
+        fromIngredientId: l.fromId!,
+        toIngredientId: l.toId!,
+        qty: qty,
+      ));
     }
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,7 +96,9 @@ class _StockTransferPageState extends ConsumerState<StockTransferPage>
 
     setState(() => _submitting = true);
     try {
-      await ref.read(bahanBakuServiceProvider).createStockTransfer(
+      await ref
+          .read(bahanBakuServiceProvider)
+          .createStockTransfer(
             fromOutletId,
             toOutletId: _destOutletId!,
             note: _noteCtrl.text,
@@ -114,9 +119,9 @@ class _StockTransferPageState extends ConsumerState<StockTransferPage>
           ..add(_LineDraft());
         _noteCtrl.clear();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Transfer stok berhasil')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Transfer stok berhasil')));
       _tabController.animateTo(1);
     } catch (e) {
       if (!mounted) return;
@@ -143,10 +148,7 @@ class _StockTransferPageState extends ConsumerState<StockTransferPage>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildCreateTab(),
-          const _TransferHistoryTab(),
-        ],
+        children: [_buildCreateTab(), const _TransferHistoryTab()],
       ),
     );
   }
@@ -191,7 +193,10 @@ class _StockTransferPageState extends ConsumerState<StockTransferPage>
                         for (final o in destOutlets)
                           DropdownMenuItem(
                             value: o.remoteId,
-                            child: Text(o.name, overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              o.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                       ],
                       onChanged: _onDestChanged,
@@ -445,111 +450,119 @@ class _TransferHistoryTab extends ConsumerWidget {
     WidgetRef ref,
     String id,
   ) async {
-    // Buat future sekali di luar builder — DraggableScrollableSheet.builder
-    // dipanggil berkali-kali saat di-drag, jadi jangan re-fetch tiap frame.
-    final detailFuture = ref.read(bahanBakuServiceProvider).getStockTransfer(id);
+    // Buat future sekali di LUAR builder. Alasan aslinya (builder sheet seret
+    // dipanggil tiap frame saat diseret) sudah tak berlaku sejak sheet-nya
+    // tak lagi diseret, tapi aturannya tetap: builder sheet dipanggil ulang
+    // tiap kali MediaQuery berubah — papan ketik muncul, layar diputar — dan
+    // memanggil getStockTransfer di dalamnya berarti menembak ulang jaringan
+    // setiap kali itu terjadi.
+    final detailFuture = ref
+        .read(bahanBakuServiceProvider)
+        .getStockTransfer(id);
     await tampilkanSheetBawah<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (ctx, scrollCtrl) => Container(
-          decoration: BoxDecoration(
-            color: kCard,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: FutureBuilder<StockTransfer>(
-            future: detailFuture,
-            builder: (ctx, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError || !snap.hasData) {
-                return Center(
-                  child: Text(
-                    'Gagal memuat detail: ${snap.error}',
-                    style: TextStyle(color: kDanger),
-                  ),
-                );
-              }
-              final t = snap.data!;
-              return ListView(
-                controller: scrollCtrl,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: kDivider,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    'Detail Transfer',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: kTextDark,
-                    ),
-                  ),
-                  const Gap(4),
-                  Text(
-                    '${t.fromOutletName.isEmpty ? t.fromOutletId : t.fromOutletName} '
-                    '→ ${t.toOutletName.isEmpty ? t.toOutletId : t.toOutletName}',
-                    style: TextStyle(color: kTextMid, fontSize: 13),
-                  ),
-                  if (t.createdAt != null) ...[
-                    const Gap(2),
-                    Text(
-                      formatDateTime(t.createdAt!),
-                      style: TextStyle(color: kTextMid, fontSize: 12),
-                    ),
-                  ],
-                  if (t.note.isNotEmpty) ...[
-                    const Gap(6),
-                    Text(
-                      'Catatan: ${t.note}',
-                      style: TextStyle(color: kTextDark, fontSize: 13),
-                    ),
-                  ],
-                  const Gap(12),
-                  for (final it in t.items)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${it.fromIngredientName.isEmpty ? it.fromIngredientId : it.fromIngredientName}'
-                              ' → '
-                              '${it.toIngredientName.isEmpty ? it.toIngredientId : it.toIngredientName}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ),
-                          const Gap(8),
-                          Text(
-                            _qtyText(it.qty),
-                            style: TextStyle(
-                              color: kPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+      // Tanpa DraggableScrollableSheet: tingginya mengikuti isi. Detail
+      // transfer dengan tiga baris bahan dulu tetap membuka setengah layar.
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: FutureBuilder<StockTransfer>(
+          future: detailFuture,
+          builder: (ctx, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              // Tinggi tetap saat memuat: Center di ruang tak terbatas akan
+              // memenuhi seluruh tinggi sheet, lalu mengerut begitu datanya
+              // tiba — sheet-nya berkedip besar-kecil.
+              return const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
               );
-            },
-          ),
+            }
+            if (snap.hasError || !snap.hasData) {
+              return Center(
+                child: Text(
+                  'Gagal memuat detail: ${snap.error}',
+                  style: TextStyle(color: kDanger),
+                ),
+              );
+            }
+            final t = snap.data!;
+            return ListView(
+              shrinkWrap: true,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: kDivider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Detail Transfer',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: kTextDark,
+                  ),
+                ),
+                const Gap(4),
+                Text(
+                  '${t.fromOutletName.isEmpty ? t.fromOutletId : t.fromOutletName} '
+                  '→ ${t.toOutletName.isEmpty ? t.toOutletId : t.toOutletName}',
+                  style: TextStyle(color: kTextMid, fontSize: 13),
+                ),
+                if (t.createdAt != null) ...[
+                  const Gap(2),
+                  Text(
+                    formatDateTime(t.createdAt!),
+                    style: TextStyle(color: kTextMid, fontSize: 12),
+                  ),
+                ],
+                if (t.note.isNotEmpty) ...[
+                  const Gap(6),
+                  Text(
+                    'Catatan: ${t.note}',
+                    style: TextStyle(color: kTextDark, fontSize: 13),
+                  ),
+                ],
+                const Gap(12),
+                for (final it in t.items)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${it.fromIngredientName.isEmpty ? it.fromIngredientId : it.fromIngredientName}'
+                            ' → '
+                            '${it.toIngredientName.isEmpty ? it.toIngredientId : it.toIngredientName}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        const Gap(8),
+                        Text(
+                          _qtyText(it.qty),
+                          style: TextStyle(
+                            color: kPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -561,8 +574,9 @@ class _TransferHistoryTab extends ConsumerWidget {
     final async = ref.watch(stockTransfersProvider);
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) =>
-          Center(child: Text('Gagal memuat: $e', style: TextStyle(color: kDanger))),
+      error: (e, _) => Center(
+        child: Text('Gagal memuat: $e', style: TextStyle(color: kDanger)),
+      ),
       data: (transfers) => RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(stockTransfersProvider);

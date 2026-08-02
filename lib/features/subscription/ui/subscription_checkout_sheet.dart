@@ -104,8 +104,10 @@ class _SubscriptionCheckoutSheetState
       _snack('Bukti transfer terkirim. Menunggu konfirmasi admin. 🙌');
       Navigator.of(context).pop();
     } catch (e) {
-      _snack('Gagal unggah bukti: ${e.toString().replaceAll('Exception: ', '')}',
-          error: true);
+      _snack(
+        'Gagal unggah bukti: ${e.toString().replaceAll('Exception: ', '')}',
+        error: true,
+      );
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -148,41 +150,41 @@ class _SubscriptionCheckoutSheetState
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (context, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            const Gap(12),
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: kDivider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+    // Tanpa DraggableScrollableSheet: tingginya mengikuti isi. Daftar paket
+    // langganan biasanya dua atau tiga kartu, tapi sheet-nya selalu terbuka
+    // setinggi 70% layar.
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Gap(12),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: kDivider,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Expanded(
-              child: _result == null
-                  ? _buildPlanSelection(scrollController)
-                  : _buildInstructions(scrollController, _result!),
-            ),
-          ],
-        ),
+          ),
+          // Flexible, bukan Expanded: Expanded akan memaksa isinya mengisi
+          // sisa ruang, dan tinggi-mengikuti-isi hilang lagi.
+          Flexible(
+            child: _result == null
+                ? _buildPlanSelection()
+                : _buildInstructions(_result!),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPlanSelection(ScrollController scrollController) {
+  Widget _buildPlanSelection() {
     final plansAsync = ref.watch(subscriptionPlansProvider);
     final currentSub = ref.watch(activeOutletSubscriptionProvider).value;
     return Column(
@@ -236,7 +238,7 @@ class _SubscriptionCheckoutSheetState
                       )
                       .code;
               return ListView.separated(
-                controller: scrollController,
+                shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                 itemCount: plans.length,
                 separatorBuilder: (_, _) => const Gap(12),
@@ -296,10 +298,7 @@ class _SubscriptionCheckoutSheetState
     );
   }
 
-  Widget _buildInstructions(
-    ScrollController scrollController,
-    BillingCheckoutResult result,
-  ) {
+  Widget _buildInstructions(BillingCheckoutResult result) {
     final pi = result.paymentInstruction;
     return Column(
       children: [
@@ -320,9 +319,9 @@ class _SubscriptionCheckoutSheetState
             ],
           ),
         ),
-        Expanded(
+        Flexible(
           child: ListView(
-            controller: scrollController,
+            shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             children: [
               Container(
@@ -548,24 +547,26 @@ class _PlanCard extends StatelessWidget {
             ],
             if (plan.features.isNotEmpty) ...[
               const Gap(10),
-              ...plan.features.take(5).map(
-                (f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.check_rounded, size: 15, color: kSuccess),
-                      const Gap(6),
-                      Expanded(
-                        child: Text(
-                          f,
-                          style: TextStyle(fontSize: 12, color: kTextDark),
-                        ),
+              ...plan.features
+                  .take(5)
+                  .map(
+                    (f) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.check_rounded, size: 15, color: kSuccess),
+                          const Gap(6),
+                          Expanded(
+                            child: Text(
+                              f,
+                              style: TextStyle(fontSize: 12, color: kTextDark),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
             ],
           ],
         ),

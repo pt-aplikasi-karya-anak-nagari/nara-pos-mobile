@@ -71,8 +71,10 @@ class _DeadLetterRecoverySheetState
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Buang transaksi?',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        title: const Text(
+          'Buang transaksi?',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
         content: Text(
           'Transaksi ini akan dihapus permanen dan TIDAK terkirim ke server. '
           'Pastikan kamu sudah mencatatnya manual bila perlu.',
@@ -111,98 +113,99 @@ class _DeadLetterRecoverySheetState
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.92,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              const Gap(10),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: kDivider,
-                  borderRadius: BorderRadius.circular(99),
+      // Tanpa DraggableScrollableSheet: tingginya mengikuti isi. Satu
+      // transaksi gagal dulu tetap membuka sheet setinggi 60% layar.
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Gap(10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: kDivider,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline_rounded, color: kDanger, size: 22),
+                const Gap(10),
+                Expanded(
+                  child: Text(
+                    'Transaksi gagal terkirim',
+                    style: TextStyle(
+                      color: kTextDark,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-                child: Row(
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(
+              'Transaksi ini sudah dicoba beberapa kali tapi ditolak server '
+              '(mis. produk dihapus / data tidak valid). Coba kirim ulang, '
+              'atau buang kalau memang tidak perlu.',
+              style: TextStyle(color: kTextMid, fontSize: 12, height: 1.4),
+            ),
+          ),
+          const Divider(height: 1),
+          // Flexible, bukan Expanded: Expanded MEMAKSA anaknya mengisi
+          // seluruh sisa ruang, jadi Column-nya kembali setinggi layar
+          // walau daftarnya cuma satu baris.
+          Flexible(
+            child: FutureBuilder<List<PendingSale>>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const SizedBox(
+                    height: 160,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final items = snap.data ?? const [];
+                // TIDAK boleh berhenti di sini saat daftar penjualan kosong.
+                //
+                // Sheet ini kini juga memuat seksi shift, dan keduanya
+                // punya sumber sendiri. Berhenti pada penjualan yang kosong
+                // membuat sheet berkata "Tidak ada transaksi gagal 🎉"
+                // sementara bannernya baru saja berkata ada catatan shift
+                // yang gagal — dua pernyataan yang bertentangan, di layar
+                // yang sama, tentang uang laci yang hilang.
+                //
+                // Keadaan benar-benar kosong ditangani _SeksiShiftGagal:
+                // ia yang tahu apakah masih ada sisa.
+                return ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.all(16),
                   children: [
-                    Icon(Icons.error_outline_rounded, color: kDanger, size: 22),
-                    const Gap(10),
-                    Expanded(
-                      child: Text(
-                        'Transaksi gagal terkirim',
-                        style: TextStyle(
-                          color: kTextDark,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
+                    for (final ps in items) ...[
+                      _DeadLetterCard(
+                        sale: ps,
+                        onRetry: () => _retry(ps),
+                        onDiscard: () => _discard(ps),
                       ),
+                      const Gap(10),
+                    ],
+                    // Seksi kedua: buka/tutup shift yang gagal permanen.
+                    // Sebelum ini tak punya permukaan UI sama sekali, jadi
+                    // catatan uang laci hilang tanpa ada yang tahu.
+                    _SeksiShiftGagal(
+                      onSelesai: _reload,
+                      adaPenjualanGagal: items.isNotEmpty,
                     ),
                   ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text(
-                  'Transaksi ini sudah dicoba beberapa kali tapi ditolak server '
-                  '(mis. produk dihapus / data tidak valid). Coba kirim ulang, '
-                  'atau buang kalau memang tidak perlu.',
-                  style: TextStyle(color: kTextMid, fontSize: 12, height: 1.4),
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: FutureBuilder<List<PendingSale>>(
-                  future: _future,
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final items = snap.data ?? const [];
-                    // TIDAK boleh berhenti di sini saat daftar penjualan kosong.
-                    //
-                    // Sheet ini kini juga memuat seksi shift, dan keduanya
-                    // punya sumber sendiri. Berhenti pada penjualan yang kosong
-                    // membuat sheet berkata "Tidak ada transaksi gagal 🎉"
-                    // sementara bannernya baru saja berkata ada catatan shift
-                    // yang gagal — dua pernyataan yang bertentangan, di layar
-                    // yang sama, tentang uang laci yang hilang.
-                    //
-                    // Keadaan benar-benar kosong ditangani _SeksiShiftGagal:
-                    // ia yang tahu apakah masih ada sisa.
-                    return ListView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        for (final ps in items) ...[
-                          _DeadLetterCard(
-                            sale: ps,
-                            onRetry: () => _retry(ps),
-                            onDiscard: () => _discard(ps),
-                          ),
-                          const Gap(10),
-                        ],
-                        // Seksi kedua: buka/tutup shift yang gagal permanen.
-                        // Sebelum ini tak punya permukaan UI sama sekali, jadi
-                        // catatan uang laci hilang tanpa ada yang tahu.
-                        _SeksiShiftGagal(
-                          onSelesai: _reload,
-                          adaPenjualanGagal: items.isNotEmpty,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -317,7 +320,10 @@ class _DeadLetterCard extends StatelessWidget {
 /// menarik perhatiannya. Close itu lalu dikirim untuk shift yang di server tak
 /// pernah ada, gagal lagi, dan kasirnya menyangka aplikasinya rusak.
 class _SeksiShiftGagal extends ConsumerStatefulWidget {
-  const _SeksiShiftGagal({required this.onSelesai, required this.adaPenjualanGagal});
+  const _SeksiShiftGagal({
+    required this.onSelesai,
+    required this.adaPenjualanGagal,
+  });
   final VoidCallback onSelesai;
 
   /// Dipakai memutuskan siapa yang menampilkan pesan "tidak ada apa-apa".
@@ -349,7 +355,9 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
     if (!mounted) return;
     _muatUlang();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Dikembalikan ke antrean — akan dikirim saat online.')),
+      const SnackBar(
+        content: Text('Dikembalikan ke antrean — akan dikirim saat online.'),
+      ),
     );
   }
 
@@ -364,7 +372,10 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
           'terbit, dan rekonsiliasi kasnya tak bisa diselesaikan.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(c, true),
             style: FilledButton.styleFrom(backgroundColor: kDanger),
