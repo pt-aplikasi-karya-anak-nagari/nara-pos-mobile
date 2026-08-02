@@ -49,8 +49,14 @@ class ServerPalsu {
   final Map<String, String> refKeShift = {}; // client_ref → id shift server
   final Set<String> terbuka = {};
   final Map<String, List<String>> salePerShift = {}; // id shift → localId sale
+  final Map<String, DateTime> mulaiShift = {}; // id shift → waktu buka
+  final List<String> ditutup = [];
   int tolakBuka = 0;
   int tolakSale = 0;
+
+  /// Shift yang masih terbuka di outlet ini, seperti GET /shifts/active.
+  String? aktifDi(String outletId) =>
+      terbuka.where((id) => id.startsWith('$outletId/')).firstOrNull;
 
   String buka(String outletId, String clientRef) {
     if (refKeShift.containsKey(clientRef)) return refKeShift[clientRef]!;
@@ -61,10 +67,14 @@ class ServerPalsu {
     final id = '$outletId/${refKeShift.length + 1}';
     refKeShift[clientRef] = id;
     terbuka.add(id);
+    mulaiShift[id] = DateTime(2026, 1, refKeShift.length);
     return id;
   }
 
-  void tutup(String shiftId) => terbuka.remove(shiftId);
+  void tutup(String shiftId) {
+    terbuka.remove(shiftId);
+    ditutup.add(shiftId);
+  }
 
   /// Cermin cabang server sesudah perbaikan: sale yang MENYEBUT shift lewat
   /// client-ref dan tak bisa di-resolve ditolak, tidak ditebak.
@@ -95,6 +105,19 @@ class ShiftApiPalsu extends ShiftApiService {
       remoteId: id,
       startTime: DateTime(2026),
       startingCash: startingCash,
+      cashierName: 'Kasir',
+      cashierRemoteId: 'kasir-1',
+    );
+  }
+
+  @override
+  Future<Shift?> getActiveShift(String outletId) async {
+    final id = srv.aktifDi(outletId);
+    if (id == null) return null;
+    return Shift(
+      remoteId: id,
+      startTime: srv.mulaiShift[id]!,
+      startingCash: 0,
       cashierName: 'Kasir',
       cashierRemoteId: 'kasir-1',
     );
@@ -264,7 +287,12 @@ PendingOp opBuka(String n, String ref) => PendingOp(
   createdAt: DateTime(2026, 1, int.parse(n)),
 );
 
-PendingOp opTutup(String n, String ref, {String? serverShiftId}) => PendingOp(
+PendingOp opTutup(
+  String n,
+  String ref, {
+  String? serverShiftId,
+  DateTime? terjadiPada,
+}) => PendingOp(
   localId: 'op-tutup-$n',
   opType: opShiftClose,
   outletId: outlet,
@@ -273,6 +301,8 @@ PendingOp opTutup(String n, String ref, {String? serverShiftId}) => PendingOp(
   localShiftId: 'lokal-$n',
   serverShiftId: serverShiftId,
   createdAt: DateTime(2026, 1, int.parse(n)),
+  occurredAt: (terjadiPada ?? DateTime(2026, 1, int.parse(n), 23))
+      .toIso8601String(),
 );
 
 PendingSale sale(String id, String refShift) => PendingSale(
@@ -451,4 +481,144 @@ void main() {
       );
     },
   );
+
+  group('op tutup yatim — server_shift_id tak pernah terisi', () {
+    // Op tutup mendapat server_shift_id saat op BUKA pasangannya sukses. Ia
+    // bisa tak pernah terisi walau buka-nya sudah selesai: respons buka tak
+    // membawa id, atau op buka mati tanpa sempat meng-cascade.
+    //
+    // Sebelumnya kasus itu hanya dilewati tiap sync. Attempts tak pernah naik,
+    // jadi op-nya tak pernah mati, tak pernah muncul di daftar "Perlu
+    // dipulihkan", dan tak pernah terkirim.
+    //
+    // Yang dirasakan kasir bukan galat, melainkan pintu terkunci: di layar
+    // shift-nya sudah tertutup (cache dikosongkan saat mengantri), sementara
+    // server masih menganggapnya terbuka — jadi ia tak bisa membuka shift baru
+    // dan tak bisa berjualan. Tak ada pesan apa pun, dan tak ada tombol yang
+    // bisa ditekan.
+
+    test(
+      'id-nya dipulihkan dari server, dan shift-nya benar-benar tertutup',
+      () async {
+        final srv = ServerPalsu();
+        // Server sudah punya shift terbuka — buka-nya dulu SUKSES, hanya
+        // tautan id-nya yang hilang di sisi klien.
+        final idServer = srv.buka(outlet, 'ref-1');
+
+        final so = ShiftOutboxPalsu([
+          opTutup('1', 'tutup-1', terjadiPada: DateTime(2026, 1, 5)),
+        ]);
+        final salesOut = SaleOutboxPalsu([]);
+        final c = ProviderContainer(
+          overrides: [
+            shiftOutboxProvider.overrideWithValue(so),
+            saleOutboxProvider.overrideWithValue(salesOut),
+            shiftApiServiceProvider.overrideWithValue(ShiftApiPalsu(srv)),
+            transactionApiServiceProvider.overrideWithValue(
+              TrxApiPalsu(srv, {}),
+            ),
+          ],
+        );
+        addTearDown(c.dispose);
+        await c.read(offlineSyncServiceProvider).sync();
+
+        expect(
+          srv.ditutup,
+          [idServer],
+          reason:
+              'shift-nya masih terbuka di server — kasir tak akan bisa membuka '
+              'shift baru, dan tak ada apa pun di layar yang menjelaskan kenapa',
+        );
+        expect(so.ops, isEmpty);
+      },
+    );
+
+    test('shift yang dibuka SESUDAH tutup ini tidak ikut tertutup', () async {
+      // Batas yang menjaga perbaikan di atas dari jadi lebih buruk dari
+      // penyakitnya. Kalau kasir sempat membuka shift BARU, memulihkan "shift
+      // aktif di outlet ini" berarti menutup shift baru itu dengan hitungan
+      // laci milik shift lama — selisih kasnya pindah ke kasir yang keliru.
+      final srv = ServerPalsu();
+      srv.buka(outlet, 'ref-baru'); // mulai 2026-01-01
+      srv.mulaiShift[srv.aktifDi(outlet)!] = DateTime(2026, 1, 9);
+
+      final so = ShiftOutboxPalsu([
+        opTutup('1', 'tutup-1', terjadiPada: DateTime(2026, 1, 5)),
+      ]);
+      final c = ProviderContainer(
+        overrides: [
+          shiftOutboxProvider.overrideWithValue(so),
+          saleOutboxProvider.overrideWithValue(SaleOutboxPalsu([])),
+          shiftApiServiceProvider.overrideWithValue(ShiftApiPalsu(srv)),
+          transactionApiServiceProvider.overrideWithValue(TrxApiPalsu(srv, {})),
+        ],
+      );
+      addTearDown(c.dispose);
+      await c.read(offlineSyncServiceProvider).sync();
+
+      expect(
+        srv.ditutup,
+        isEmpty,
+        reason:
+            'shift yang dibuka belakangan ikut tertutup dengan hitungan '
+            'laci milik shift lama',
+      );
+      expect(
+        so.ops.single.attempts,
+        1,
+        reason: 'harus terlihat, bukan didiamkan',
+      );
+    });
+
+    test('tanpa shift terbuka di server, op-nya jadi TERLIHAT', () async {
+      // Tak ada yang bisa dipulihkan. Yang penting attempts naik supaya ia
+      // akhirnya mendarat di daftar "Perlu dipulihkan" dan bisa ditangani
+      // manusia — bukan menggantung diam selamanya.
+      final srv = ServerPalsu();
+      final so = ShiftOutboxPalsu([opTutup('1', 'tutup-1')]);
+      final c = ProviderContainer(
+        overrides: [
+          shiftOutboxProvider.overrideWithValue(so),
+          saleOutboxProvider.overrideWithValue(SaleOutboxPalsu([])),
+          shiftApiServiceProvider.overrideWithValue(ShiftApiPalsu(srv)),
+          transactionApiServiceProvider.overrideWithValue(TrxApiPalsu(srv, {})),
+        ],
+      );
+      addTearDown(c.dispose);
+      await c.read(offlineSyncServiceProvider).sync();
+
+      expect(so.ops.single.attempts, 1);
+      expect(so.ops.single.lastError, contains('perlu dipulihkan'));
+    });
+
+    test(
+      'yang buka-nya MASIH mengantri tetap ditunggu, bukan divonis',
+      () async {
+        // Sisi yang tak boleh ikut rusak: op tutup yang server_shift_id-nya
+        // kosong karena buka-nya memang belum jalan. Menaikkan attempts di sini
+        // akan membunuh tutup shift yang sehat pada antrian offline biasa.
+        final srv = ServerPalsu();
+        final so = ShiftOutboxPalsu([
+          opBuka('1', 'ref-1'),
+          opTutup('1', 'tutup-1'),
+        ]);
+        final c = ProviderContainer(
+          overrides: [
+            shiftOutboxProvider.overrideWithValue(so),
+            saleOutboxProvider.overrideWithValue(SaleOutboxPalsu([])),
+            shiftApiServiceProvider.overrideWithValue(ShiftApiPalsu(srv)),
+            transactionApiServiceProvider.overrideWithValue(
+              TrxApiPalsu(srv, {}),
+            ),
+          ],
+        );
+        addTearDown(c.dispose);
+        await c.read(offlineSyncServiceProvider).sync();
+
+        // Buka jalan, lalu tutup ikut jalan di putaran yang sama.
+        expect(so.ops, isEmpty);
+        expect(srv.ditutup.length, 1);
+      },
+    );
+  });
 }

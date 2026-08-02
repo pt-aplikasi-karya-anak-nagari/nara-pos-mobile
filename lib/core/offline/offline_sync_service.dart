@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../connectivity_service.dart';
 import '../../features/transactions/data/transaction_repository.dart';
 import '../../features/shifts/data/shift_api_service.dart';
+import '../../features/shifts/domain/shift.dart';
 import '../../features/shifts/data/shift_repository.dart';
 import 'sale_outbox.dart';
 import 'shift_outbox.dart';
@@ -190,13 +191,75 @@ class OfflineSyncService {
 
         // ── FASE C: drain TUTUP shift ──────────────────────────────────────
         if (!stoppedOffline) {
+          // Shift lokal yang op BUKA-nya masih di antrian. Hanya untuk merekalah
+          // "server_shift_id belum ada" berarti benar-benar tinggal menunggu.
+          final bukaMasihAntri = <String>{
+            for (final o in await shiftOutbox.opensPending())
+              if (o.localShiftId != null) o.localShiftId!,
+          };
+
           for (final op in await shiftOutbox.closesPending()) {
             if (ditolakDiPanggilanIni.contains('shift:${op.localId}')) continue;
-            final targetId = op.serverShiftId;
-            if (targetId == null || targetId.isEmpty) {
-              // Open belum ter-resolve (belum sync) → lewati, coba lagi nanti.
-              continue;
+            var targetId = op.serverShiftId ?? '';
+
+            // OP TUTUP YATIM.
+            //
+            // server_shift_id diisi saat op BUKA pasangannya sukses. Ada dua
+            // jalan ia tak pernah terisi walau buka-nya sudah selesai:
+            // respons buka tak membawa id, atau op buka mati tanpa sempat
+            // meng-cascade (localShiftId-nya null).
+            //
+            // Sebelumnya kasus itu hanya di-`continue`: attempts tak pernah
+            // naik, jadi ia tak pernah mati, tak pernah muncul di daftar
+            // "Perlu dipulihkan", dan tak pernah terkirim. Yang dirasakan
+            // kasir bukan galat melainkan pintu terkunci — shift-nya sudah
+            // ditutup di layar (cache dikosongkan saat mengantri), sementara
+            // server masih menganggapnya terbuka, jadi ia tak bisa membuka
+            // shift baru dan tak bisa berjualan. Selamanya, tanpa satu pun
+            // pesan.
+            if (targetId.isEmpty) {
+              if (bukaMasihAntri.contains(op.localShiftId)) continue;
+
+              // Buka-nya sudah tak di antrian → id-nya bisa dipulihkan dari
+              // server: shift yang masih terbuka untuk kasir ini di outlet ini
+              // adalah shift yang op ini hendak tutup.
+              Shift? aktif;
+              try {
+                aktif = await shiftApi.getActiveShift(op.outletId);
+              } catch (e) {
+                if (isOfflineError(e)) {
+                  stoppedOffline = true;
+                  break;
+                }
+                aktif = null;
+              }
+
+              // Tapi jangan menutup shift yang SALAH. Kalau shift terbuka di
+              // server dimulai SESUDAH tutup ini terjadi, ia shift lain yang
+              // dibuka belakangan — menutupnya dengan hitungan laci milik
+              // shift lama akan memindahkan selisih kas ke kasir yang keliru.
+              final mulai = aktif?.startTime;
+              final saat = DateTime.tryParse(op.occurredAt ?? '');
+              final cocok =
+                  (aktif?.remoteId ?? '').isNotEmpty &&
+                  !(mulai != null && saat != null && mulai.isAfter(saat));
+
+              if (!cocok) {
+                ditolakDiPanggilanIni.add('shift:${op.localId}');
+                await shiftOutbox.markError(
+                  op.localId,
+                  'Shift tujuan tidak ditemukan di server. Tutup shift ini '
+                  'perlu dipulihkan manual.',
+                );
+                continue;
+              }
+
+              targetId = aktif!.remoteId!;
+              if (op.localShiftId != null) {
+                await shiftOutbox.setServerShiftId(op.localShiftId!, targetId);
+              }
             }
+
             try {
               await shiftApi.closeShift(
                 op.outletId,
