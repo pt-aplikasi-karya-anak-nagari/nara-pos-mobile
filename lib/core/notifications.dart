@@ -239,7 +239,51 @@ class NotificationService {
     }
   }
 
+  /// order_id pesanan baru yang sudah pernah ditampilkan di sesi app ini.
+  ///
+  /// Sejak jalur SSE ditambahkan, satu pesanan QR tiba DUA KALI: sekali lewat
+  /// FCM, sekali lewat realtime. Keduanya sengaja dipertahankan — FCM sampai
+  /// walau app di background, SSE sampai walau FCM ditahan penghemat baterai
+  /// atau perangkatnya tak punya Google Play Services sama sekali. Yang tak
+  /// boleh dobel adalah AKIBATNYA: dua banner, dua baris inbox, dua struk.
+  ///
+  /// Sengaja HANYA untuk new_menu_order. Tipe lain seperti order_updated
+  /// memang boleh berulang untuk pesanan yang sama — status berubah beberapa
+  /// kali, dan tiap perubahan layak diberitahukan.
+  final _pesananBaruDitampilkan = <String>{};
+
+  /// true kalau pesanan ini yang PERTAMA sampai; false kalau kembarannya
+  /// sudah ditangani lebih dulu.
+  bool _klaimPesananBaru(Map<String, dynamic> data) =>
+      klaimPesananBaru(_pesananBaruDitampilkan, data);
+
+  /// Pesanan baru yang datang lewat SSE realtime, bukan FCM.
+  ///
+  /// Dialirkan ke jalur yang SAMA PERSIS dengan pesan FCM supaya seluruh
+  /// akibatnya ikut: banner lokal, baris inbox, dan aliran foreground yang
+  /// memicu cetak otomatis. Tanpa ini, jalur realtime hanya akan menyegarkan
+  /// daftar di layar — diam, dan tak berguna bagi kasir yang sedang menunduk
+  /// meracik minuman.
+  void terimaPesananRealtime({
+    required Map<String, String> data,
+    required String title,
+    required String body,
+  }) {
+    _handleForegroundMessage(
+      RemoteMessage(
+        // ID stabil dari order_id: kalau kembarannya lewat FCM menyusul, baris
+        // inbox-nya menimpa alih-alih menumpuk.
+        messageId: 'rt-${data['order_id'] ?? ''}',
+        data: data,
+        notification: RemoteNotification(title: title, body: body),
+      ),
+    );
+  }
+
   void _handleForegroundMessage(RemoteMessage message) {
+    if (!_klaimPesananBaru(message.data)) {
+      return;
+    }
     final notif = message.notification;
     final title =
         notif?.title ?? message.data['title'] as String? ?? 'Notifikasi';
@@ -250,8 +294,7 @@ class NotificationService {
     // microsecondsSinceEpoch (~1.7e15) & String.hashCode bisa melebihi batas
     // → notifikasi gagal tampil / id terpotong & tabrakan.
     final id =
-        (message.messageId?.hashCode ??
-            DateTime.now().microsecondsSinceEpoch) &
+        (message.messageId?.hashCode ?? DateTime.now().microsecondsSinceEpoch) &
         0x7fffffff;
     // Encode `data` map ke JSON supaya bisa dipulihkan saat user tap local
     // notif → `_onLocalNotifTap` decode lagi & emit ke tap stream. Tanpa
@@ -398,3 +441,21 @@ class NotificationService {
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService.instance;
 });
+
+/// true kalau pesanan ini yang PERTAMA sampai; false kalau kembarannya sudah
+/// ditangani lebih dulu. [sudah] adalah ingatan pemanggil, dan ikut diubah.
+///
+/// Fungsi MURNI supaya perilakunya bisa diuji tanpa Firebase maupun plugin
+/// notifikasi — keduanya tak ada di lingkungan tes.
+///
+/// Batasnya sengaja HANYA new_menu_order. Tipe lain seperti order_updated
+/// memang boleh berulang untuk pesanan yang sama: status berubah beberapa kali
+/// dan tiap perubahan layak diberitahukan. Dedup yang tak dibatasi tipe akan
+/// membungkam pemberitahuan kedua dan seterusnya.
+bool klaimPesananBaru(Set<String> sudah, Map<String, dynamic> data) {
+  if ((data['type'] ?? '').toString() != 'new_menu_order') return true;
+  // Tanpa order_id tak ada yang bisa dibandingkan — biarkan lewat.
+  final id = (data['order_id'] ?? '').toString();
+  if (id.isEmpty) return true;
+  return sudah.add(id);
+}

@@ -25,12 +25,12 @@ class RealtimeEvent {
   final Map<String, dynamic> data;
 
   factory RealtimeEvent.fromJson(Map<String, dynamic> j) => RealtimeEvent(
-        id: (j['id'] ?? '') as String,
-        type: (j['type'] ?? '') as String,
-        outletId: (j['outlet_id'] ?? '') as String,
-        actorId: j['actor_id'] as String?,
-        data: (j['data'] as Map<String, dynamic>?) ?? const {},
-      );
+    id: (j['id'] ?? '') as String,
+    type: (j['type'] ?? '') as String,
+    outletId: (j['outlet_id'] ?? '') as String,
+    actorId: j['actor_id'] as String?,
+    data: (j['data'] as Map<String, dynamic>?) ?? const {},
+  );
 
   bool get isOrder => type.startsWith('order.');
   bool get isTransaction => type.startsWith('transaction.');
@@ -67,8 +67,9 @@ class RealtimeService {
         backoff = const Duration(seconds: 1); // konek sukses → reset backoff
         onStatus?.call(true);
 
-        final lines =
-            utf8.decoder.bind(body.stream).transform(const LineSplitter());
+        final lines = utf8.decoder
+            .bind(body.stream)
+            .transform(const LineSplitter());
         final buf = StringBuffer();
         await for (final line in lines) {
           if (line.isEmpty) {
@@ -115,8 +116,9 @@ class RealtimeConnected extends Notifier<bool> {
   void set(bool v) => state = v;
 }
 
-final realtimeConnectedProvider =
-    NotifierProvider<RealtimeConnected, bool>(RealtimeConnected.new);
+final realtimeConnectedProvider = NotifierProvider<RealtimeConnected, bool>(
+  RealtimeConnected.new,
+);
 
 /// Stream event realtime untuk outlet aktif. autoDispose: koneksi hidup selama
 /// masih ada yang mendengarkan (mis. tab Pesanan terbuka), lalu ditutup
@@ -131,10 +133,51 @@ final realtimeEventsProvider = StreamProvider.autoDispose<RealtimeEvent>((ref) {
   // guard ref.mounted supaya tidak menyentuh ref yang sudah mati.
   final connected = ref.read(realtimeConnectedProvider.notifier);
   ref.onDispose(() => connected.set(false));
-  return ref.watch(realtimeServiceProvider).connect(
+  return ref
+      .watch(realtimeServiceProvider)
+      .connect(
         outletId,
         onStatus: (c) {
           if (ref.mounted) connected.set(c);
         },
       );
 });
+
+/// Ringkasan pesanan QR baru yang layak dibunyikan ke kasir.
+class PesananQrBaru {
+  const PesananQrBaru({
+    required this.orderId,
+    required this.invoiceNo,
+    required this.nominal,
+  });
+  final String orderId;
+  final String invoiceNo;
+  final double nominal;
+}
+
+/// Baca [ev] sebagai pesanan QR baru, atau null kalau bukan.
+///
+/// Fungsi MURNI. Tiga penyaringnya menahan hal yang berbeda, dan melewatkan
+/// satu saja punya akibatnya sendiri:
+///
+///   type != order.created   kanal ini juga membawa pembayaran, retur,
+///                           perubahan status, dan stok menipis. Tanpa
+///                           saringan ini printer menyala untuk hampir setiap
+///                           kejadian di outlet sepanjang hari.
+///   source != menu_qr       transaksi yang dibuat KASIR SENDIRI juga lewat
+///                           sini. Mencetaknya otomatis berarti struk kedua
+///                           untuk pesanan yang baru saja ia cetak sendiri.
+///   id kosong               tanpa id, detailnya tak bisa diambil DAN
+///                           kembarannya lewat FCM tak bisa dikenali — jadi
+///                           justru berakhir dua struk.
+PesananQrBaru? bacaPesananQrBaru(RealtimeEvent ev) {
+  if (ev.type != 'order.created') return null;
+  if ((ev.data['source'] ?? '').toString() != 'menu_qr') return null;
+  final id = (ev.data['id'] ?? '').toString();
+  if (id.isEmpty) return null;
+  return PesananQrBaru(
+    orderId: id,
+    invoiceNo: (ev.data['invoice_no'] ?? '').toString(),
+    nominal: (ev.data['final_amount'] as num?)?.toDouble() ?? 0,
+  );
+}

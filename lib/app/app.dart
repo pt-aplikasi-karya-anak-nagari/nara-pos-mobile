@@ -8,7 +8,9 @@ import 'package:sizer/sizer.dart';
 import 'package:toastification/toastification.dart';
 import '../shared/widgets/connectivity_banner.dart';
 import '../shared/widgets/pending_sync_banner.dart';
+import '../core/format.dart';
 import '../core/i18n.dart';
+import '../core/realtime/realtime_service.dart';
 import '../core/offline/offline_sync_service.dart';
 import '../core/notifications.dart';
 import '../features/kasir/providers.dart';
@@ -74,15 +76,17 @@ class NaraApp extends ConsumerWidget {
             ],
             builder: (context, child) {
               final Widget app = _NotificationTapListener(
-                child: _OrderRefreshListener(
-                  child: _AutoPrintListener(
-                    child: SubscriptionExpiryDialogListener(
-                      child: Column(
-                        children: [
-                          const ConnectivityBanner(),
-                          const PendingSyncBanner(),
-                          Expanded(child: child!),
-                        ],
+                child: _PendengarPesananRealtime(
+                  child: _OrderRefreshListener(
+                    child: _AutoPrintListener(
+                      child: SubscriptionExpiryDialogListener(
+                        child: Column(
+                          children: [
+                            const ConnectivityBanner(),
+                            const PendingSyncBanner(),
+                            Expanded(child: child!),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -366,4 +370,62 @@ class _OrderRefreshListenerState extends ConsumerState<_OrderRefreshListener> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// Jalur KEDUA untuk pesanan QR yang baru masuk: SSE realtime, di samping FCM.
+///
+/// # KENAPA DUA JALUR, BUKAN SATU
+///
+/// FCM sendirian tidak cukup andal untuk kasir:
+///
+///   * Penghemat baterai Android (Doze / "optimasi baterai" bawaan pabrikan —
+///     Xiaomi, Oppo, Vivo terkenal agresif) menunda atau membuang pesan FCM
+///     untuk aplikasi yang dianggap tidak penting. Tundaannya bisa menit.
+///   * Banyak tablet POS murah tidak punya Google Play Services sama sekali.
+///     Di perangkat itu FCM tak pernah sampai — sekali pun.
+///
+/// Backend sudah menyiarkan `order.created` lewat SSE sejak awal, dan
+/// RealtimeService untuk membacanya sudah ada di aplikasi ini — hanya saja tak
+/// pernah ada yang berlangganan, jadi providernya (autoDispose) bahkan tak
+/// pernah dibuat. Kode mati yang menunggu disambungkan.
+///
+/// Untuk tablet kasir yang menyala di meja dengan aplikasi terbuka — keadaan
+/// normalnya — SSE justru lebih cepat dan lebih pasti daripada FCM.
+///
+/// # KENAPA DISALURKAN KE JALUR FCM, BUKAN MENANGANI SENDIRI
+///
+/// Supaya SELURUH akibatnya ikut tanpa ditulis dua kali: banner lokal, baris
+/// inbox, penyegaran daftar, dan cetak otomatis. Menangani sendiri berarti
+/// menyalin empat perilaku itu, dan salah satunya pasti tertinggal saat salah
+/// satu sisi berubah.
+///
+/// Kembarannya diurus NotificationService: pesanan yang sama tak akan
+/// menghasilkan dua banner, dua baris inbox, atau dua struk.
+class _PendengarPesananRealtime extends ConsumerWidget {
+  final Widget child;
+  const _PendengarPesananRealtime({required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<AsyncValue<RealtimeEvent>>(realtimeEventsProvider, (_, next) {
+      final ev = next.value;
+      if (ev == null) return;
+      final pesanan = bacaPesananQrBaru(ev);
+      if (pesanan == null) return;
+
+      NotificationService.instance.terimaPesananRealtime(
+        data: {
+          'type': 'new_menu_order',
+          'order_id': pesanan.orderId,
+          'invoice_no': pesanan.invoiceNo,
+        },
+        title: 'Pesanan baru lewat QR',
+        body: [
+          if (pesanan.nominal > 0) formatRupiah(pesanan.nominal),
+          if (pesanan.invoiceNo.isNotEmpty) pesanan.invoiceNo,
+        ].join(' · '),
+      );
+    });
+    return child;
+  }
 }
