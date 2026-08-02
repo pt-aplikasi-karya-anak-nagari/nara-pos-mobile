@@ -231,6 +231,17 @@ class TransactionApiService extends BaseApiService {
     );
   }
 
+  /// Transaksi milik satu shift, untuk rekap tender & cetak laporan tutup
+  /// kasir. Backend mengurutkannya dari yang paling awal dan MEMUAT ITEMNYA
+  /// (loadItemsForTransactions), jadi struk bisa langsung dicetak tanpa fetch
+  /// detail satu per satu.
+  Future<List<dynamic>> getByShift(String shiftId) async {
+    return await get<List<dynamic>>(
+      '/shifts/$shiftId/transactions',
+      converter: (res) => res as List<dynamic>,
+    );
+  }
+
   /// Upload bukti pembayaran ke backend. Mengembalikan URL relatif yang
   /// kemudian dipakai sebagai nilai `payment_proof_url` di payload
   /// checkout / mark-as-paid.
@@ -485,6 +496,18 @@ class TransactionRepository {
   /// Hasilnya sudah menyertakan items per transaksi (lihat
   /// transactionRepository.GetActiveByTable di backend), jadi UI bisa
   /// langsung menampilkan rincian tanpa perlu fetch detail satu per satu.
+  /// Penjualan satu shift — dipakai rekap tender di Riwayat Shift dan struk
+  /// laporan tutup kasir.
+  ///
+  /// Sebelum ini daftarnya di-hardcode kosong, sehingga rekapnya menampilkan
+  /// Rp0 untuk SEMUA metode bayar tepat di sebelah Ekspektasi Kas yang benar —
+  /// dua angka bertentangan di dokumen serah-terima uang, dan yang
+  /// menandatanganinya tak punya cara tahu mana yang bisa dipercaya.
+  Future<List<Sale>> getSalesByShift(String shiftId) async {
+    final res = await apiService.getByShift(shiftId);
+    return res.map((e) => Sale.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<Sale>> getActiveSalesByTable(String tableId) async {
     final res = await apiService.getActiveByTable(tableId);
     return res.map((e) => Sale.fromJson(e as Map<String, dynamic>)).toList();

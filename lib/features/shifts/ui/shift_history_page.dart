@@ -426,13 +426,15 @@ class _TabletDetailPanel extends ConsumerWidget {
     final isNegative = (s.difference ?? 0) < 0;
     final hasDifference = s.difference != null && s.difference != 0;
 
-    // BELUM TERHUBUNG: daftar ini masih kosong, jadi rekap tender di bawah dan
-    // struk yang dicetak lewat printShiftReport() selalu menampilkan nol.
-    // Perhitungannya sendiri sudah benar (termasuk netting retur), tinggal
-    // diisi begitu transaksi per-shift diambil dari
-    // GET /outlets/:outletId/shifts — sampai saat itu jangan percaya angka
-    // tender di halaman ini.
-    final shiftSales = <Sale>[];
+    // Transaksi shift ini, dari GET /shifts/:id/transactions. Rekap tender di
+    // bawah dan struk printShiftReport() dihitung dari sini.
+    //
+    // `.value ?? []` disengaja: selama memuat dan bila gagal, daftarnya KOSONG,
+    // dan blok rekap serta tombol cetak di bawah memang bersembunyi saat kosong.
+    // Itu tetap perilaku yang benar — nol yang tampak seperti fakta di dokumen
+    // serah-terima uang lebih berbahaya daripada tak ada angka sama sekali.
+    final shiftSales =
+        ref.watch(shiftSalesProvider(s.remoteId ?? '')).value ?? const <Sale>[];
 
     double totalQris = 0;
     double totalCard = 0;
@@ -441,6 +443,14 @@ class _TabletDetailPanel extends ConsumerWidget {
     int refundCount = 0;
 
     for (final sale in shiftSales) {
+      // Status yang sama persis dengan yang dipakai server menghitung
+      // Ekspektasi Kas (cashSalesSubquery). Bill yang belum dibayar sudah punya
+      // shift_id sejak dibuat, jadi tanpa saringan ini pesanan meja yang masih
+      // terbuka akan menggelembungkan tender di sebelah angka kas yang tidak
+      // menghitungnya — dua angka dari laci yang sama yang tak bisa dicocokkan.
+      const dihitung = {'paid', 'partially_refunded', 'refunded'};
+      if (!dihitung.contains(sale.paymentStatus)) continue;
+
       if (sale.isRefunded) {
         totalRefund += sale.total;
         refundCount++;
@@ -454,9 +464,14 @@ class _TabletDetailPanel extends ConsumerWidget {
         totalRefund += sale.total - sale.netTotal;
         refundCount++;
       }
-      if (sale.paymentMethod == 'QRIS') totalQris += sale.netTotal;
-      if (sale.paymentMethod == 'Kartu') totalCard += sale.netTotal;
-      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.netTotal;
+      // Dikelompokkan lewat TIPE, bukan nama tampilan. Pencocokan nama yang
+      // lama ('Kartu', 'Transfer') tak pernah sama dengan nama sebenarnya di
+      // basis data ("Kartu Debit/Kredit", "Transfer Bank"), dan diam-diam
+      // melaporkan nol. Lihat Sale.porsiTender — ia juga membagi transaksi
+      // split ke tender masing-masing.
+      totalQris += sale.porsiTender('qris');
+      totalCard += sale.porsiTender('card');
+      totalTransfer += sale.porsiTender('transfer');
     }
 
     String duration = '-';
@@ -507,6 +522,10 @@ class _TabletDetailPanel extends ConsumerWidget {
                 //
                 // Z-Report di sebelahnya dihitung SERVER dan tetap tersedia,
                 // jadi kasirnya tidak kehilangan jalan keluar.
+                //
+                // Sejak shiftSales terhubung ke server, kosong berarti "sedang
+                // memuat" atau "gagal memuat" — dua keadaan yang sama-sama tak
+                // boleh dicetak.
                 if (!s.isOpen && shiftSales.isNotEmpty)
                   IconButton(
                     onPressed: () async {
@@ -636,18 +655,17 @@ class _TabletDetailPanel extends ConsumerWidget {
                               const Gap(32),
 
                               // SELURUH rekap di bawah dihitung dari
-                              // `shiftSales`, yang BELUM TERHUBUNG ke server —
-                              // ia selalu kosong. Menampilkannya berarti
-                              // mencetak "Total QRIS Rp0" tepat di sebelah
-                              // Ekspektasi Kas yang BENAR: dua angka yang
-                              // saling bertentangan di dokumen serah-terima
-                              // uang, dan yang membacanya tak punya cara tahu
-                              // mana yang bisa dipercaya.
+                              // `shiftSales`. Ia kosong hanya saat masih memuat
+                              // atau saat pengambilannya gagal — dan justru di
+                              // dua keadaan itu menampilkannya berarti mencetak
+                              // "Total QRIS Rp0" tepat di sebelah Ekspektasi Kas
+                              // yang BENAR: dua angka yang saling bertentangan
+                              // di dokumen serah-terima uang, dan yang
+                              // membacanya tak punya cara tahu mana yang bisa
+                              // dipercaya.
                               //
                               // Lebih baik tak menampilkan apa-apa daripada
                               // menampilkan nol yang tampak seperti fakta.
-                              // Blok ini kembali sendiri begitu shiftSales
-                              // benar-benar diisi.
                               if (shiftSales.isNotEmpty) ...[
                               // Non-Cash Summary
                               const _SubHeader(label: 'TRANSAKSI NON-TUNAI'),

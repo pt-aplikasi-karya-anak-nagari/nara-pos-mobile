@@ -15,6 +15,27 @@ class Sale {
   double total;
 
   String paymentMethod;
+
+  /// Tipe metode bayar ternormalisasi (cash | qris | card | transfer), hasil
+  /// JOIN server ke `payment_methods`.
+  ///
+  /// [paymentMethod] hanya menyimpan NAMA TAMPILAN yang boleh diubah Pemilik —
+  /// "Kartu Debit/Kredit", "Transfer Bank", atau apa pun yang ia ketik.
+  /// Mengelompokkan tender dengan mencocokkan nama persis akan diam-diam
+  /// menghasilkan nol untuk metode yang namanya tak sama.
+  ///
+  /// Kosong pada endpoint yang tidak meng-JOIN-nya, dan pada transaksi lama
+  /// yang `payment_method_id`-nya NULL — [tipeBayar] menangani keduanya.
+  String paymentMethodType;
+
+  /// Rincian tender untuk transaksi split (E7). Kosong untuk single-method.
+  ///
+  /// Wajib diperhatikan saat merekap: transaksi split disimpan dengan
+  /// payment_method = "split", yang bukan metode mana pun. Tanpa daftar ini
+  /// nilainya hilang dari rekap sementara porsi tunainya TETAP dihitung server
+  /// di ekspektasi kas laci.
+  List<SaleTender> tenders;
+
   double cashAmount;
   double changeAmount;
 
@@ -119,6 +140,8 @@ class Sale {
     this.serviceCharge = 0,
     required this.total,
     required this.paymentMethod,
+    this.paymentMethodType = '',
+    this.tenders = const [],
     this.cashAmount = 0,
     this.changeAmount = 0,
     this.customerName = '',
@@ -202,6 +225,57 @@ class Sale {
 
   int get totalQty => items.fold(0, (sum, it) => sum + it.qty);
   set totalQty(int value) {}
+
+  /// Tipe tender transaksi single-method, sudah ternormalisasi.
+  ///
+  /// [paymentMethodType] diutamakan karena ia datang dari kolom `type` milik
+  /// metode bayarnya sendiri. Transaksi lama bisa punya `payment_method_id`
+  /// NULL — untuk itu namanya DITEBAK lewat kata kunci, bukan dicocokkan
+  /// persis, mengikuti cara server memperlakukan kasus yang sama di
+  /// cashSalesSubquery.
+  String get tipeBayar => paymentMethodType.isNotEmpty
+      ? paymentMethodType.toLowerCase()
+      : tebakTipeTender(paymentMethod);
+
+  /// Menebak tipe tender dari nama tampilannya.
+  ///
+  /// Sengaja `contains`, bukan `==`: nama bawaannya sendiri sudah "Kartu
+  /// Debit/Kredit" dan "Transfer Bank", dan Pemilik bebas menambahi keterangan
+  /// ("QRIS BCA", "Transfer Mandiri"). Cocok-persis akan gagal pada semuanya.
+  ///
+  /// Mengembalikan '' bila tak dikenali — termasuk untuk "split", yang memang
+  /// bukan metode melainkan penanda bahwa rinciannya ada di [tenders].
+  static String tebakTipeTender(String nama) {
+    final n = nama.toLowerCase();
+    if (n.contains('tunai') || n.contains('cash')) return 'cash';
+    if (n.contains('qris') || n.contains('qr')) return 'qris';
+    if (n.contains('kartu') ||
+        n.contains('card') ||
+        n.contains('debit') ||
+        n.contains('kredit')) {
+      return 'card';
+    }
+    if (n.contains('transfer') || n.contains('bank')) return 'transfer';
+    return '';
+  }
+
+  /// Nominal transaksi ini yang masuk lewat tender bertipe [tipe], sudah
+  /// dikurangi retur secara proporsional.
+  ///
+  /// Untuk transaksi split, retur dibagi rata ke semua tender karena server pun
+  /// tak mencatat tender mana yang dikembalikan — memilih salah satu berarti
+  /// menebak, dan tebakan yang salah menggeser uang antar kolom di kertas
+  /// serah-terima.
+  double porsiTender(String tipe) {
+    final t = tipe.toLowerCase();
+    if (tenders.isEmpty) {
+      return tipeBayar == t ? netTotal : 0;
+    }
+    final kotor = tenders
+        .where((x) => x.tipe == t)
+        .fold<double>(0, (a, x) => a + x.amount);
+    return kotor * (1 - refundRatio);
+  }
 
   /// Nilai transaksi setelah dikurangi yang sudah diretur.
   ///
@@ -294,6 +368,11 @@ class Sale {
       serviceCharge: _d(json['service_charge']),
       total: _d(json['final_amount']),
       paymentMethod: json['payment_method']?.toString() ?? '',
+      paymentMethodType: json['payment_method_type']?.toString() ?? '',
+      tenders: (json['payments'] as List?)
+              ?.map((e) => SaleTender.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
       cashAmount: _d(json['cash_amount']),
       changeAmount: _d(json['change_amount']),
       customerName: json['customer_name']?.toString() ?? '',
@@ -388,4 +467,28 @@ class Sale {
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString()) ?? 0;
   }
+}
+
+/// Satu tender dalam transaksi split. Padanan `entity.TransactionPayment`.
+class SaleTender {
+  final String method;
+  final String type;
+  final double amount;
+
+  const SaleTender({
+    required this.method,
+    required this.type,
+    required this.amount,
+  });
+
+  /// Tipe ternormalisasi. `payment_type` bisa kosong untuk baris yang ditulis
+  /// klien lama — server hanya menebak 'cash' di sana, sisanya dibiarkan kosong.
+  String get tipe =>
+      type.isNotEmpty ? type.toLowerCase() : Sale.tebakTipeTender(method);
+
+  factory SaleTender.fromJson(Map<String, dynamic> json) => SaleTender(
+        method: json['payment_method']?.toString() ?? '',
+        type: json['payment_type']?.toString() ?? '',
+        amount: Sale._d(json['amount']),
+      );
 }

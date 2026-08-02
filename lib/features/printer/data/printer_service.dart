@@ -521,12 +521,18 @@ class PrinterService {
     // netTotal, bukan total: struk yang diretur sebagian hanya menyumbang porsi
     // yang benar-benar diterima. Kalau memakai nilai penuh, rekap tender yang
     // dicetak tidak akan cocok dengan uang di laci maupun dengan Z-report server.
+    //
+    // Dikelompokkan lewat TIPE metode bayar, bukan nama tampilannya. Nama di
+    // basis data adalah "Kartu Debit/Kredit" dan "Transfer Bank" — cocok-persis
+    // dengan 'Kartu'/'Transfer' tak pernah benar, dan kertas ini akan mencetak
+    // Rp0 untuk keduanya tanpa ada yang tahu. Pemilik juga bebas mengganti nama
+    // metode bayarnya kapan saja.
     for (final sale in sales) {
       if (!sale.countsAsSale) continue;
-      if (sale.paymentMethod == 'QRIS') totalQris += sale.netTotal;
-      if (sale.paymentMethod == 'Kartu') totalCard += sale.netTotal;
-      if (sale.paymentMethod == 'Transfer') totalTransfer += sale.netTotal;
-      if (sale.paymentMethod == 'Tunai') totalCash += sale.netTotal;
+      totalQris += sale.porsiTender('qris');
+      totalCard += sale.porsiTender('card');
+      totalTransfer += sale.porsiTender('transfer');
+      totalCash += sale.porsiTender('cash');
     }
 
     final bytes = <int>[

@@ -6,6 +6,7 @@ import '../../../core/outlet_scope.dart';
 import '../../../core/offline/entity_cache.dart';
 import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/offline/shift_outbox.dart';
+import '../../transactions/data/transaction_repository.dart';
 import '../../transactions/domain/sale.dart';
 import '../domain/shift.dart';
 import '../domain/z_report.dart';
@@ -93,6 +94,29 @@ final cashMovementsProvider =
 });
 
 // Z-Report (laporan tutup shift) untuk sebuah shift. Di-cache per shiftId.
+/// Penjualan satu shift — untuk rekap tender di Riwayat Shift dan struk
+/// laporan tutup kasir.
+///
+/// # KENAPA PROVIDER, BUKAN FETCH DI WIDGET
+///
+/// Halamannya ConsumerWidget yang di-build ulang setiap shift dipilih. Fetch
+/// langsung di build akan menembak server tiap render; family provider
+/// menyimpannya per shift dan hanya menembak sekali.
+///
+/// # KENAPA GAGALNYA DIBIARKAN MENGALIR
+///
+/// Pemanggil membaca `.value ?? []`, jadi saat memuat atau saat gagal daftarnya
+/// KOSONG — dan blok rekap tender serta tombol cetaknya memang disembunyikan
+/// selama kosong. Itu perilaku yang benar: lebih baik tak menampilkan apa-apa
+/// daripada mencetak Rp0 untuk semua metode bayar di dokumen serah-terima uang.
+final shiftSalesProvider = FutureProvider.family<List<Sale>, String>((
+  ref,
+  shiftId,
+) async {
+  if (shiftId.isEmpty) return const [];
+  return ref.read(transactionRepositoryProvider).getSalesByShift(shiftId);
+});
+
 final shiftZReportProvider =
     FutureProvider.family<ZReport, String>((ref, shiftId) {
   return ref.read(shiftApiServiceProvider).getShiftZReport(shiftId);
