@@ -72,7 +72,11 @@ Future<double> tinggiKartu(
           alignment: Alignment.topLeft,
           child: SizedBox(
             width: lebarKartu,
-            child: ProductCard(product: produk(nama)),
+            // lebarKartu dioper eksplisit: sejak IntrinsicHeight dipakai untuk
+            // menyamakan tinggi kartu sebaris, kartu ini tak boleh lagi
+            // mengukur lebarnya sendiri lewat LayoutBuilder — BarisProduk yang
+            // memberitahunya.
+            child: ProductCard(product: produk(nama), lebarKartu: lebarKartu),
           ),
         ),
       ),
@@ -228,7 +232,10 @@ void main() {
           alignment: Alignment.topLeft,
           child: SizedBox(
             width: 130,
-            child: ProductCard(product: produk('Kopi', harga: 1500000)),
+            child: ProductCard(
+              product: produk('Kopi', harga: 1500000),
+              lebarKartu: 130,
+            ),
           ),
         ),
       ),

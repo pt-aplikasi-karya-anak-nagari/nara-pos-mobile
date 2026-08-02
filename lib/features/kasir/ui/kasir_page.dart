@@ -35,13 +35,13 @@ import '../../transactions/data/transaction_repository.dart';
 import '../../transactions/domain/sale.dart';
 import '../providers.dart';
 import '../scan_trigger.dart';
+import 'widgets/baris_produk.dart';
 import 'widgets/header_aksi_kasir.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
 import 'widgets/empty_states.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
-import 'widgets/product_card.dart';
 
 class KasirPage extends HookConsumerWidget {
   const KasirPage({super.key});
@@ -679,8 +679,10 @@ class KasirPage extends HookConsumerWidget {
     // berubah — komentar lamanya bahkan tercetak dua kali, tanda ia sudah
     // beberapa kali disetel dengan coba-coba.
     //
-    // PagedMasonryGridView menempatkan tiap kartu setinggi isinya sendiri, jadi
-    // tak ada lagi yang perlu ditebak.
+    // Penggantinya: daftar BARIS, tiap baris setinggi kartu tertinggi di baris
+    // itu saja (lihat BarisProduk). Masonry sempat dicoba lalu ditolak — ia
+    // menempatkan kartu di kolom TERPENDEK, jadi urutan bacanya melompat, tepi
+    // kartunya tak sejajar, dan di ujung daftar muncul petak menganggur.
 
     final productArea = RefreshIndicator(
       color: kPrimary,
@@ -707,13 +709,10 @@ class KasirPage extends HookConsumerWidget {
       },
       child: PagingListener<int, Product>(
         controller: pagingController,
-        builder: (context, state, fetchNextPage) => PagedMasonryGridView<int, Product>.count(
-          state: state,
+        builder: (context, state, fetchNextPage) => PagedListView<int, List<Product>>(
+          state: barisState(state, gridCols),
           fetchNextPage: fetchNextPage,
           scrollController: scrollController,
-          crossAxisCount: gridCols,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
           // AlwaysScrollable supaya RefreshIndicator (tarik ke bawah) tetap
           // bisa dipakai walaupun grid kosong / hanya 1 baris.
           physics: const AlwaysScrollableScrollPhysics(),
@@ -723,8 +722,9 @@ class KasirPage extends HookConsumerWidget {
             horizontalPad,
             isTablet ? 24 : 100,
           ),
-          builderDelegate: PagedChildBuilderDelegate<Product>(
-            itemBuilder: (context, item, index) => ProductCard(product: item),
+          builderDelegate: PagedChildBuilderDelegate<List<Product>>(
+            itemBuilder: (context, baris, index) =>
+                BarisProduk(produk: baris, kolom: gridCols),
             firstPageErrorIndicatorBuilder: (context) => Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -845,9 +845,9 @@ class KasirPage extends HookConsumerWidget {
                 height: MediaQuery.of(context).size.height,
                 child: Skeletonizer(
                   enabled: true,
-                  // Skeleton ikut masonry supaya transisi loading → data tak
-                  // menggeser tinggi kartu di mata kasir.
-                  child: MasonryGridView.count(
+                  // Skeleton memakai susunan baris yang sama supaya transisi
+                  // loading → data tak menggeser posisi kartu di mata kasir.
+                  child: ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
@@ -856,11 +856,11 @@ class KasirPage extends HookConsumerWidget {
                       horizontalPad,
                       isTablet ? 24 : 100,
                     ),
-                    crossAxisCount: gridCols,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    itemCount: gridCols * 2,
-                    itemBuilder: (_, _) => ProductCard(product: dummy),
+                    itemCount: 2,
+                    itemBuilder: (_, _) => BarisProduk(
+                      produk: List.filled(gridCols, dummy),
+                      kolom: gridCols,
+                    ),
                   ),
                 ),
               );

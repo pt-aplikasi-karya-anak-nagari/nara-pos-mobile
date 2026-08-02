@@ -24,7 +24,22 @@ import '../../../access_rights/data/access_rights_repository.dart';
 
 class ProductCard extends HookConsumerWidget {
   final Product product;
-  const ProductCard({super.key, required this.product});
+
+  /// Lebar kartu ini dalam dp, diberitahu dari luar oleh [BarisProduk].
+  ///
+  /// # KENAPA DIOPER, BUKAN DIUKUR SENDIRI
+  ///
+  /// Percobaan pertama memakai LayoutBuilder di dalam kartu. Itu membuat kartu
+  /// ini TAK BISA diukur tinggi intrinsiknya ("LayoutBuilder does not support
+  /// returning intrinsic dimensions") — padahal justru pengukuran itu yang
+  /// dipakai BarisProduk untuk menyamakan tinggi kartu sebaris.
+  ///
+  /// Lebar baris sudah diketahui satu tingkat di atas, jadi menghitungnya di
+  /// sana sekali lalu mengopernya ke tiap kartu lebih murah sekaligus
+  /// menghapus penghalangnya.
+  final double lebarKartu;
+
+  const ProductCard({super.key, required this.product, this.lebarKartu = 150});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -552,7 +567,12 @@ class ProductCard extends HookConsumerWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Column(
-                                  mainAxisSize: MainAxisSize.min,
+                                  // max: kartu mengisi tinggi baris yang sudah ditentukan
+                                  // IntrinsicHeight di BarisProduk. Tinggi barisnya sendiri
+                                  // dihitung dari tinggi INTRINSIK kartu — dan Spacer tak
+                                  // menyumbang tinggi intrinsik, jadi baris tetap seketat
+                                  // isinya.
+                                  mainAxisSize: MainAxisSize.max,
                                   children: [
                                     Text(
                                       'DISKON ${product.discountValue.toStringAsFixed(0)}%',
@@ -663,8 +683,8 @@ class ProductCard extends HookConsumerWidget {
             // Bukan Expanded lagi: kartu ini tak lagi dipaksa mengisi petak
             // grid setinggi kartu terpanjang. Tingginya kini persis setinggi
             // isinya — lihat komentar grid masonry di kasir_page.dart.
-            LayoutBuilder(
-              builder: (context, box) {
+            Builder(
+              builder: (context) {
                 // 150 dp = lebar kartu di ponsel 2 kolom, jadi patokan 1:1.
                 //
                 // Yang dipatok adalah UKURAN HURUF-nya, bukan faktor skalanya.
@@ -673,7 +693,7 @@ class ProductCard extends HookConsumerWidget {
                 // yang dikeluhkan. Ambang bawah adalah sifat ukuran hurufnya
                 // sendiri, jadi di situlah ia harus dipasang.
                 double ukur(double dasar, {required double minimum}) =>
-                    (dasar * box.maxWidth / 150).clamp(minimum, dasar * 1.5);
+                    (dasar * lebarKartu / 150).clamp(minimum, dasar * 1.5);
 
                 final titleSize = ukur(isCompact ? 12.5 : 13.5, minimum: 12.0);
                 final priceSize = ukur(isCompact ? 12.5 : 13.5, minimum: 12.0);
