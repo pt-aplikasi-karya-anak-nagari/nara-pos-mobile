@@ -70,13 +70,23 @@ Future<double> tinggiKartu(
       SingleChildScrollView(
         child: Align(
           alignment: Alignment.topLeft,
+          // IntrinsicHeight seperti di produksi (lihat BarisProduk).
+          //
+          // Kartu ini memakai Spacer untuk menurunkan tombol "+" ke dasarnya,
+          // dan anak ber-flex butuh tinggi TERBATAS. Memasangnya langsung di
+          // dalam area yang bisa digulir — yang tingginya tak terbatas —
+          // melempar "non-zero flex but incoming height constraints are
+          // unbounded". Jadi tesnya harus memberi batas yang sama dengan yang
+          // diberi BarisProduk, atau ia menguji keadaan yang tak pernah ada.
           child: SizedBox(
             width: lebarKartu,
             // lebarKartu dioper eksplisit: sejak IntrinsicHeight dipakai untuk
             // menyamakan tinggi kartu sebaris, kartu ini tak boleh lagi
             // mengukur lebarnya sendiri lewat LayoutBuilder — BarisProduk yang
             // memberitahunya.
-            child: ProductCard(product: produk(nama), lebarKartu: lebarKartu),
+            child: IntrinsicHeight(
+              child: ProductCard(product: produk(nama), lebarKartu: lebarKartu),
+            ),
           ),
         ),
       ),
@@ -232,9 +242,11 @@ void main() {
           alignment: Alignment.topLeft,
           child: SizedBox(
             width: 130,
-            child: ProductCard(
-              product: produk('Kopi', harga: 1500000),
-              lebarKartu: 130,
+            child: IntrinsicHeight(
+              child: ProductCard(
+                product: produk('Kopi', harga: 1500000),
+                lebarKartu: 130,
+              ),
             ),
           ),
         ),

@@ -567,12 +567,7 @@ class ProductCard extends HookConsumerWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Column(
-                                  // max: kartu mengisi tinggi baris yang sudah ditentukan
-                                  // IntrinsicHeight di BarisProduk. Tinggi barisnya sendiri
-                                  // dihitung dari tinggi INTRINSIK kartu — dan Spacer tak
-                                  // menyumbang tinggi intrinsik, jadi baris tetap seketat
-                                  // isinya.
-                                  mainAxisSize: MainAxisSize.max,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       'DISKON ${product.discountValue.toStringAsFixed(0)}%',
@@ -680,156 +675,192 @@ class ProductCard extends HookConsumerWidget {
                 ),
               ],
             ),
-            // Bukan Expanded lagi: kartu ini tak lagi dipaksa mengisi petak
-            // grid setinggi kartu terpanjang. Tingginya kini persis setinggi
-            // isinya — lihat komentar grid masonry di kasir_page.dart.
-            Builder(
-              builder: (context) {
-                // 150 dp = lebar kartu di ponsel 2 kolom, jadi patokan 1:1.
-                //
-                // Yang dipatok adalah UKURAN HURUF-nya, bukan faktor skalanya.
-                // Memaku faktor skala di 0,85 tetap menghasilkan huruf 10,2 dp
-                // pada grid 5 kolom — masih di bawah ambang baca, dan itulah
-                // yang dikeluhkan. Ambang bawah adalah sifat ukuran hurufnya
-                // sendiri, jadi di situlah ia harus dipasang.
-                double ukur(double dasar, {required double minimum}) =>
-                    (dasar * lebarKartu / 150).clamp(minimum, dasar * 1.5);
+            // Expanded — dan ini WAJIB, bukan hiasan.
+            //
+            // Column memberi anaknya tinggi TAK TERBATAS. Kolom isi di bawah
+            // memakai Spacer (agar tombol "+" turun ke dasar kartu), dan anak
+            // ber-flex di dalam tinggi tak terbatas melempar "RenderFlex
+            // children have non-zero flex but incoming height constraints are
+            // unbounded" — kartunya tak terender sama sekali.
+            //
+            // Expanded memberinya sisa tinggi kartu yang terbatas, sehingga
+            // Spacer punya ruang untuk dibagi. Tinggi kartunya sendiri tetap
+            // ditentukan IntrinsicHeight di BarisProduk.
+            Expanded(
+              child: Builder(
+                builder: (context) {
+                  // 150 dp = lebar kartu di ponsel 2 kolom, jadi patokan 1:1.
+                  //
+                  // Yang dipatok adalah UKURAN HURUF-nya, bukan faktor skalanya.
+                  // Memaku faktor skala di 0,85 tetap menghasilkan huruf 10,2 dp
+                  // pada grid 5 kolom — masih di bawah ambang baca, dan itulah
+                  // yang dikeluhkan. Ambang bawah adalah sifat ukuran hurufnya
+                  // sendiri, jadi di situlah ia harus dipasang.
+                  double ukur(double dasar, {required double minimum}) =>
+                      (dasar * lebarKartu / 150).clamp(minimum, dasar * 1.5);
 
-                final titleSize = ukur(isCompact ? 12.5 : 13.5, minimum: 12.0);
-                final priceSize = ukur(isCompact ? 12.5 : 13.5, minimum: 12.0);
-                // Kategori sengaja berambang lebih rendah: ia keterangan
-                // pendamping. Ambang setinggi judul akan membuat keduanya
-                // seukuran, dan hierarki bacanya hilang.
-                final kategoriSize = ukur(isCompact ? 9.0 : 10.0, minimum: 9.0);
-                final qtySize = ukur(isCompact ? 12.5 : 13.5, minimum: 12.0);
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    isCompact ? 8 : 10,
-                    isCompact ? 6 : 8,
-                    isCompact ? 8 : 10,
-                    isCompact ? 6 : 8,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Sampai 5 baris. Sebelumnya 1 baris + elipsis: dua produk
-                      // yang berbeda hanya pada kata terakhir tampil dengan teks
-                      // yang persis sama, dan kasir memilih yang salah tanpa cara
-                      // untuk tahu.
-                      Text(
-                        product.name,
-                        style: TextStyle(
-                          fontSize: titleSize,
-                          fontWeight: FontWeight.w600,
-                          color: kTextDark,
-                          height: 1.15,
-                        ),
-                        maxLines: 5,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if ((mainCategory == 'Semua' ||
-                              mainCategory == 'Favorit') &&
-                          product.categoryName != null) ...[
-                        const Gap(1),
+                  final titleSize = ukur(
+                    isCompact ? 12.5 : 13.5,
+                    minimum: 12.0,
+                  );
+                  final priceSize = ukur(
+                    isCompact ? 12.5 : 13.5,
+                    minimum: 12.0,
+                  );
+                  // Kategori sengaja berambang lebih rendah: ia keterangan
+                  // pendamping. Ambang setinggi judul akan membuat keduanya
+                  // seukuran, dan hierarki bacanya hilang.
+                  final kategoriSize = ukur(
+                    isCompact ? 9.0 : 10.0,
+                    minimum: 9.0,
+                  );
+                  final qtySize = ukur(isCompact ? 12.5 : 13.5, minimum: 12.0);
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      isCompact ? 8 : 10,
+                      isCompact ? 6 : 8,
+                      isCompact ? 8 : 10,
+                      isCompact ? 6 : 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      // mainAxisSize di sini sebenarnya TIDAK menentukan apa
+                      // pun: Expanded di atas sudah memberi tinggi yang ketat,
+                      // jadi kolom ini mengisinya entah min entah max. Suntikan
+                      // yang menggantinya jadi min lolos dari seluruh tes — dan
+                      // memang seharusnya begitu.
+                      //
+                      // Yang benar-benar menyejajarkan tombol "+" ada tiga, dan
+                      // ketiganya wajib: IntrinsicHeight di BarisProduk (semua
+                      // kartu sebaris setinggi sama), Expanded di atas (memberi
+                      // Spacer tinggi terbatas untuk dibagi), dan Spacer di
+                      // bawah (mendorong tombol ke dasar kartu).
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        // Sampai 5 baris. Sebelumnya 1 baris + elipsis: dua produk
+                        // yang berbeda hanya pada kata terakhir tampil dengan teks
+                        // yang persis sama, dan kasir memilih yang salah tanpa cara
+                        // untuk tahu.
                         Text(
-                          product.categoryName!.toUpperCase(),
+                          product.name,
                           style: TextStyle(
-                            fontSize: kategoriSize,
-                            color: kPrimary.withValues(alpha: 0.8),
+                            fontSize: titleSize,
+                            fontWeight: FontWeight.w600,
+                            color: kTextDark,
+                            height: 1.15,
+                          ),
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if ((mainCategory == 'Semua' ||
+                                mainCategory == 'Favorit') &&
+                            product.categoryName != null) ...[
+                          const Gap(1),
+                          Text(
+                            product.categoryName!.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: kategoriSize,
+                              color: kPrimary.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const Gap(2),
+                        Text(
+                          formatRupiah(product.discountedPrice),
+                          style: TextStyle(
+                            fontSize: priceSize,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+                            color: kPrimary,
+                            height: 1.1,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                      const Gap(2),
-                      Text(
-                        formatRupiah(product.discountedPrice),
-                        style: TextStyle(
-                          fontSize: priceSize,
-                          fontWeight: FontWeight.w700,
-                          color: kPrimary,
-                          height: 1.1,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
 
-                      // Jarak tetap, bukan Spacer.
-                      //
-                      // Spacer menuntut sisa ruang untuk dibagi — dan sisa ruang
-                      // itulah yang dulu jadi lubang kosong di kartu bernama
-                      // pendek, karena semua kartu dipaksa setinggi yang
-                      // terpanjang. Sekarang kartunya setinggi isinya, jadi tak
-                      // ada sisa untuk dibagi dan Spacer justru membuatnya
-                      // meluber.
-                      const Gap(8),
-                      if (!inCart || hasVariants)
-                        SizedBox(
-                          width: double.infinity,
-                          height: 30,
-                          child: ElevatedButton(
-                            onPressed: canAddMore ? addDirect : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kPrimary,
-                              disabledBackgroundColor: kTextMid.withValues(
-                                alpha: 0.3,
+                        // Spacer — dan artinya kini BERBEDA dari dulu.
+                        //
+                        // Waktu semua kartu dipaksa setinggi kartu terpanjang di
+                        // SELURUH menu, Spacer melahirkan lubang menganggur.
+                        // Sekarang tingginya ditentukan per BARIS, jadi sisa
+                        // ruangnya paling banyak sebesar selisih terhadap
+                        // tetangga di baris yang sama — dan Spacer memakainya
+                        // untuk menurunkan tombol "+" ke dasar kartu.
+                        //
+                        // Itulah yang membuat tombol "+" sejajar antarkartu.
+                        // Tanpa ini, isi kartu menumpuk di atas dan tiap tombol
+                        // berhenti tepat di bawah harganya — tinggi berbeda-beda
+                        // mengikuti berapa baris nama produknya.
+                        const Gap(8),
+                        const Spacer(),
+                        if (!inCart || hasVariants)
+                          SizedBox(
+                            width: double.infinity,
+                            height: 30,
+                            child: ElevatedButton(
+                              onPressed: canAddMore ? addDirect : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kPrimary,
+                                disabledBackgroundColor: kTextMid.withValues(
+                                  alpha: 0.3,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: EdgeInsets.zero,
+                                elevation: 0,
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                              child: HugeIcon(
+                                icon: AppIcons.add,
+                                color: canAddMore
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.7),
+                                size: 18,
                               ),
-                              padding: EdgeInsets.zero,
-                              elevation: 0,
                             ),
-                            child: HugeIcon(
-                              icon: AppIcons.add,
-                              color: canAddMore
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.7),
-                              size: 18,
-                            ),
-                          ),
-                        )
-                      else
-                        SizedBox(
-                          height: 30,
-                          child: Row(
-                            children: [
-                              QtyButton(
-                                icon: AppIcons.remove,
-                                // C4: kurangi baris terakhir produk ini (kontrol
-                                // kasar di grid; presisi di panel keranjang).
-                                onTap: () => cart.decrementLastOf(product),
-                                primary: false,
-                              ),
-                              Expanded(
-                                child: Center(
-                                  child: Text(
-                                    '$qty',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: qtySize,
-                                      color: kPrimary,
+                          )
+                        else
+                          SizedBox(
+                            height: 30,
+                            child: Row(
+                              children: [
+                                QtyButton(
+                                  icon: AppIcons.remove,
+                                  // C4: kurangi baris terakhir produk ini (kontrol
+                                  // kasar di grid; presisi di panel keranjang).
+                                  onTap: () => cart.decrementLastOf(product),
+                                  primary: false,
+                                ),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      '$qty',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: qtySize,
+                                        color: kPrimary,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              QtyButton(
-                                icon: AppIcons.add,
-                                // C4: lewat addDirect → produk bermodifier membuka
-                                // sheet (bukan menambah baris polos hantu).
-                                onTap: canAddMore ? () => addDirect() : null,
-                                primary: true,
-                              ),
-                            ],
+                                QtyButton(
+                                  icon: AppIcons.add,
+                                  // C4: lewat addDirect → produk bermodifier membuka
+                                  // sheet (bukan menambah baris polos hantu).
+                                  onTap: canAddMore ? () => addDirect() : null,
+                                  primary: true,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                );
-              },
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),

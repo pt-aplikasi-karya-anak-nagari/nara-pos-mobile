@@ -157,6 +157,79 @@ void main() {
     });
   });
 
+  group('tombol "+" sejajar', () {
+    // Ini yang dilaporkan setelah barisnya sejajar: kartunya memang setinggi
+    // sama, tapi ISINYA menumpuk di atas — tiap tombol berhenti tepat di bawah
+    // harganya, jadi tingginya berbeda-beda mengikuti berapa baris nama
+    // produknya.
+    //
+    // Rangkaian tes sebelumnya TIDAK menangkap ini: ia mengukur kotak KARTU,
+    // dan kartunya memang sudah sejajar. Yang tak diukur siapa pun adalah
+    // posisi tombol di dalamnya.
+
+    Rect kotakTombol(WidgetTester tester, int ke) {
+      final tombol = find.byType(ElevatedButton);
+      return tester.getRect(tombol.at(ke));
+    }
+
+    testWidgets('tombol sejajar walau nama produknya beda jumlah baris',
+        (tester) async {
+      await pasangBaris(
+        tester,
+        nama: [pendek, panjang, pendek, panjang],
+        kolom: 4,
+        lebar: 900,
+      );
+
+      final atas = List.generate(4, (i) => kotakTombol(tester, i).top);
+      for (final t in atas.skip(1)) {
+        expect(t, moreOrLessEquals(atas.first, epsilon: 0.5),
+            reason: 'tombol "+" tidak sejajar: $atas — kartunya sejajar tapi '
+                'isinya menumpuk di atas');
+      }
+    });
+
+    testWidgets('tombol menempel ke DASAR kartu, bukan menggantung di tengah',
+        (tester) async {
+      await pasangBaris(
+        tester,
+        nama: [pendek, panjang, pendek],
+        kolom: 3,
+        lebar: 700,
+      );
+
+      final kartu = kotakKartu(tester);
+      for (var i = 0; i < 3; i++) {
+        final sisa = kartu[i].bottom - kotakTombol(tester, i).bottom;
+        expect(sisa, lessThan(16.0),
+            reason: 'ada $sisa dp menganggur di bawah tombol kartu ke-$i — '
+                'tombolnya menggantung, bukan menempel ke dasar');
+      }
+    });
+
+    testWidgets('tombol tetap sejajar di baris tak genap', (tester) async {
+      await pasangBaris(tester, nama: [panjang, pendek], kolom: 4, lebar: 900);
+      final a = kotakTombol(tester, 0).top;
+      final b = kotakTombol(tester, 1).top;
+      expect(b, moreOrLessEquals(a, epsilon: 0.5));
+    });
+
+    testWidgets('semua tombol berukuran sama', (tester) async {
+      // Tombol yang tingginya ikut melar akan tampak berbeda-beda walau
+      // tepinya sejajar.
+      await pasangBaris(
+        tester,
+        nama: [pendek, panjang, pendek],
+        kolom: 3,
+        lebar: 700,
+      );
+      final ukuran = List.generate(3, (i) => kotakTombol(tester, i).size);
+      for (final u in ukuran.skip(1)) {
+        expect(u.height, moreOrLessEquals(ukuran.first.height, epsilon: 0.5));
+      }
+    });
+  });
+
   group('tinggi baris ditentukan baris itu sendiri', () {
     testWidgets('baris berisi nama pendek saja LEBIH RENDAH daripada baris '
         'yang memuat nama panjang', (tester) async {
