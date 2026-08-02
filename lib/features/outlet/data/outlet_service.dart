@@ -396,6 +396,22 @@ class OutletService extends BaseApiService {
     await patch<void>(ApiEndpoint.paymentMethodDefault(id));
   }
 
+  /// Minta server menyuntikkan [nominal] ke QRIS statis outlet.
+  ///
+  /// Mengembalikan payload siap-gambar beserta nominal yang BENAR-BENAR ada di
+  /// dalamnya — QRIS hanya membawa rupiah bulat, jadi keduanya bisa berbeda dan
+  /// yang ditampilkan ke pelanggan harus angka dari server, bukan total kasir.
+  Future<Map<String, dynamic>> buatQrisDinamis(
+    String paymentMethodId,
+    double nominal,
+  ) async {
+    return post<Map<String, dynamic>>(
+      ApiEndpoint.paymentMethodQrisDinamis(paymentMethodId),
+      data: {'amount': nominal},
+      converter: (res) => Map<String, dynamic>.from(res as Map),
+    );
+  }
+
   // Ringkasan agregat untuk dashboard owner — total, active, by_type,
   // default_id. Sama struktur dengan response backend Summary().
   Future<Map<String, dynamic>> getPaymentMethodsSummary(String outletId) async {

@@ -63,3 +63,49 @@ final paymentMethodsFutureProvider = FutureProvider<List<PaymentMethod>>((ref) a
   if (outletId == null) return [];
   return ref.watch(paymentMethodRepositoryProvider).getAll(outletId);
 });
+
+/// Kunci permintaan QRIS dinamis: metode bayar mana, nominal berapa.
+///
+/// Butuh == dan hashCode sendiri supaya provider family men-cache per
+/// (metode, nominal). Tanpa itu setiap rebuild layar bayar — dan layar itu
+/// dibangun ulang tiap kali kasir mengetik — menembak server lagi.
+class KunciQrisDinamis {
+  final String paymentMethodId;
+  final double nominal;
+
+  const KunciQrisDinamis(this.paymentMethodId, this.nominal);
+
+  @override
+  bool operator ==(Object other) =>
+      other is KunciQrisDinamis &&
+      other.paymentMethodId == paymentMethodId &&
+      other.nominal == nominal;
+
+  @override
+  int get hashCode => Object.hash(paymentMethodId, nominal);
+}
+
+/// QRIS bernominal untuk satu transaksi, disusun server.
+///
+/// # KENAPA SERVER YANG MENYUSUN
+///
+/// Payload hasilnya menentukan ke rekening mana uang pelanggan mengalir.
+/// Aturan pembentukannya (urutan tag EMVCo, checksum CRC-16) harus hidup di
+/// SATU tempat yang bisa diuji dan diperbaiki tanpa menunggu setiap tablet
+/// memperbarui aplikasinya.
+///
+/// # KENAPA GAGALNYA TIDAK DISEMBUNYIKAN
+///
+/// Pemanggil menangani `error` secara khusus: ia kembali ke QRIS STATIS milik
+/// outlet dan mengatakan terus terang bahwa nominalnya harus diketik pelanggan.
+/// Itu jauh lebih baik daripada layar bayar yang kosong — QRIS statis tetap
+/// menerima uang, hanya kurang nyaman.
+final qrisDinamisProvider =
+    FutureProvider.family<Map<String, dynamic>, KunciQrisDinamis>((
+  ref,
+  kunci,
+) async {
+  return ref
+      .read(outletServiceProvider)
+      .buatQrisDinamis(kunci.paymentMethodId, kunci.nominal);
+});

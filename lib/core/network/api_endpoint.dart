@@ -92,6 +92,11 @@ class ApiEndpoint {
   static String paymentMethodDefault(String id) =>
       '/payment-methods/$id/default';
 
+  /// QRIS statis outlet → QRIS bernominal untuk satu transaksi. Server yang
+  /// menyusun payload-nya; aplikasi ini hanya menggambar teks yang diterima.
+  static String paymentMethodQrisDinamis(String id) =>
+      '/payment-methods/$id/qris-dinamis';
+
   // Receipt branding settings — pindah dari SharedPreferences ke
   // backend supaya owner web bisa atur + multi-device kasir konsisten.
   static String outletReceiptSettings(String outletId) =>

@@ -1392,41 +1392,9 @@ class PaymentSheet extends HookConsumerWidget {
                     selectedPM.qrData!.isNotEmpty) ...[
                   const Gap(20),
                   Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: kDivider),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Scan QRIS untuk Bayar',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                              color: kTextMid,
-                            ),
-                          ),
-                          const Gap(8),
-                          Text(
-                            formatRupiah(total),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 22,
-                              color: kPrimary,
-                            ),
-                          ),
-                          const Gap(16),
-                          BarcodeWidget(
-                            barcode: Barcode.qrCode(),
-                            data: selectedPM.qrData!,
-                            width: 180,
-                            height: 180,
-                          ),
-                        ],
-                      ),
+                    child: KartuQris(
+                      metode: selectedPM,
+                      nominal: total,
                     ),
                   ),
                 ] else if (selectedPM.type == 'transfer' &&
@@ -1980,4 +1948,141 @@ String _fmtMult(double m) {
     s = s.substring(0, s.length - 1);
   }
   return s;
+}
+
+/// Kartu QRIS di layar bayar.
+///
+/// # APA YANG BERUBAH
+///
+/// Sebelumnya kartu ini menggambar QRIS STATIS milik outlet apa adanya, dengan
+/// nominal ditulis sebagai TEKS di atasnya. Pelanggan memindai, lalu harus
+/// mengetik sendiri angka yang ia baca di layar — dan salah ketik satu digit
+/// baru ketahuan saat rekonsiliasi kas, kalau ketahuan.
+///
+/// Sekarang nominalnya disuntikkan ke dalam payload QRIS-nya oleh server, jadi
+/// yang terpindai sudah membawa angkanya.
+///
+/// # KENAPA ANGKA YANG DITAMPILKAN DATANG DARI SERVER
+///
+/// QRIS hanya membawa rupiah bulat. Total Rp11.000,40 jadi Rp11.000 di dalam
+/// kode. Kalau kartu ini menampilkan totalnya sendiri, layar dan QR menyebut
+/// dua angka berbeda — dan yang membayar tak punya cara tahu mana yang benar.
+/// Karena itu yang ditampilkan adalah `amount` dari respons, bukan [nominal].
+///
+/// # KENAPA GAGALNYA TIDAK DISEMBUNYIKAN
+///
+/// Bila server tak terjangkau, kartu ini KEMBALI ke QRIS statis dan mengatakan
+/// terus terang bahwa nominalnya harus diketik pelanggan. QRIS statis tetap
+/// menerima uang — hanya kurang nyaman. Layar bayar yang kosong, atau QR statis
+/// yang berpura-pura dinamis, jauh lebih mahal: yang pertama menghentikan
+/// antrean, yang kedua membuat kasir mengira nominalnya sudah terkunci padahal
+/// pelanggan bebas mengetik angka lain.
+class KartuQris extends ConsumerWidget {
+  final PaymentMethod metode;
+  final double nominal;
+
+  const KartuQris({super.key, required this.metode, required this.nominal});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // id kosong → metode ini belum pernah sinkron ke server (mis. dibuat
+    // offline), jadi tak ada yang bisa diminta. Langsung pakai yang statis.
+    final id = metode.id;
+    final dinamis = id.isEmpty
+        ? null
+        : ref.watch(qrisDinamisProvider(KunciQrisDinamis(id, nominal)));
+
+    final data = dinamis?.asData?.value;
+    final gagal = dinamis?.hasError ?? true;
+    final memuat = dinamis?.isLoading ?? false;
+
+    final payload = (data?['qr_data'] as String?) ?? metode.qrData!;
+    final terkunci = data != null;
+    final tampilNominal = (data?['amount'] as num?)?.toDouble() ?? nominal;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kDivider),
+      ),
+      child: Column(
+        children: [
+          Text(
+            terkunci ? 'Scan & Bayar — nominal sudah terisi' : 'Scan QRIS untuk Bayar',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: kTextMid,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const Gap(8),
+          Text(
+            formatRupiah(tampilNominal),
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              color: kPrimary,
+            ),
+          ),
+          const Gap(16),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              // QR-nya tetap tergambar selama memuat, hanya diredupkan. Kalau
+              // ia hilang lalu muncul lagi, kasir yang sudah mengarahkan ponsel
+              // pelanggan ke layar harus mengulang.
+              Opacity(
+                opacity: memuat ? 0.25 : 1,
+                child: BarcodeWidget(
+                  barcode: Barcode.qrCode(),
+                  data: payload,
+                  width: 180,
+                  height: 180,
+                ),
+              ),
+              if (memuat)
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+            ],
+          ),
+          if (gagal && !memuat) ...[
+            const Gap(12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: kWarning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HugeIcon(icon: AppIcons.alertCircle, size: 14, color: kWarning),
+                  const Gap(6),
+                  Flexible(
+                    child: Text(
+                      'Nominal belum masuk ke QR — minta pelanggan '
+                      'mengetik ${formatRupiah(nominal)} sendiri.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                        color: kWarning,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
