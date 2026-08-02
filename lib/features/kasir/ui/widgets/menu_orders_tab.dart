@@ -11,6 +11,7 @@ import '../../../shifts/data/shift_repository.dart';
 import '../../../transactions/data/transaction_repository.dart';
 import '../../../transactions/domain/sale.dart';
 import '../../../transactions/ui/widgets/mini_payment_sheet.dart';
+import 'dialog_bukti_qris.dart';
 import 'empty_states.dart';
 import '../../../../shared/widgets/sheet_bawah.dart';
 
@@ -157,9 +158,7 @@ class _MenuOrderCard extends ConsumerWidget {
   // Pesanan QR sudah lunas (bayar QRIS di depan) → kasir cukup MENGKONFIRMASI.
   Future<void> _confirm(BuildContext context, WidgetRef ref) async {
     try {
-      await ref
-          .read(transactionRepositoryProvider)
-          .confirmMenuOrder(order.id);
+      await ref.read(transactionRepositoryProvider).confirmMenuOrder(order.id);
       ref.invalidate(menuOrdersProvider);
       ref.invalidate(salesFutureProvider);
       if (context.mounted) {
@@ -195,48 +194,62 @@ class _MenuOrderCard extends ConsumerWidget {
 
     final hasProof = (order.paymentProofUrl ?? '').isNotEmpty;
     if (hasProof) {
-      // Bukti sudah dilampirkan customer (metode dipilih saat checkout) → kasir
-      // cukup MENERIMA. Jangan buka sheet baru yang mengganti metode & membuang
-      // bukti aslinya. Konfirmasi ringan supaya tap tak langsung commit.
-      final ok = await showDialog<bool>(
+      // Pelanggan sudah membayar (QRIS) dan melampirkan bukti. Kasir TIDAK
+      // memilih metode apa pun — pembayarannya sudah terjadi. Dialog ini
+      // menampilkan buktinya langsung (dulu hanya teks metode+total, jadi
+      // kasir mengonfirmasi tanpa pernah melihat buktinya) dengan dua
+      // keputusan: konfirmasi, atau tolak supaya pelanggan upload ulang.
+      final aksi = await showDialog<AksiBukti>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text(
-            'Terima & Lunaskan?',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          content: Text(
-            'Metode: ${order.paymentMethod}\nTotal: ${formatRupiah(order.total)}',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kSuccess,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Terima & Lunaskan'),
-            ),
-          ],
+        builder: (_) => DialogBuktiQris(
+          urlBukti: resolveAssetUrl(order.paymentProofUrl),
+          metode: order.paymentMethod.isEmpty ? 'QRIS' : order.paymentMethod,
+          total: order.total,
         ),
       );
-      if (ok != true) return;
-      method = order.paymentMethod;
+      if (aksi == null) return;
+      if (aksi == AksiBukti.tolak) {
+        try {
+          await ref
+              .read(transactionRepositoryProvider)
+              .rejectPaymentProof(order.id);
+          ref.invalidate(menuOrdersProvider);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Bukti ${order.invoiceId} ditolak — pelanggan diminta '
+                  'upload ulang',
+                ),
+                backgroundColor: kWarning,
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Gagal menolak bukti: $e'),
+                backgroundColor: kDanger,
+              ),
+            );
+          }
+        }
+        return;
+      }
+      method = order.paymentMethod.isEmpty ? 'QRIS' : order.paymentMethod;
       proofUrl = order.paymentProofUrl;
     } else {
       // Open-bill / tanpa bukti → sheet untuk pilih metode & input tunai.
       final result =
-          await tampilkanSheetBawah<({String method, double cash, String proofUrl})>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => MiniPaymentSheet(total: order.total),
-      );
+          await tampilkanSheetBawah<
+            ({String method, double cash, String proofUrl})
+          >(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => MiniPaymentSheet(total: order.total),
+          );
       if (result == null) return;
       method = result.method;
       cashAmount = result.method == 'Tunai' ? result.cash : 0.0;
@@ -246,7 +259,9 @@ class _MenuOrderCard extends ConsumerWidget {
       proofUrl = result.proofUrl.isEmpty ? null : result.proofUrl;
     }
     try {
-      await ref.read(transactionRepositoryProvider).markAsPaid(
+      await ref
+          .read(transactionRepositoryProvider)
+          .markAsPaid(
             order.id,
             paymentMethod: method,
             cashAmount: cashAmount,
@@ -493,10 +508,18 @@ class _MenuOrderCard extends ConsumerWidget {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () => _settle(context, ref),
-                icon: const Icon(Icons.payments_outlined, size: 16),
-                label: const Text(
-                  'Tandai Lunas',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                icon: Icon(
+                  hasProof ? Icons.verified_outlined : Icons.payments_outlined,
+                  size: 16,
+                ),
+                // Dengan bukti terlampir, pekerjaannya BUKAN menagih —
+                // uangnya sudah pindah. Label harus mengatakan itu.
+                label: Text(
+                  hasProof ? 'Konfirmasi Pembayaran' : 'Tandai Lunas',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kSuccess,
