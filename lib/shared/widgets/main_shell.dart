@@ -14,7 +14,7 @@ import '../../features/profil/data/profil_state.dart';
 import '../../features/user/data/auth_service.dart';
 import '../../features/user/domain/user_role.dart';
 
-class _NavItem {
+class NavItem {
   final IconAsset icon;
   final String labelKey;
   final int branch;
@@ -22,7 +22,7 @@ class _NavItem {
   /// Opsional. Bila di-set, badge angka muncul di sudut kanan-atas icon —
   /// di-watch reactive lewat WidgetRef. Return 0 = badge hidden.
   final int Function(WidgetRef ref)? badgeBuilder;
-  const _NavItem({
+  const NavItem({
     required this.icon,
     required this.labelKey,
     this.branch = -1,
@@ -30,38 +30,61 @@ class _NavItem {
   });
 }
 
+/// Indeks branch tiap tab, HARUS sama dengan urutan StatefulShellBranch di
+/// app/router.dart.
+///
+/// # KENAPA KONSTANTA, BUKAN ANGKA DI TEMPATNYA
+///
+/// Angkanya muncul di dua tempat — daftar tab di bawah dan pemeriksaan di
+/// _onTap — dan pernah menyimpang: tab Profil menunjuk branch 4 sementara
+/// router hanya punya branch 0..3. goBranch(4) di luar jangkauan, jadi menekan
+/// Profil tidak melakukan apa-apa. Sorotan tab pun ikut salah: currentBranch 3
+/// tak cocok dengan item mana pun, indexWhere mengembalikan -1, dan jatuh ke
+/// tab Kasir.
+///
+/// Tak satu pun dari keduanya menimbulkan galat yang terlihat.
+const int branchKasir = 0;
+const int branchRiwayat = 1;
+const int branchNotifikasi = 2;
+const int branchProfil = 3;
+
+/// Tab yang tampil di bilah bawah, berurutan.
+///
+/// Berada di tingkat atas supaya bisa diperiksa tes tanpa membangun MainShell
+/// beserta seluruh pohon widget-nya.
+List<NavItem> navItemsUtama(UserRole role) {
+  return [
+    const NavItem(
+      icon: AppIcons.storefront,
+      labelKey: 'nav.kasir',
+      branch: branchKasir,
+    ),
+    const NavItem(
+      icon: AppIcons.receiptLong,
+      labelKey: 'nav.riwayat',
+      branch: branchRiwayat,
+    ),
+    NavItem(
+      icon: AppIcons.notification,
+      labelKey: 'nav.notifikasi',
+      branch: branchNotifikasi,
+      badgeBuilder: (ref) => ref.watch(unreadNotificationCountProvider),
+    ),
+    const NavItem(
+      icon: AppIcons.person,
+      labelKey: 'nav.profil',
+      branch: branchProfil,
+    ),
+  ];
+}
+
 class MainShell extends HookConsumerWidget {
   final StatefulNavigationShell navigationShell;
   const MainShell({super.key, required this.navigationShell});
 
-  List<_NavItem> _getVisibleItems(UserRole role) {
-    return [
-      const _NavItem(
-        icon: AppIcons.storefront,
-        labelKey: 'nav.kasir',
-        branch: 0,
-      ),
-      const _NavItem(
-        icon: AppIcons.receiptLong,
-        labelKey: 'nav.riwayat',
-        branch: 1,
-      ),
-      _NavItem(
-        icon: AppIcons.notification,
-        labelKey: 'nav.notifikasi',
-        branch: 2,
-        badgeBuilder: (ref) => ref.watch(unreadNotificationCountProvider),
-      ),
-      const _NavItem(icon: AppIcons.person, labelKey: 'nav.profil', branch: 4),
-    ];
-  }
+  List<NavItem> _getVisibleItems(UserRole role) => navItemsUtama(role);
 
-  // Branch index untuk tab Profil (geser dari 3 setelah Notifikasi disisipkan
-  // di branch 2). Disimpan const supaya kalau order tab berubah lagi nanti,
-  // ada satu titik tunggal yang harus di-update.
-  static const int _profileBranchIndex = 3;
-
-  void _onTap(int visualIndex, List<_NavItem> items, WidgetRef ref) {
+  void _onTap(int visualIndex, List<NavItem> items, WidgetRef ref) {
     final item = items[visualIndex];
     final branch = item.branch;
 
@@ -69,7 +92,7 @@ class MainShell extends HookConsumerWidget {
     // mulai dari menu utama, bukan submenu terakhir) maupun keluar
     // (supaya saat kembali, fresh state). Selalu reset, jadi logika
     // if-else di sini cuma untuk dokumentasi maksud.
-    if (branch == _profileBranchIndex) {
+    if (branch == branchProfil) {
       ref.read(selectedProfileMenuProvider.notifier).state = null;
     } else {
       ref.read(selectedProfileMenuProvider.notifier).state = null;
@@ -284,7 +307,7 @@ class MainShell extends HookConsumerWidget {
 /// ConsumerWidget supaya `ref.watch` hanya men-trigger rebuild di sub-tree
 /// icon — bukan entire MainShell (yang besar & punya animation controller).
 class _NavIconWithBadge extends ConsumerWidget {
-  final _NavItem item;
+  final NavItem item;
   final bool active;
   const _NavIconWithBadge({required this.item, required this.active});
 
