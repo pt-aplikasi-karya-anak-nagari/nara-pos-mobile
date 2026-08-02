@@ -24,6 +24,19 @@ class CartModifier {
         'name': name,
         'price': price,
       };
+
+  /// Kebalikan toCheckoutJson — dipakai memulihkan add-on dari draft.
+  ///
+  /// Bentuk JSON-nya sengaja SAMA dengan yang dikirim ke server. Memakai dua
+  /// bentuk berbeda untuk hal yang sama membuat keduanya menyimpang diam-diam,
+  /// dan yang menyimpang di sini adalah harga.
+  factory CartModifier.fromJson(Map<String, dynamic> json) => CartModifier(
+        groupId: json['group_id'] as String? ?? '',
+        groupName: json['group_name'] as String? ?? '',
+        optionId: json['option_id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        price: (json['price'] as num? ?? 0).toDouble(),
+      );
 }
 
 class CartItem {

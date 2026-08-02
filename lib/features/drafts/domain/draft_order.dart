@@ -1,4 +1,5 @@
 import '../../products/domain/product.dart';
+import '../../kasir/domain/cart_item.dart';
 
 class DraftCartItem {
   final Map<String, dynamic> productSnapshot;
@@ -19,6 +20,18 @@ class DraftCartItem {
   final String manualDiscountType;
   final double manualDiscountValue;
 
+  /// Add-on/modifier yang dipilih kasir untuk baris ini.
+  ///
+  /// Sebelumnya TIDAK diawetkan sama sekali — bukan hilang sebagian, melainkan
+  /// tak pernah ditulis. Akibatnya setiap pesanan ber-add-on yang pernah
+  /// diparkir ditagih KURANG saat dilanjutkan, tiket dapur tercetak tanpa
+  /// "+ Boba / + Extra Shot", dan laporan penjualan add-on ikut nol.
+  ///
+  /// Yang membuatnya sulit terlihat: kartu draft menampilkan totalAmount yang
+  /// disimpan terpisah dan SUDAH memuat add-on, jadi angka di daftar draft
+  /// tampak benar — barulah setelah dipulihkan keranjangnya menyusut.
+  final List<CartModifier> modifiers;
+
   const DraftCartItem({
     required this.productSnapshot,
     required this.qty,
@@ -31,6 +44,7 @@ class DraftCartItem {
     this.variantDiscountName = '',
     this.manualDiscountType = 'none',
     this.manualDiscountValue = 0,
+    this.modifiers = const [],
   });
 
   Product get product => Product.fromJson(productSnapshot);
@@ -47,6 +61,7 @@ class DraftCartItem {
         'variant_discount_name': variantDiscountName,
         'manual_discount_type': manualDiscountType,
         'manual_discount_value': manualDiscountValue,
+        'modifiers': modifiers.map((m) => m.toCheckoutJson()).toList(),
       };
 
   factory DraftCartItem.fromJson(Map<String, dynamic> json) => DraftCartItem(
@@ -64,6 +79,11 @@ class DraftCartItem {
         manualDiscountType: json['manual_discount_type'] as String? ?? 'none',
         manualDiscountValue:
             (json['manual_discount_value'] as num? ?? 0).toDouble(),
+        // Draft LAMA tak punya kunci ini — dibaca sebagai daftar kosong, yaitu
+        // perilaku sebelumnya. Draft yang sudah tersimpan tetap bisa dibuka.
+        modifiers: ((json['modifiers'] as List?) ?? const [])
+            .map((m) => CartModifier.fromJson(Map<String, dynamic>.from(m as Map)))
+            .toList(),
       );
 }
 

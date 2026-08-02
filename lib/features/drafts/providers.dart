@@ -113,6 +113,7 @@ DraftOrder? buildDraftFromCurrentCart(
       variantDiscountName: c.variantDiscountName,
       manualDiscountType: c.manualDiscountType,
       manualDiscountValue: c.manualDiscountValue,
+      modifiers: c.modifiers,
     );
   }).toList();
 
@@ -165,6 +166,7 @@ void restoreDraftToCart(WidgetRef ref, DraftOrder draft) {
           variantDiscountName: di.variantDiscountName,
           manualDiscountType: di.manualDiscountType,
           manualDiscountValue: di.manualDiscountValue,
+          modifiers: di.modifiers,
         ),
       )
       .toList();
