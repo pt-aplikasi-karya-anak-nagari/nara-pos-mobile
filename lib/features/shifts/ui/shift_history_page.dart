@@ -494,7 +494,20 @@ class _TabletDetailPanel extends ConsumerWidget {
                     ),
                     tooltip: 'Z-Report (Laporan Tutup Shift)',
                   ),
-                if (!s.isOpen)
+                // Tombol cetak DISEMBUNYIKAN selama daftar penjualan belum
+                // terhubung. printShiftReport menghitung seluruh rekap tender
+                // dan TOTAL PENJUALAN dari daftar itu, jadi dengan daftar
+                // kosong ia mencetak nol untuk semua metode bayar — di sebelah
+                // Ekspektasi Kas yang benar.
+                //
+                // Kertas itu dipakai kasir menyerahkan uang ke supervisor.
+                // Dokumen yang menyatakan penjualan nol untuk laci yang berisi
+                // jutaan bukan sekadar tak berguna: ia jadi bukti tertulis yang
+                // salah, dan yang menandatanganinya tak punya cara tahu.
+                //
+                // Z-Report di sebelahnya dihitung SERVER dan tetap tersedia,
+                // jadi kasirnya tidak kehilangan jalan keluar.
+                if (!s.isOpen && shiftSales.isNotEmpty)
                   IconButton(
                     onPressed: () async {
                       final success = await ref
@@ -622,6 +635,20 @@ class _TabletDetailPanel extends ConsumerWidget {
                               ),
                               const Gap(32),
 
+                              // SELURUH rekap di bawah dihitung dari
+                              // `shiftSales`, yang BELUM TERHUBUNG ke server —
+                              // ia selalu kosong. Menampilkannya berarti
+                              // mencetak "Total QRIS Rp0" tepat di sebelah
+                              // Ekspektasi Kas yang BENAR: dua angka yang
+                              // saling bertentangan di dokumen serah-terima
+                              // uang, dan yang membacanya tak punya cara tahu
+                              // mana yang bisa dipercaya.
+                              //
+                              // Lebih baik tak menampilkan apa-apa daripada
+                              // menampilkan nol yang tampak seperti fakta.
+                              // Blok ini kembali sendiri begitu shiftSales
+                              // benar-benar diisi.
+                              if (shiftSales.isNotEmpty) ...[
                               // Non-Cash Summary
                               const _SubHeader(label: 'TRANSAKSI NON-TUNAI'),
                               _AmountRow(
@@ -657,6 +684,7 @@ class _TabletDetailPanel extends ConsumerWidget {
                                 icon: AppIcons.refund,
                                 valueColor: refundCount > 0 ? kDanger : null,
                               ),
+                              ],
                             ] else ...[
                               Center(
                                 child: Padding(

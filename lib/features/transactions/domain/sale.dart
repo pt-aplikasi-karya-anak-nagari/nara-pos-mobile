@@ -285,6 +285,9 @@ class Sale {
           ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ?? DateTime.now()
           : DateTime.now(),
       subtotal: _d(json['subtotal_amount']),
+      // Nilai awal; DITIMPA di bawah begitu items terbaca. Endpoint DAFTAR
+      // transaksi tak mengirim items, dan untuk itu nilai ini tetap dipakai —
+      // di sana strukmya memang tak dicetak.
       originalSubtotal: _d(json['subtotal_amount']),
       tax: _d(json['tax_amount']),
       discountTotal: _d(json['discount_amount']),
@@ -344,6 +347,30 @@ class Sale {
       sale.items = (json['items'] as List)
           .map((e) => SaleItem.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      // originalSubtotal DIREKONSTRUKSI, bukan disalin dari subtotal_amount.
+      //
+      // subtotal_amount dari server SUDAH pasca-diskon baris: kasir
+      // mengirimkannya sebagai Σ effectivePrice × qty. Menyalinnya ke
+      // originalSubtotal membuat struk mencetak angka pasca-diskon di baris
+      // "Subtotal" lalu MENGURANGI diskonnya lagi di baris berikutnya —
+      // penjumlahan yang tak nyambung, dan pelanggan yang menghitung sendiri
+      // tidak akan ketemu.
+      //
+      // Yang membuatnya aneh: struk yang SAMA tercetak berbeda tergantung
+      // koneksi. Jalur luring mengisi field ini dari originalSubtotalProvider
+      // yang memang pra-diskon; hanya jalur daring yang salah. Cetak ulang dari
+      // riwayat ikut terkena, karena ia juga lewat Sale.fromJson.
+      //
+      // Setelah direkonstruksi, aritmetikanya kembali tertutup:
+      //   Subtotal − Diskon + Layanan + Pajak = TOTAL
+      // dan itu berlaku juga untuk mode pajak inclusive, karena subtotal yang
+      // tersimpan di sana sudah NET sementara pajaknya ditambahkan terpisah.
+      final diskonBaris = sale.items.fold<double>(
+        0,
+        (s, it) => s + it.discountAmount,
+      );
+      sale.originalSubtotal = sale.subtotal + diskonBaris;
     }
 
     return sale;

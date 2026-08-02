@@ -43,7 +43,27 @@ class ShiftManagementDialog extends HookConsumerWidget {
     final cashOut = cashMovements
         .where((m) => m['type'] == 'out')
         .fold<double>(0, (s, m) => s + ((m['amount'] as num?)?.toDouble() ?? 0));
-    final expected = isClosing && activeShift != null
+    // totalSales DATANG DARI SERVER (shift_repository.go menghitungnya lewat
+    // subquery). Untuk shift yang dibuka saat LURING, remoteId masih null dan
+    // angkanya 0 — bukan karena tak ada penjualan, melainkan karena servernya
+    // belum pernah tahu shift ini ada.
+    //
+    // Menghitung ekspektasi dari nol itu berarti menyodorkan angka selisih
+    // sebesar SELURUH penjualan shift-nya, tepat pada saat serah terima uang.
+    // Kasir yang laci-nya berisi Rp2.200.000 diberi tahu ia kurang Rp2.000.000,
+    // di depan orang yang sedang menghitung bersamanya.
+    //
+    // Angka yang akhirnya tersimpan di server BENAR (applyClose menghitung
+    // ulang di sana). Yang salah hanya yang ditampilkan — dan justru itu yang
+    // dibaca orang saat menentukan siapa yang bertanggung jawab.
+    //
+    // Yang TIDAK dilakukan: menjumlahkan antrean penjualan luring ke totalSales.
+    // Pada kasus paling umum — shift dibuka luring lalu perangkatnya kembali
+    // daring — penjualannya sudah tersinkron DAN masih tersisa di antrean
+    // sampai antreannya terkuras, sehingga angkanya terhitung dua kali. Menukar
+    // angka yang terlalu kecil dengan angka yang terlalu besar bukan perbaikan.
+    final totalSalesTepercaya = activeShift?.remoteId != null;
+    final expected = isClosing && activeShift != null && totalSalesTepercaya
         ? (activeShift.startingCash + totalSales + cashIn - cashOut)
         : null;
 
@@ -90,6 +110,26 @@ class ShiftManagementDialog extends HookConsumerWidget {
                 style: TextStyle(color: kTextMid, fontSize: 14),
               ),
               const Gap(24),
+              // Shift luring: ekspektasi kas tak bisa dihitung di sini karena
+              // totalSales-nya milik server. Katakan apa adanya, jangan
+              // menghitung dari nol — angka selisih palsu sebesar seluruh
+              // penjualan shift jauh lebih merugikan daripada tak ada angka.
+              if (isClosing && expected == null) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: kWarning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    'Shift ini dibuka saat offline, jadi ekspektasi kas belum '
+                    'bisa dihitung di perangkat. Masukkan saja uang fisik yang '
+                    'Anda hitung — selisihnya dihitung server setelah tersinkron.',
+                    style: TextStyle(color: kTextMid, fontSize: 12, height: 1.4),
+                  ),
+                ),
+                const Gap(20),
+              ],
               if (isClosing && expected != null) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -208,7 +248,23 @@ class ShiftManagementDialog extends HookConsumerWidget {
                                 .close(val, noteCtrl.text);
                             if (context.mounted) {
                               Navigator.pop(context);
-                              _showShiftSummary(context, expected!, val);
+                              // expected bisa NULL untuk shift luring. Memaksa
+                              // membukanya di sini akan crash tepat saat
+                              // menutup shift — momen paling buruk untuk
+                              // aplikasi kasir berhenti, karena uangnya sudah
+                              // dihitung dan dialognya sudah ditutup.
+                              if (expected != null) {
+                                _showShiftSummary(context, expected, val);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Shift ditutup. Ekspektasi kas dihitung server '
+                                      'setelah data tersinkron — cek Riwayat Shift nanti.',
+                                    ),
+                                  ),
+                                );
+                              }
                             }
                           } else {
                             await ref
