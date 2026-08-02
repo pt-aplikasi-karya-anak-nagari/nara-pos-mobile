@@ -67,6 +67,31 @@ class FcmService {
   Future<String?> syncForCurrentUser() async {
     final token = await _safeGetToken();
     if (token == null || token.isEmpty) return null;
+
+    // LISTENER DIPASANG SEBELUM penjaga "sudah tersinkron".
+    //
+    // Dulu ia berada SESUDAHNYA, jadi pada start normal — token tak berubah,
+    // yang merupakan keadaan hampir setiap pagi — fungsinya sudah return
+    // duluan dan listener tak pernah terpasang. Begitu Firebase merotasi
+    // tokennya (reinstall, restore, pembersihan cache), backend tak pernah
+    // diberi tahu.
+    //
+    // Akibatnya notifikasi pesanan baru berhenti muncul TANPA pesan galat apa
+    // pun, dan auto-cetak struk pesanan QR ikut mati karena bergantung pada
+    // pesan foreground. Pesanan menumpuk tak terlihat sampai ada yang kebetulan
+    // membuka daftarnya.
+    //
+    // Tetap SESUDAH null-check di atas: di platform tanpa FCM, token null dan
+    // memasang listener di sana tak ada gunanya.
+    _refreshSub ??= FirebaseMessaging.instance.onTokenRefresh.listen((t) async {
+      try {
+        await _api.register(token: t, platform: _platformLabel());
+        await _prefs.setString(_lastRegisteredKey, t);
+      } catch (_) {
+        // ignore; akan dicoba ulang saat next sync.
+      }
+    });
+
     final last = _prefs.getString(_lastRegisteredKey);
     if (last == token) {
       // Sudah tersinkron — skip request supaya tidak spam endpoint.
@@ -80,16 +105,6 @@ class FcmService {
       // event berikut (token refresh / re-login).
     }
 
-    // Subscribe ke token refresh sekali saja. Kalau Firebase rotate token,
-    // backend di-update otomatis tanpa user perlu re-login.
-    _refreshSub ??= FirebaseMessaging.instance.onTokenRefresh.listen((t) async {
-      try {
-        await _api.register(token: t, platform: _platformLabel());
-        await _prefs.setString(_lastRegisteredKey, t);
-      } catch (_) {
-        // ignore; akan dicoba ulang saat next sync.
-      }
-    });
     return token;
   }
 

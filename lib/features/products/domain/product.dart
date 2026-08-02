@@ -56,6 +56,18 @@ class Product {
   String? outletRemoteId;
   List<ProductVariant> variants;
 
+  /// Stok yang BENAR-BENAR bisa dijual.
+  ///
+  /// Untuk produk bervarian, yang dijual adalah variannya dan stok hidup di
+  /// masing-masing varian; kolom `stock` induk tak pernah diisi — ia 0 karena
+  /// tak dipakai, bukan karena barangnya habis.
+  ///
+  /// Membaca `stock` langsung membuat setiap produk bervarian tampil habis dan
+  /// tombol tambahnya mati — tanpa label "Habis" dan tanpa pesan, jadi kasir
+  /// hanya melihat tombol yang tak melakukan apa-apa.
+  int get stokJual =>
+      variants.isEmpty ? stock : variants.fold(0, (s, v) => s + v.stock);
+
   // Local UI state
   bool isFavorite;
 

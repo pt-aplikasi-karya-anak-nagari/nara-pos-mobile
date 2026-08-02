@@ -54,7 +54,7 @@ class ProductCard extends HookConsumerWidget {
     // Produk tanpa "kelola stok" tidak menggunakan sistem stok: tidak pernah
     // dianggap habis dan tidak punya batas kuantitas.
     final tracksStock = product.trackStock;
-    final stockOut = tracksStock && product.stock <= 0;
+    final stockOut = tracksStock && product.stokJual <= 0;
     // Auto-86: bahan resep habis / di-86 manual menurut backend. Fail-open —
     // isInStock default true saat field absen (backend lama / produk tanpa
     // resep) → tak pernah dianggap habis di sini.
@@ -67,7 +67,9 @@ class ProductCard extends HookConsumerWidget {
     // belum habis. Angka "N" diambil dari availablePortions (null → "sisa").
     final portions = effPortions;
     final lowPortions = effLowStock && !outOfStock;
-    final canAddMore = !outOfStock && (!tracksStock || qty < product.stock);
+    // Batas kuantitas juga dari stok yang bisa dijual. Memakai stok induk di
+    // sini membuat produk bervarian mentok di 0 walau variannya penuh.
+    final canAddMore = !outOfStock && (!tracksStock || qty < product.stokJual);
     final hasVariants = product.variants.isNotEmpty;
     // Label habis dibedakan berdasar alasan: di-86 manual, bahan habis, atau
     // habis stok fisik. Fail-open: reason kosong / 'stock' → "Habis" biasa.
