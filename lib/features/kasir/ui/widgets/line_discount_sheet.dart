@@ -14,9 +14,8 @@ import '../../providers.dart';
 ///
 /// Tampilkan via:
 /// ```dart
-/// showModalBottomSheet(
+/// tampilkanSheetBawah(
 ///   context: context,
-///   isScrollControlled: true,
 ///   useRootNavigator: true,
 ///   backgroundColor: Colors.transparent,
 ///   builder: (_) => LineDiscountSheet(index: i, item: item),

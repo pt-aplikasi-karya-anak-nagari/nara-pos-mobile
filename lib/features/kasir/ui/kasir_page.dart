@@ -41,6 +41,7 @@ import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class KasirPage extends HookConsumerWidget {
   const KasirPage({super.key});
@@ -605,7 +606,7 @@ class KasirPage extends HookConsumerWidget {
     // ── Cart / Payment ────────────────────────────────────────────────────────
 
     void openCart() {
-      showModalBottomSheet(
+      tampilkanSheetBawah(
         context: context,
         isScrollControlled: true,
         useRootNavigator: true,
@@ -613,7 +614,7 @@ class KasirPage extends HookConsumerWidget {
         builder: (cartCtx) => CartSheet(
           onCheckout: () {
             Navigator.pop(cartCtx);
-            showModalBottomSheet(
+            tampilkanSheetBawah(
               context: context,
               isScrollControlled: true,
               useRootNavigator: true,
@@ -632,7 +633,7 @@ class KasirPage extends HookConsumerWidget {
     }
 
     void openPayment() {
-      showModalBottomSheet(
+      tampilkanSheetBawah(
         context: context,
         isScrollControlled: true,
         useRootNavigator: true,
@@ -1304,7 +1305,7 @@ class _Header extends HookConsumerWidget {
             if (!context.pakaiRailNavigasi)
               HeaderAksiKasir(
                 onScan: () => ref.read(scanTriggerProvider.notifier).trigger(),
-                onCustomOrder: () => showModalBottomSheet(
+                onCustomOrder: () => tampilkanSheetBawah(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
@@ -1327,7 +1328,7 @@ class _Header extends HookConsumerWidget {
                     ),
                   ),
                 ),
-                onDraft: () => showModalBottomSheet(
+                onDraft: () => tampilkanSheetBawah(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,

@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../core/format.dart';
 import '../../../core/outlet_scope.dart';
 import '../data/expense_service.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 /// Pencatatan pengeluaran di mobile (C2) — total bulan ini + daftar + catat baru.
 class ExpensesPage extends ConsumerWidget {
@@ -77,7 +78,7 @@ class ExpensesPage extends ConsumerWidget {
   }
 
   Future<void> _openForm(BuildContext context, WidgetRef ref) async {
-    await showModalBottomSheet(
+    await tampilkanSheetBawah(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

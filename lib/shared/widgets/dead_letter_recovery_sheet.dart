@@ -9,12 +9,13 @@ import '../../core/format.dart';
 import '../../core/offline/offline_sync_service.dart';
 import '../../core/offline/sale_outbox.dart';
 import '../../core/offline/shift_outbox.dart';
+import 'sheet_bawah.dart';
 
 /// Sheet pemulihan transaksi offline yang gagal sinkron permanen (dead-letter).
 /// Mencegah kehilangan diam-diam: owner bisa lihat detail + alasan gagal, lalu
 /// pilih "Coba Lagi" (re-queue) atau "Buang" (hapus permanen).
 Future<void> showDeadLetterRecoverySheet(BuildContext context, WidgetRef ref) {
-  return showModalBottomSheet<void>(
+  return tampilkanSheetBawah<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: kCard,

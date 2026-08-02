@@ -39,6 +39,7 @@ import '../../shifts/ui/shift_management_dialog.dart';
 import '../../payments/ui/payment_method_management_page.dart';
 import '../data/profil_state.dart';
 import '../../user/domain/assignable_role.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class ProfilPage extends HookConsumerWidget {
   const ProfilPage({super.key});
@@ -815,7 +816,7 @@ class _ThemeTile extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
-    final picked = await showModalBottomSheet<ThemeMode>(
+    final picked = await tampilkanSheetBawah<ThemeMode>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(

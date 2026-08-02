@@ -26,6 +26,7 @@ import '../data/product_export_service.dart';
 import '../../../shared/widgets/tablet_components.dart';
 import '../../../core/outlet_scope.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 String _tabLabel(WidgetRef ref, String t) {
   final keys = {
@@ -1048,7 +1049,7 @@ class _ProductTile extends ConsumerWidget {
   }
 
   void _openLabelSheet(BuildContext context) {
-    showModalBottomSheet<void>(
+    tampilkanSheetBawah<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

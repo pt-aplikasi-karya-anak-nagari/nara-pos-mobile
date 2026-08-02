@@ -12,6 +12,7 @@ import '../../../transactions/data/transaction_repository.dart';
 import '../../../transactions/domain/sale.dart';
 import '../../../transactions/ui/widgets/mini_payment_sheet.dart';
 import 'empty_states.dart';
+import '../../../../shared/widgets/sheet_bawah.dart';
 
 /// Tab "Pesanan Meja" — antrean order dari QR menu (source=menu_qr) yang masih
 /// aktif (belum selesai). Dua mode:
@@ -230,7 +231,7 @@ class _MenuOrderCard extends ConsumerWidget {
     } else {
       // Open-bill / tanpa bukti → sheet untuk pilih metode & input tunai.
       final result =
-          await showModalBottomSheet<({String method, double cash, String proofUrl})>(
+          await tampilkanSheetBawah<({String method, double cash, String proofUrl})>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,

@@ -15,6 +15,7 @@ import '../data/printer_service.dart';
 import '../data/printer_settings.dart';
 import '../data/role_printer_config_repository.dart';
 import '../../../core/permission_service.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ class PrinterSettingsPage extends HookConsumerWidget {
     }
 
     Future<void> showPermissionSheet() async {
-      await showModalBottomSheet<void>(
+      await tampilkanSheetBawah<void>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,

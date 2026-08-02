@@ -26,6 +26,7 @@ import '../data/modifier_repository.dart';
 import '../../kasir/providers.dart';
 import '../../outlet/data/outlet_service.dart';
 import 'barcode_scanner_page.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class ProductFormPage extends HookConsumerWidget {
   final String? productRemoteId;
@@ -499,7 +500,7 @@ class ProductFormPage extends HookConsumerWidget {
                 ),
               ),
           onTap: () async {
-            final result = await showModalBottomSheet<Category>(
+            final result = await tampilkanSheetBawah<Category>(
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
@@ -823,7 +824,7 @@ class ProductFormPage extends HookConsumerWidget {
           ),
           TextButton.icon(
             onPressed: () async {
-              final result = await showModalBottomSheet<_SizeDraft>(
+              final result = await tampilkanSheetBawah<_SizeDraft>(
                 context: context,
                 isScrollControlled: true,
                 backgroundColor: Colors.transparent,
@@ -844,7 +845,7 @@ class ProductFormPage extends HookConsumerWidget {
         GestureDetector(
           onTap: () async {
             final draft = sizes.value[i];
-            final result = await showModalBottomSheet<_SizeDraft>(
+            final result = await tampilkanSheetBawah<_SizeDraft>(
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
@@ -1014,7 +1015,7 @@ class ProductFormPage extends HookConsumerWidget {
               .toList();
           return GestureDetector(
             onTap: () async {
-              final result = await showModalBottomSheet<Set<String>>(
+              final result = await tampilkanSheetBawah<Set<String>>(
                 context: context,
                 isScrollControlled: true,
                 backgroundColor: Colors.transparent,

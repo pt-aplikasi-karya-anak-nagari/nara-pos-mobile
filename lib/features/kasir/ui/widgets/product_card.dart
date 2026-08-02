@@ -20,6 +20,7 @@ import '../../../../core/outlet_scope.dart';
 import '../../../outlet/data/outlet_service.dart';
 import '../../../access_rights/domain/permission.dart';
 import '../../../access_rights/data/access_rights_repository.dart';
+import '../../../../shared/widgets/sheet_bawah.dart';
 
 class ProductCard extends HookConsumerWidget {
   final Product product;
@@ -145,7 +146,7 @@ class ProductCard extends HookConsumerWidget {
       final title = variant == null
           ? product.name
           : '${product.name} (${variant.name})';
-      return showModalBottomSheet<List<CartModifier>>(
+      return tampilkanSheetBawah<List<CartModifier>>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -158,7 +159,7 @@ class ProductCard extends HookConsumerWidget {
     }
 
     Future<void> addWithVariant() async {
-      final picked = await showModalBottomSheet<ProductVariant>(
+      final picked = await tampilkanSheetBawah<ProductVariant>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -248,7 +249,7 @@ class ProductCard extends HookConsumerWidget {
       final hint = markOut
           ? ref.t('product.mark_86_hint')
           : ref.t('product.restore_86_hint');
-      await showModalBottomSheet<void>(
+      await tampilkanSheetBawah<void>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,

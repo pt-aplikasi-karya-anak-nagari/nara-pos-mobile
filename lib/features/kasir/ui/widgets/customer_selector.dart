@@ -8,6 +8,7 @@ import '../../../../app/theme.dart';
 import '../../../../core/app_icons.dart';
 import '../../../customers/data/customer_repository.dart';
 import '../../providers.dart';
+import '../../../../shared/widgets/sheet_bawah.dart';
 
 class CustomerSelector extends ConsumerWidget {
   const CustomerSelector({super.key});
@@ -76,7 +77,7 @@ class CustomerSelector extends ConsumerWidget {
   }
 
   void _showCustomerPicker(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
+    tampilkanSheetBawah(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,

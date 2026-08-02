@@ -14,6 +14,7 @@ import '../../../core/outlet_scope.dart';
 import '../../../core/responsive.dart';
 import '../data/attendance_repository.dart';
 import '../domain/attendance.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 /// Halaman utama absensi.
 ///
@@ -381,7 +382,7 @@ class _ActiveSessionCard extends HookConsumerWidget {
   }
 
   Future<void> _checkOut(BuildContext context, WidgetRef ref) async {
-    final result = await showModalBottomSheet<_AbsenSheetResult>(
+    final result = await tampilkanSheetBawah<_AbsenSheetResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -499,7 +500,7 @@ class _CheckInCard extends ConsumerWidget {
       );
       return;
     }
-    final result = await showModalBottomSheet<_AbsenSheetResult>(
+    final result = await tampilkanSheetBawah<_AbsenSheetResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

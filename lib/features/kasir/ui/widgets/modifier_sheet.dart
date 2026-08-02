@@ -146,6 +146,16 @@ class _ModifierSheetState extends State<ModifierSheet> {
             ),
             Flexible(
               child: ListView.builder(
+                // shrinkWrap: ListView TIDAK mengecil mengikuti isinya. Tanpa
+                // ini ia memenuhi seluruh tinggi yang ditawarkan Flexible —
+                // 85% layar — walau grupnya cuma satu berisi dua pilihan.
+                // Itulah rongga kosong menganga antara daftar ukuran dan
+                // tombol "Tambah" pada sheet varian.
+                //
+                // Flexible-nya tetap dipertahankan: ia yang membatasi tinggi
+                // saat produk punya banyak grup modifier, sehingga daftarnya
+                // digulir alih-alih meluber keluar layar.
+                shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
                 itemCount: widget.groups.length,
                 itemBuilder: (_, gi) {

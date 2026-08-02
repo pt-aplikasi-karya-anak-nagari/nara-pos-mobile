@@ -16,6 +16,7 @@ import '../data/shift_repository.dart';
 import '../domain/shift.dart';
 import 'cash_movement_sheet.dart';
 import 'z_report_page.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class ShiftHistoryPage extends HookConsumerWidget {
   const ShiftHistoryPage({super.key});
@@ -721,7 +722,7 @@ class _TabletDetailPanel extends ConsumerWidget {
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton.icon(
-                                    onPressed: () => showModalBottomSheet(
+                                    onPressed: () => tampilkanSheetBawah(
                                       context: context,
                                       isScrollControlled: true,
                                       backgroundColor: Colors.transparent,

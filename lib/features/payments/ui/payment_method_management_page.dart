@@ -13,6 +13,7 @@ import '../../user/data/auth_service.dart';
 import '../data/payment_method_repository.dart';
 import '../domain/payment_method.dart';
 import 'widgets/payment_method_list_tile.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class PaymentMethodManagementPage extends ConsumerWidget {
   const PaymentMethodManagementPage({super.key});
@@ -57,7 +58,7 @@ class PaymentMethodManagementPage extends ConsumerWidget {
   }
 
   void _showEditSheet(BuildContext context, WidgetRef ref, PaymentMethod pm) {
-    showModalBottomSheet(
+    tampilkanSheetBawah(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

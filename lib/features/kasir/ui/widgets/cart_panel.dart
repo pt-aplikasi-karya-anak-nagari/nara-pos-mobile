@@ -15,6 +15,7 @@ import 'empty_states.dart';
 import 'customer_selector.dart';
 import 'line_discount_sheet.dart';
 import 'menu_orders_tab.dart';
+import '../../../../shared/widgets/sheet_bawah.dart';
 
 /// Panel keranjang permanen yang ditampilkan di sisi kanan layar
 /// pada mode tablet/landscape, mirip POS profesional.
@@ -655,7 +656,7 @@ class _CartRow extends ConsumerWidget {
                             if (canApplyManual)
                               _LineDiscountButton(
                                 hasDiscount: item.hasManualDiscount,
-                                onTap: () => showModalBottomSheet(
+                                onTap: () => tampilkanSheetBawah(
                                   context: rowCtx,
                                   isScrollControlled: true,
                                   useRootNavigator: true,

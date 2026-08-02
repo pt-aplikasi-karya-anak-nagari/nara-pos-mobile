@@ -13,6 +13,7 @@ import '../../outlet/data/outlet_service.dart';
 import '../data/order_type_repository.dart';
 import '../domain/order_type.dart';
 import 'widgets/order_type_list_tile.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class OrderTypeListPage extends HookConsumerWidget {
   const OrderTypeListPage({super.key});
@@ -100,7 +101,7 @@ class OrderTypeListPage extends HookConsumerWidget {
   }
 
   void _showForm(BuildContext context, WidgetRef ref, [OrderType? existing]) {
-    showModalBottomSheet(
+    tampilkanSheetBawah(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

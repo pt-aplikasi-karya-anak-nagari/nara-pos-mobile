@@ -28,6 +28,7 @@ import '../data/transaction_repository.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
 import 'widgets/mini_payment_sheet.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class TransactionDetailPage extends ConsumerStatefulWidget {
   final String saleId;
@@ -502,7 +503,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     }
 
     // Tanpa bukti → flow lama: buka sheet untuk input metode & cash.
-    final result = await showModalBottomSheet<
+    final result = await tampilkanSheetBawah<
       ({String method, double cash, String proofUrl})
     >(
       context: context,

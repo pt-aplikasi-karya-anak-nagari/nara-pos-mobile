@@ -33,6 +33,7 @@ import '../../../settings/data/tax_settings.dart';
 import '../../../tables/data/table_repository.dart';
 import '../../../tables/domain/pos_table.dart';
 import 'table_selector_sheet.dart';
+import '../../../../shared/widgets/sheet_bawah.dart';
 
 // Payment methods are now loaded from the database via paymentMethodsFutureProvider
 
@@ -570,7 +571,7 @@ class PaymentSheet extends HookConsumerWidget {
         text: remaining > 0 ? formatRupiah(remaining) : '',
       );
       var amountVal = remaining;
-      final result = await showModalBottomSheet<
+      final result = await tampilkanSheetBawah<
         ({String method, String type, double amount})
       >(
         context: context,
@@ -1723,7 +1724,7 @@ class _TablePickerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        showModalBottomSheet(
+        tampilkanSheetBawah(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,

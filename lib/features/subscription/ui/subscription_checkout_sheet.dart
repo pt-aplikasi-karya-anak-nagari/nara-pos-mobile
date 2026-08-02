@@ -13,6 +13,7 @@ import '../../../core/outlet_scope.dart';
 import '../../billing/data/billing_repository.dart';
 import '../data/subscription_repository.dart';
 import '../domain/subscription.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 /// Buka sheet pembayaran/perpanjangan langganan: pilih paket → buat invoice
 /// checkout → tampilkan instruksi transfer bank manual + unggah bukti transfer.
@@ -20,7 +21,7 @@ Future<void> showSubscriptionCheckoutSheet(
   BuildContext context,
   WidgetRef ref,
 ) {
-  return showModalBottomSheet<void>(
+  return tampilkanSheetBawah<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

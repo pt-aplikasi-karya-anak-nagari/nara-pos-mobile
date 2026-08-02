@@ -18,6 +18,7 @@ import '../../features/tables/ui/table_management_page.dart';
 import '../../features/profil/data/profil_state.dart';
 import '../../features/user/data/auth_service.dart';
 import '../../features/user/domain/user_role.dart';
+import 'sheet_bawah.dart';
 
 class NavItem {
   final IconAsset icon;
@@ -338,7 +339,7 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
       icon: AppIcons.add,
       label: 'Custom',
       labelPanjang: 'Custom Order',
-      onTap: () => showModalBottomSheet(
+      onTap: () => tampilkanSheetBawah(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -370,7 +371,7 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
       icon: AppIcons.task,
       label: 'Draft',
       lencana: (r) => r.watch(draftsCountProvider),
-      onTap: () => showModalBottomSheet(
+      onTap: () => tampilkanSheetBawah(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,

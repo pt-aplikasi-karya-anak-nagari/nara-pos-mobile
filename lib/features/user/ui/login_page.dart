@@ -11,6 +11,7 @@ import 'staff_session_page.dart';
 import '../../../app/theme.dart';
 import '../../../app/theme_mode_provider.dart';
 import '../../../core/i18n.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 class LoginPage extends ConsumerWidget {
   const LoginPage({super.key});
@@ -125,7 +126,7 @@ class _LupaPasswordLink extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return TextButton(
       onPressed: () async {
-        final email = await showModalBottomSheet<String>(
+        final email = await tampilkanSheetBawah<String>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
@@ -164,7 +165,7 @@ class _DaftarLink extends ConsumerWidget {
           style: TextStyle(color: kTextMid, fontSize: 13),
         ),
         GestureDetector(
-          onTap: () => showModalBottomSheet(
+          onTap: () => tampilkanSheetBawah(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,

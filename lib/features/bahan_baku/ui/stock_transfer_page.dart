@@ -7,6 +7,7 @@ import '../../../core/format.dart';
 import '../../../core/outlet_scope.dart';
 import '../../outlet/data/outlet_service.dart';
 import '../data/bahan_baku_service.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 
 /// Format kuantitas double tanpa trailing `.0` bila bulat.
 String _qtyText(double v) =>
@@ -447,7 +448,7 @@ class _TransferHistoryTab extends ConsumerWidget {
     // Buat future sekali di luar builder — DraggableScrollableSheet.builder
     // dipanggil berkali-kali saat di-drag, jadi jangan re-fetch tiap frame.
     final detailFuture = ref.read(bahanBakuServiceProvider).getStockTransfer(id);
-    await showModalBottomSheet<void>(
+    await tampilkanSheetBawah<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,

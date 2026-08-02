@@ -17,6 +17,7 @@ import '../../../transactions/domain/sale.dart';
 import '../../../transactions/ui/widgets/mini_payment_sheet.dart';
 import '../../data/table_repository.dart';
 import '../../domain/pos_table.dart';
+import '../../../../shared/widgets/sheet_bawah.dart';
 
 /// Dialog detail meja: tampilkan status, durasi live, dan rincian
 /// pesanan yang sedang berjalan kalau meja sedang occupied.
@@ -377,7 +378,7 @@ class _SaleCard extends ConsumerWidget {
   });
 
   Future<void> _payNow(BuildContext context, WidgetRef ref) async {
-    final result = await showModalBottomSheet<
+    final result = await tampilkanSheetBawah<
       ({String method, double cash, String proofUrl})
     >(
       context: context,
@@ -977,7 +978,7 @@ class _Actions extends ConsumerWidget {
     final tabTotal = settleable.fold<double>(0, (s, x) => s + x.total);
 
     final result =
-        await showModalBottomSheet<({String method, double cash, String proofUrl})>(
+        await tampilkanSheetBawah<({String method, double cash, String proofUrl})>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
