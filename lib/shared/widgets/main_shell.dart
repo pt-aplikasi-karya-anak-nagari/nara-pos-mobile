@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -78,7 +77,7 @@ List<NavItem> navItemsUtama(UserRole role) {
   ];
 }
 
-class MainShell extends HookConsumerWidget {
+class MainShell extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
   const MainShell({super.key, required this.navigationShell});
 
@@ -112,21 +111,18 @@ class MainShell extends HookConsumerWidget {
     final role = user?.role ?? UserRole.cashier;
     final visibleItems = _getVisibleItems(role);
 
-    // Controller untuk animasi auto-hide bottom nav saat scroll.
-    // value 1.0 = nav tampil penuh, 0.0 = nav tersembunyi.
-    final navAnim = useAnimationController(
-      duration: const Duration(milliseconds: 280),
-      reverseDuration: const Duration(milliseconds: 240),
-      initialValue: 1.0,
-    );
-
-    // Pastikan nav kembali tampil ketika user pindah tab/branch
-    // (mis. setelah hidden lalu navigasi programatik).
+    // Auto-hide-saat-scroll DIHAPUS, bukan dipindahkan.
+    //
+    // Controller-nya ada dan digerakkan maju-mundur oleh ScrollNotification,
+    // tapi NILAINYA tak pernah dipakai menganimasikan apa pun — tak ada
+    // AnimatedBuilder, SlideTransition, atau SizeTransition yang membacanya.
+    // Jadi selama ini ia hanya membakar satu ticker per frame scroll tanpa
+    // pernah menyembunyikan apa pun.
+    //
+    // Dengan navigasi pindah ke sisi kanan, menyembunyikannya pun tak lagi ada
+    // gunanya: yang langka di layar melintang adalah ruang TEGAK, dan rail di
+    // samping justru mengembalikannya.
     final currentBranch = navigationShell.currentIndex;
-    useEffect(() {
-      navAnim.forward();
-      return null;
-    }, [currentBranch]);
 
     // Find visual index that matches current branch
     int activeVisualIndex = visibleItems.indexWhere(
@@ -135,167 +131,237 @@ class MainShell extends HookConsumerWidget {
     // Fallback if current branch is not in visible items (e.g. redirected)
     if (activeVisualIndex == -1) activeVisualIndex = 0;
 
-    const double hPad = 8.0;
-    const double navH = 58.0;
-    const double tabletItemW = 110.0;
-    final int totalVisualItems = visibleItems.length;
+    // Rail di kanan untuk layar 600 dp ke atas; bilah bawah untuk ponsel
+    // sempit.
+    //
+    // # KENAPA TIDAK SELALU DI KANAN
+    //
+    // Di ponsel 360 dp, rail selebar 88 dp memakan seperempat lebar layar —
+    // dan lebar itulah yang menentukan berapa kartu produk muat sebaris. Yang
+    // langka di ponsel tegak adalah lebar; yang langka di tablet melintang
+    // adalah tinggi. Jadi navigasinya mengambil dari sisi yang lapang.
+    //
+    // 600 dp juga titik saat ponsel dimiringkan jadi melintang — di sana rail
+    // sudah menguntungkan, karena tingginya tinggal ~360 dp.
+    final pakaiRail = context.screen != ScreenSize.compact;
+
+    final isi = Stack(
+      children: [
+        Positioned.fill(
+          child: Image.asset('assets/images/bg.jpg', fit: BoxFit.cover),
+        ),
+        Positioned.fill(child: Container(color: kBg.withValues(alpha: 0.85))),
+        navigationShell,
+      ],
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset('assets/images/bg.jpg', fit: BoxFit.cover),
+      body: pakaiRail
+          ? Row(
+              children: [
+                Expanded(child: isi),
+                RailKanan(
+                  items: visibleItems,
+                  aktif: activeVisualIndex,
+                  onTap: (i) => _onTap(i, visibleItems, ref),
+                ),
+              ],
+            )
+          : isi,
+      bottomNavigationBar: pakaiRail
+          ? null
+          : BilahBawah(
+              items: visibleItems,
+              aktif: activeVisualIndex,
+              isTablet: isTablet,
+              onTap: (i) => _onTap(i, visibleItems, ref),
+            ),
+    );
+  }
+}
+
+/// Navigasi di tepi KANAN layar, untuk layar 600 dp ke atas.
+///
+/// Kanan, bukan kiri: di tablet yang dipegang dua tangan, ibu jari kanan yang
+/// paling sering dipakai kasir — dan panel keranjang memang sudah di sisi itu,
+/// jadi perpindahan pandangnya pendek.
+class RailKanan extends ConsumerWidget {
+  final List<NavItem> items;
+  final int aktif;
+  final ValueChanged<int> onTap;
+
+  const RailKanan({
+    super.key,
+    required this.items,
+    required this.aktif,
+    required this.onTap,
+  });
+
+  static const double lebar = 88;
+  static const double tinggiItem = 68;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Colors.black.withValues(alpha: 0.06),
+            width: 0.5,
           ),
-          Positioned.fill(child: Container(color: kBg.withValues(alpha: 0.85))),
-          NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              // Auto-hide hanya aktif di tab Kasir (branch 0). Tab lain
-              // (Riwayat, Laporan, Profil) bukan halaman utama scroll-heavy
-              // dan banyak punya form/sheet di dalamnya, jadi nav-nya
-              // dibuat selalu tampil supaya tidak menyembunyikan kontrol
-              // navigasi tanpa sebab.
-              if (navigationShell.currentIndex != 0) return false;
-              if (notification.metrics.axis != Axis.vertical) {
-                return false;
-              }
-              // Hide selama scrolling (mulai dari sentuhan user atau fling
-              // momentum), tampil lagi setelah scroll benar-benar berhenti.
-              // ScrollStartNotification → user mulai scroll
-              // ScrollEndNotification  → scroll selesai (termasuk momentum)
-              if (notification is ScrollStartNotification) {
-                if (navAnim.status != AnimationStatus.dismissed &&
-                    navAnim.status != AnimationStatus.reverse) {
-                  navAnim.reverse();
-                }
-              } else if (notification is ScrollEndNotification) {
-                if (navAnim.status != AnimationStatus.completed &&
-                    navAnim.status != AnimationStatus.forward) {
-                  navAnim.forward();
-                }
-              }
-              return false;
-            },
-            child: navigationShell,
-          ),
-        ],
+        ),
       ),
-      bottomNavigationBar: DecoratedBox(
-        // Hairline separator khas tab bar iOS, di-paint di atas glass.
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: Colors.black.withValues(alpha: 0.06),
-              width: 0.5,
+      position: DecorationPosition.foreground,
+      child: Container(
+        width: lebar,
+        color: kCard,
+        child: SafeArea(
+          left: false,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < items.length; i++)
+                SizedBox(
+                  height: tinggiItem,
+                  width: lebar,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: _TombolNav(
+                      item: items[i],
+                      aktif: i == aktif,
+                      onTap: () => onTap(i),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bilah navigasi di bawah, untuk ponsel sempit.
+class BilahBawah extends ConsumerWidget {
+  final List<NavItem> items;
+  final int aktif;
+  final bool isTablet;
+  final ValueChanged<int> onTap;
+
+  const BilahBawah({
+    super.key,
+    required this.items,
+    required this.aktif,
+    required this.isTablet,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: Colors.black.withValues(alpha: 0.06),
+            width: 0.5,
+          ),
+        ),
+      ),
+      position: DecorationPosition.foreground,
+      child: Container(
+        decoration: BoxDecoration(color: kCard),
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 58,
+            child: Row(
+              children: [
+                for (var i = 0; i < items.length; i++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: _TombolNav(
+                        item: items[i],
+                        aktif: i == aktif,
+                        onTap: () => onTap(i),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
-        position: DecorationPosition.foreground,
-        child: Container(
-          decoration: BoxDecoration(color: kCard),
-          padding: const EdgeInsets.only(top: 16, bottom: 8),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final totalW = constraints.maxWidth;
+      ),
+    );
+  }
+}
 
-                final double itemW;
-                final double pillLeft;
+/// Satu tombol navigasi — bentuknya sama untuk rail maupun bilah bawah.
+///
+/// Sorotannya kini menempel pada tombolnya sendiri, bukan pil melayang yang
+/// digeser AnimatedPositioned. Pil itu posisinya dihitung dari lebar layar dan
+/// jumlah item; untuk rail ia harus dihitung ulang dari TINGGI — dua rumus
+/// untuk satu hal yang sama, dan yang satu pasti akan lupa diperbarui.
+class _TombolNav extends ConsumerWidget {
+  final NavItem item;
+  final bool aktif;
+  final VoidCallback onTap;
 
-                if (isTablet) {
-                  itemW = tabletItemW;
-                  final innerW = totalW - 2 * hPad;
-                  final rowOffset =
-                      (innerW - totalVisualItems * tabletItemW) / 2;
-                  pillLeft = hPad + rowOffset + activeVisualIndex * tabletItemW;
-                } else {
-                  itemW = (totalW - 2 * hPad) / totalVisualItems;
-                  pillLeft = hPad + activeVisualIndex * itemW;
-                }
+  const _TombolNav({
+    required this.item,
+    required this.aktif,
+    required this.onTap,
+  });
 
-                return SizedBox(
-                  height: navH,
-                  child: Stack(
-                    children: [
-                      // ── Sliding highlight pill ─────────────────────────
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                        left: pillLeft,
-                        width: itemW,
-                        top: 6,
-                        bottom: 6,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: kPrimary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-
-                      // ── Nav items ──────────────────────────────────────
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: hPad),
-                        child: Row(
-                          mainAxisAlignment: isTablet
-                              ? MainAxisAlignment.center
-                              : MainAxisAlignment.start,
-                          children: List.generate(totalVisualItems, (vi) {
-                            final item = visibleItems[vi];
-
-                            // ── Regular nav items ──
-                            final active = vi == activeVisualIndex;
-
-                            final tile = GestureDetector(
-                              onTap: () => _onTap(vi, visibleItems, ref),
-                              behavior: HitTestBehavior.opaque,
-                              child: SizedBox(
-                                height: navH,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    AnimatedScale(
-                                      scale: active ? 1.1 : 1.0,
-                                      duration: const Duration(
-                                        milliseconds: 250,
-                                      ),
-                                      curve: Curves.easeOut,
-                                      child: _NavIconWithBadge(
-                                        item: item,
-                                        active: active,
-                                      ),
-                                    ),
-                                    const Gap(3),
-                                    AnimatedDefaultTextStyle(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: active
-                                            ? FontWeight.w700
-                                            : FontWeight.w400,
-                                        color: active ? kPrimary : kTextMid,
-                                      ),
-                                      child: Text(ref.t(item.labelKey)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-
-                            if (isTablet) {
-                              return SizedBox(width: tabletItemW, child: tile);
-                            }
-                            return Expanded(child: tile);
-                          }),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Semantics(
+      button: true,
+      selected: aktif,
+      label: ref.t(item.labelKey),
+      child: GestureDetector(
+        // Key stabil: teks yang tampil ikut bahasa aktif, jadi mencari tombol
+        // lewat teksnya membuat tesnya pecah begitu terjemahannya diubah.
+        key: ValueKey('nav-${item.labelKey}'),
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: aktif ? kPrimary.withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: aktif ? 1.1 : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+                child: _NavIconWithBadge(item: item, active: aktif),
+              ),
+              const Gap(3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: aktif ? FontWeight.w700 : FontWeight.w400,
+                  color: aktif ? kPrimary : kTextMid,
+                ),
+                child: Text(
+                  ref.t(item.labelKey),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ),
       ),
