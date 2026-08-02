@@ -21,7 +21,6 @@ import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../../core/outlet_scope.dart';
 import '../../../core/responsive.dart';
-import '../../drafts/providers.dart';
 import '../../drafts/ui/draft_list_sheet.dart';
 import '../../outlet/data/outlet_service.dart';
 import '../../printer/data/printer_service.dart';
@@ -36,6 +35,7 @@ import '../../transactions/data/transaction_repository.dart';
 import '../../transactions/domain/sale.dart';
 import '../providers.dart';
 import '../scan_trigger.dart';
+import 'widgets/header_aksi_kasir.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
 import 'widgets/empty_states.dart';
@@ -1318,265 +1318,36 @@ class _Header extends HookConsumerWidget {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Builder(
-                    builder: (_) {
-                      final label = ref.watch(activeOutletLabelProvider);
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const HugeIcon(
-                              icon: AppIcons.storefront,
-                              color: Colors.white,
-                              size: 13,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              label.isNotEmpty ? label : 'Outlet',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+            HeaderAksiKasir(
+              onScan: () => ref.read(scanTriggerProvider.notifier).trigger(),
+              onCustomOrder: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const _CustomOrderSheet(),
+              ),
+              onMeja: () => showDialog(
+                context: context,
+                builder: (ctx) => Dialog(
+                  insetPadding: const EdgeInsets.all(16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
                   ),
-                  const Gap(16),
-                  Row(
-                    children: [
-                      // Scan Button
-                      GestureDetector(
-                        onTap: () {
-                          ref.read(scanTriggerProvider.notifier).trigger();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              HugeIcon(
-                                icon: AppIcons.scan,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Scan',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Gap(8),
-                      GestureDetector(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const _CustomOrderSheet(),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              HugeIcon(
-                                icon: AppIcons.add,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Custom Order',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Gap(8),
-                      // Table Management Button
-                      GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => Dialog(
-                              insetPadding: const EdgeInsets.all(16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: context.isTablet ? 1100 : 500,
-                                  maxHeight:
-                                      MediaQuery.of(context).size.height * 0.85,
-                                ),
-                                child: const TableManagementPage(
-                                  isReadOnly: true,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              HugeIcon(
-                                icon: HugeIcons.strokeRoundedTable02,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Meja',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Gap(8),
-                      // Draft Orders Button
-                      GestureDetector(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const DraftListSheet(),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const HugeIcon(
-                                icon: AppIcons.task,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                              const SizedBox(width: 4),
-                              const Text(
-                                'Draft',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Consumer(
-                                builder: (_, ref, _) {
-                                  final count = ref.watch(draftsCountProvider);
-                                  if (count == 0) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Padding(
-                                    padding: const EdgeInsets.only(left: 6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 1,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '$count',
-                                        style: const TextStyle(
-                                          color: kPrimary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  clipBehavior: Clip.antiAlias,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: context.isTablet ? 1100 : 500,
+                      maxHeight: MediaQuery.of(context).size.height * 0.85,
+                    ),
+                    child: const TableManagementPage(isReadOnly: true),
                   ),
-
-                  // Custom Order Button
-                ],
+                ),
+              ),
+              onDraft: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const DraftListSheet(),
               ),
             ),
             Gap(16),
