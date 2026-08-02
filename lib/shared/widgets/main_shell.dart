@@ -12,6 +12,7 @@ import '../../features/drafts/providers.dart';
 import '../../features/drafts/ui/draft_list_sheet.dart';
 import '../../features/kasir/scan_trigger.dart';
 import '../../features/kasir/ui/kasir_page.dart';
+import '../../features/kasir/ui/widgets/dialog_kalkulator.dart';
 import '../../features/notifications/data/notification_history.dart';
 import 'wadah_branch_beranimasi.dart';
 import '../../features/tables/ui/table_management_page.dart';
@@ -334,6 +335,17 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
       icon: AppIcons.scan,
       label: 'Scan',
       onTap: () => ref.read(scanTriggerProvider.notifier).trigger(),
+    ),
+    _TombolAksi(
+      icon: HugeIcons.strokeRoundedCalculator,
+      label: 'Hitung',
+      labelPanjang: 'Kalkulator',
+      // Dialog, bukan halaman: kasir memakainya sambil keranjang tetap di
+      // layar, dan menutupnya tak boleh mengubah apa pun di belakangnya.
+      onTap: () => showDialog(
+        context: context,
+        builder: (_) => const DialogKalkulator(),
+      ),
     ),
     _TombolAksi(
       icon: AppIcons.add,
