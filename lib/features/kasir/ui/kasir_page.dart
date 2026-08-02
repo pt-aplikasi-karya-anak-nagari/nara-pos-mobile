@@ -1318,38 +1318,44 @@ class _Header extends HookConsumerWidget {
                 ],
               ),
             ),
-            HeaderAksiKasir(
-              onScan: () => ref.read(scanTriggerProvider.notifier).trigger(),
-              onCustomOrder: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const _CustomOrderSheet(),
-              ),
-              onMeja: () => showDialog(
-                context: context,
-                builder: (ctx) => Dialog(
-                  insetPadding: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: context.isTablet ? 1100 : 500,
-                      maxHeight: MediaQuery.of(context).size.height * 0.85,
+            // Di layar lega, keempat aksi ini sudah pindah ke rail kanan
+            // (lihat RailKanan di main_shell.dart) — menampilkannya di sini
+            // juga berarti dua tombol "Draft" di satu layar. Prasyaratnya
+            // dibaca dari context.pakaiRailNavigasi, sumber tunggal yang sama
+            // yang dipakai MainShell memutuskan menggambar rail atau bilah.
+            if (!context.pakaiRailNavigasi)
+              HeaderAksiKasir(
+                onScan: () => ref.read(scanTriggerProvider.notifier).trigger(),
+                onCustomOrder: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const CustomOrderSheet(),
+                ),
+                onMeja: () => showDialog(
+                  context: context,
+                  builder: (ctx) => Dialog(
+                    insetPadding: const EdgeInsets.all(16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const TableManagementPage(isReadOnly: true),
+                    clipBehavior: Clip.antiAlias,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: context.isTablet ? 1100 : 500,
+                        maxHeight: MediaQuery.of(context).size.height * 0.85,
+                      ),
+                      child: const TableManagementPage(isReadOnly: true),
+                    ),
                   ),
                 ),
+                onDraft: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const DraftListSheet(),
+                ),
               ),
-              onDraft: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const DraftListSheet(),
-              ),
-            ),
             Gap(16),
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 16),
@@ -1589,8 +1595,13 @@ class _DensityBtn extends StatelessWidget {
   }
 }
 
-class _CustomOrderSheet extends HookConsumerWidget {
-  const _CustomOrderSheet();
+/// Sheet pesanan bebas (nama & harga diketik kasir).
+///
+/// Publik karena pemanggilnya kini DUA: header layar Kasir di ponsel sempit,
+/// dan rail navigasi kanan di layar lega — dan rail itu hidup di MainShell,
+/// di luar berkas ini.
+class CustomOrderSheet extends HookConsumerWidget {
+  const CustomOrderSheet({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

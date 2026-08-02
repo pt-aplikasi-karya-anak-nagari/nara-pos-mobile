@@ -49,6 +49,24 @@ extension ResponsiveContext on BuildContext {
     }
   }
 
+  /// Navigasi utama ditaruh sebagai rail di tepi KANAN, bukan bilah bawah.
+  ///
+  /// # KENAPA SATU TEMPAT
+  ///
+  /// Dua tempat memutuskannya: MainShell (menggambar rail atau bilah) dan
+  /// KasirPage (menyembunyikan baris aksi di header karena aksinya sudah pindah
+  /// ke rail). Kalau keduanya menghitung sendiri-sendiri, satu titik henti yang
+  /// diubah akan membuat aksinya tampil DUA KALI, atau — lebih buruk — hilang
+  /// sama sekali dari kedua tempat.
+  ///
+  /// # KENAPA 600 dp
+  ///
+  /// Di ponsel 360 dp, rail selebar 88 dp memakan seperempat lebar layar, dan
+  /// lebar itulah yang menentukan berapa kartu produk muat sebaris. 600 dp juga
+  /// titik saat ponsel dimiringkan jadi melintang — di sana tingginya tinggal
+  /// ~360 dp dan rail justru menguntungkan.
+  bool get pakaiRailNavigasi => screen != ScreenSize.compact;
+
   /// Hitung jumlah kolom grid produk berdasarkan lebar layar.
   int get productGridColumns => responsive<int>(
         compact: 2,

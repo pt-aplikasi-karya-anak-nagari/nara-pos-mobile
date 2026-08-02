@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nara_pos_mobile/core/auth_storage.dart';
 import 'package:nara_pos_mobile/core/shared_prefs.dart';
 import 'package:nara_pos_mobile/features/user/domain/user_role.dart';
 import 'package:nara_pos_mobile/shared/widgets/main_shell.dart';
@@ -34,16 +37,20 @@ final tujuan = ['nav.kasir', 'nav.riwayat', 'nav.notifikasi', 'nav.profil'];
 /// Label tombol diterjemahkan lewat ref.t(), yang membaca bahasa aktif dari
 /// SharedPreferences. Providernya sengaja melempar bila tak ditimpa.
 late SharedPreferences _prefs;
+late AuthStorage _penyimpanan;
 
 Future<void> siapkan() async {
   SharedPreferences.setMockInitialValues({});
   _prefs = await SharedPreferences.getInstance();
+  // Lencana Draft membaca outlet aktif, yang bersandar pada penyimpanan sesi.
+  _penyimpanan = AuthStorage(_prefs);
 }
 
 Future<List<String>> pasang(
   WidgetTester tester, {
   required bool rail,
   int aktif = 0,
+  bool aksi = false,
   Size ukuran = const Size(1024, 768),
 }) async {
   final ditekan = <String>[];
@@ -55,7 +62,10 @@ Future<List<String>> pasang(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(_prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_prefs),
+        authStorageProvider.overrideWithValue(_penyimpanan),
+      ],
       child: MaterialApp(
         home: Scaffold(
           body: rail
@@ -66,6 +76,7 @@ Future<List<String>> pasang(
                       items: items,
                       aktif: aktif,
                       onTap: (i) => ditekan.add(items[i].labelKey),
+                      tampilkanAksi: aksi,
                     ),
                   ],
                 )
@@ -187,6 +198,114 @@ void main() {
         1,
       );
       pegangan.dispose();
+    });
+  });
+
+  group('aksi cepat di rail', () {
+    // Scan, Custom Order, Meja, dan Draft pindah dari header biru layar Kasir
+    // ke rail. Yang dijaga: keempatnya benar-benar ADA di rail, dan hanya
+    // muncul di tab Kasir — sheet "Custom Order" yang bisa dibuka dari halaman
+    // Profil hanya membingungkan.
+    const aksiRail = ['Scan', 'Custom', 'Meja', 'Draft'];
+
+    testWidgets('keempat aksi ada saat di tab Kasir', (tester) async {
+      await pasang(tester, rail: true, aksi: true);
+      for (final a in aksiRail) {
+        expect(find.byKey(ValueKey('aksi-$a')), findsOneWidget,
+            reason: 'aksi "$a" hilang dari rail');
+      }
+    });
+
+    testWidgets('aksi berada DI ATAS tujuan navigasi', (tester) async {
+      // Aksi mengubah PESANAN yang sedang dibuat; tujuan memindahkan HALAMAN.
+      // Yang lebih sering disentuh saat melayani antrean ada di atas.
+      await pasang(tester, rail: true, aksi: true);
+      final aksiTerbawah = aksiRail
+          .map((a) => tester.getRect(find.byKey(ValueKey('aksi-$a'))).bottom)
+          .reduce((a, b) => a > b ? a : b);
+      final tujuanTeratas = tujuan
+          .map((t) => kotak(tester, t).top)
+          .reduce((a, b) => a < b ? a : b);
+      expect(aksiTerbawah, lessThan(tujuanTeratas));
+    });
+
+    testWidgets('aksi TIDAK muncul di tab selain Kasir', (tester) async {
+      await pasang(tester, rail: true, aksi: false);
+      for (final a in aksiRail) {
+        expect(find.byKey(ValueKey('aksi-$a')), findsNothing,
+            reason: 'aksi "$a" tetap muncul padahal bukan di tab Kasir');
+      }
+      // Tujuannya tetap lengkap — aksi yang disembunyikan tak boleh ikut
+      // menyeret navigasinya.
+      for (final t in tujuan) {
+        expect(find.byKey(ValueKey('nav-$t')), findsOneWidget);
+      }
+    });
+
+    testWidgets('rail berisi 8 baris tetap terjangkau di layar pendek',
+        (tester) async {
+      // Ponsel dimiringkan: tinggi tinggal ~360 dp untuk 4 aksi + 4 tujuan.
+      // Tanpa gulir, tab Profil di paling bawah jadi tak terjangkau sama
+      // sekali — dan tak ada galat apa pun yang memberitahu.
+      await pasang(tester, rail: true, aksi: true,
+          ukuran: const Size(800, 360));
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Scrollable), findsWidgets);
+      await tester.drag(find.byKey(const ValueKey('nav-nav.kasir')),
+          const Offset(0, -200));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('nav-nav.profil')), findsOneWidget);
+    });
+  });
+
+  group('aksi tidak tampil dua kali', () {
+    // Saat rail dipakai, header biru layar Kasir HARUS menyembunyikan baris
+    // aksinya — kalau tidak, ada dua tombol "Draft" di satu layar dan kasir
+    // menekan yang mana pun tanpa tahu keduanya sama.
+    //
+    // # KENAPA MEMBACA BERKAS SUMBER
+    //
+    // Prasyaratnya hidup di dalam build() KasirPage, dan memasang KasirPage di
+    // tes menuntut hampir seluruh graf provider aplikasi — outlet, produk,
+    // keranjang, shift, printer. Yang bisa diperiksa tanpa itu adalah bahwa
+    // penjaganya MASIH ADA dan memakai sumber tunggal yang sama. Suntikan yang
+    // mencabut penjaga itu lolos dari seluruh tes lain di berkas ini; inilah
+    // yang menutupnya.
+
+    test('KasirPage menjaga HeaderAksiKasir dengan pakaiRailNavigasi', () {
+      final sumber =
+          File('lib/features/kasir/ui/kasir_page.dart').readAsStringSync();
+      final i = sumber.indexOf('HeaderAksiKasir(');
+      expect(i, greaterThan(0), reason: 'HeaderAksiKasir tak dipakai lagi');
+
+      // Penjaganya harus berada tepat sebelum pemanggilan, bukan di mana pun
+      // di berkas.
+      final sebelum = sumber.substring(0, i);
+      final penjaga = sebelum.lastIndexOf('!context.pakaiRailNavigasi');
+      expect(penjaga, greaterThan(0),
+          reason: 'HeaderAksiKasir dipanggil TANPA penjaga '
+              '!context.pakaiRailNavigasi — di tablet, Scan/Custom/Meja/Draft '
+              'akan tampil dua kali: di header dan di rail');
+      expect(i - penjaga, lessThan(400),
+          reason: 'penjaganya ada tapi terlalu jauh dari pemanggilannya — '
+              'kemungkinan menjaga hal lain');
+    });
+
+    test('hanya SATU tempat yang memutuskan rail atau bilah', () {
+      // Dua tempat membacanya (MainShell & KasirPage). Kalau salah satunya
+      // menghitung sendiri dari titik henti, mengubah titik itu akan membuat
+      // aksinya dobel atau hilang dari kedua tempat.
+      for (final berkas in [
+        'lib/shared/widgets/main_shell.dart',
+        'lib/features/kasir/ui/kasir_page.dart',
+      ]) {
+        final isi = File(berkas).readAsStringSync();
+        expect(isi.contains('pakaiRailNavigasi'), isTrue,
+            reason: '$berkas tak memakai sumber tunggalnya');
+        expect(isi.contains('screen != ScreenSize.compact'), isFalse,
+            reason: '$berkas menghitung sendiri titik hentinya — '
+                'pakai context.pakaiRailNavigasi');
+      }
     });
   });
 }
