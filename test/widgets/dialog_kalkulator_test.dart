@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:nara_pos_mobile/features/kasir/ui/widgets/dialog_kalkulator.dart';
+import 'package:nara_pos_mobile/features/kasir/ui/widgets/riwayat_kalkulator.dart';
 
 // Kalkulator kasir.
 //
@@ -19,9 +21,17 @@ import 'package:nara_pos_mobile/features/kasir/ui/widgets/dialog_kalkulator.dart
 //   3333.3333333    pembagian menyisakan desimal panjang yang tak bisa
 //                   dibacakan.
 
-Future<void> buka(WidgetTester t) async {
+/// Lebar layar uji. Di bawah 620 dialognya memakai tata letak satu kolom
+/// (riwayat di atas keypad); di atasnya, riwayat pindah ke kiri. Default
+/// dibuat SEMPIT supaya tes perilaku hitungan tak bergantung pada tata letak.
+Future<void> buka(WidgetTester t, {double lebar = 400}) async {
+  t.view.physicalSize = Size(lebar, 1000);
+  t.view.devicePixelRatio = 1.0;
+  addTearDown(t.view.reset);
   await t.pumpWidget(
-    const MaterialApp(home: Scaffold(body: DialogKalkulator())),
+    const ProviderScope(
+      child: MaterialApp(home: Scaffold(body: DialogKalkulator())),
+    ),
   );
   await t.pumpAndSettle();
 }
@@ -196,5 +206,126 @@ void main() {
     await buka(t);
     await tekan(t, ['5', '0', '0', '0', '0']);
     expect(find.textContaining('50.000'), findsWidgets);
+  });
+
+  group('riwayat perhitungan', () {
+    testWidgets('hasil masuk riwayat LENGKAP dengan ekspresinya', (t) async {
+      // Riwayat berisi "45000" saja tak berguna: kasir tak tahu itu dari
+      // hitungan yang mana. Ekspresinya yang membuat baris itu bisa dibaca
+      // lagi lima menit kemudian.
+      await buka(t);
+      await tekan(t, ['5', '0', '0', '0', '0', '−', '5', '0', '0', '0', '=']);
+      expect(find.text('50000 − 5000'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('kalkulator-riwayat-0')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('yang TERBARU di atas', (t) async {
+      await buka(t);
+      await tekan(t, ['1', '+', '1', '=']);
+      await tekan(t, ['9', '+', '9', '=']);
+      final pertama = t.widget<Text>(
+        find.descendant(
+          of: find.byKey(const ValueKey('kalkulator-riwayat-0')),
+          matching: find.textContaining('+'),
+        ),
+      );
+      expect(
+        pertama.data,
+        '9 + 9',
+        reason:
+            'baris teratas "${pertama.data}" — yang baru saja dihitung '
+            'adalah yang paling mungkin dilihat lagi, jadi harus di atas',
+      );
+    });
+
+    testWidgets('mengetuk riwayat memuat hasilnya ke layar', (t) async {
+      // Riwayat yang hanya bisa dibaca memaksa kasir mengetik ulang, dan
+      // mengetik ulang adalah tempat salah ketik terjadi.
+      await buka(t);
+      await tekan(t, ['2', '5', '0', '0', '0', '+', '5', '0', '0', '0', '=']);
+      await tekan(t, ['7']); // layar berpindah ke angka lain
+      expect(layar(t), '7');
+
+      await t.tap(find.byKey(const ValueKey('kalkulator-riwayat-0')));
+      await t.pump();
+      expect(layar(t), '30000');
+    });
+
+    testWidgets('angka setelah mengetuk riwayat MENGGANTI, bukan menempel', (
+      t,
+    ) async {
+      // Kalau menempel, mengetuk 30000 lalu menekan 5 menghasilkan 300005 —
+      // angka yang tampak wajar dan sama sekali salah.
+      await buka(t);
+      await tekan(t, ['1', '0', '+', '2', '0', '=']);
+      await t.tap(find.byKey(const ValueKey('kalkulator-riwayat-0')));
+      await t.pump();
+      await tekan(t, ['5']);
+      expect(layar(t), '5', reason: 'layar menampilkan ${layar(t)}');
+    });
+
+    testWidgets('Bersihkan mengosongkan riwayat', (t) async {
+      await buka(t);
+      await tekan(t, ['3', '+', '3', '=']);
+      expect(
+        find.byKey(const ValueKey('kalkulator-riwayat-0')),
+        findsOneWidget,
+      );
+
+      await t.tap(find.byKey(const ValueKey('kalkulator-riwayat-bersihkan')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const ValueKey('kalkulator-riwayat-0')), findsNothing);
+    });
+
+    testWidgets('riwayat kosong menjelaskan dirinya, bukan diam', (t) async {
+      await buka(t);
+      expect(find.textContaining('Belum ada perhitungan'), findsOneWidget);
+      // Tombol bersihkan tak ditampilkan saat tak ada yang bisa dibersihkan.
+      expect(
+        find.byKey(const ValueKey('kalkulator-riwayat-bersihkan')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('operasi yang belum ditekan = TIDAK masuk riwayat', (t) async {
+      // Hitungan setengah jadi bukan hasil. Mencatatnya membuat daftar penuh
+      // angka yang tak pernah dipakai siapa pun.
+      await buka(t);
+      await tekan(t, ['8', '+', '2']);
+      expect(find.byKey(const ValueKey('kalkulator-riwayat-0')), findsNothing);
+      await tekan(t, ['=']);
+      expect(
+        find.byKey(const ValueKey('kalkulator-riwayat-0')),
+        findsOneWidget,
+      );
+    });
+
+    test('riwayat dibatasi 50 baris', () {
+      // Kasir sibuk menghitung ratusan kali sehari; daftar tanpa batas hanya
+      // menghabiskan memori untuk baris yang tak akan pernah digulir orang.
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(riwayatKalkulatorProvider.notifier);
+      for (var i = 0; i < 60; i++) {
+        n.tambah('$i + 0', '$i');
+      }
+      final r = c.read(riwayatKalkulatorProvider);
+      expect(r, hasLength(RiwayatKalkulator.batas));
+      expect(r.first.hasil, '59', reason: 'yang terbaru harus bertahan');
+    });
+  });
+
+  testWidgets('ekspresi yang SEDANG disusun tampil di layar', (t) async {
+    // Kasir yang terganggu di tengah hitungan bisa melihat lagi apa yang
+    // sedang ia kerjakan — bukan hanya angka terakhir yang diketik.
+    await buka(t);
+    await tekan(t, ['1', '2', '0', '0', '0', '×', '3']);
+    final ekspresi = t.widget<Text>(
+      find.byKey(const ValueKey('kalkulator-ekspresi')),
+    );
+    expect(ekspresi.data, '12000 × 3');
   });
 }
