@@ -22,7 +22,14 @@ class PendingSyncBanner extends ConsumerWidget {
     final pending = ref.watch(pendingSyncCountProvider);
     final dead = ref.watch(deadLetterCountProvider);
     final shiftPending = ref.watch(pendingShiftSyncCountProvider);
-    if (pending <= 0 && dead <= 0 && shiftPending <= 0) {
+    // Dead-letter SHIFT dihitung sejak lama tapi tak pernah ditampilkan di
+    // permukaan mana pun — satu-satunya yang membacanya adalah penyinkron, untuk
+    // menyegarkan angkanya sendiri. Akibatnya catatan tutup shift yang ditolak
+    // permanen (uang laci, catatan penutup) hilang diam-diam: tak sampai ke
+    // server, dan tak bisa dipulihkan dari aplikasi. Z-Report untuk shift itu
+    // tak pernah terbit, dan rekonsiliasi kas hari itu tak bisa diselesaikan.
+    final shiftDead = ref.watch(shiftDeadLetterCountProvider);
+    if (pending <= 0 && dead <= 0 && shiftPending <= 0 && shiftDead <= 0) {
       return const SizedBox.shrink();
     }
 
@@ -70,6 +77,17 @@ class PendingSyncBanner extends ConsumerWidget {
               color: kDanger,
               icon: Icons.error_outline_rounded,
               text: '$dead transaksi gagal terkirim',
+              actionLabel: 'Pulihkan',
+              onAction: () => showDeadLetterRecoverySheet(context, ref),
+            ),
+          if (shiftDead > 0)
+            _BannerRow(
+              color: kDanger,
+              icon: Icons.point_of_sale_outlined,
+              // Disebut "buka/tutup shift", bukan "operasi shift": yang hilang
+              // adalah catatan uang laci, dan kasir perlu langsung mengenali
+              // bahwa itu yang sedang dibicarakan.
+              text: '$shiftDead catatan buka/tutup shift gagal terkirim',
               actionLabel: 'Pulihkan',
               onAction: () => showDeadLetterRecoverySheet(context, ref),
             ),

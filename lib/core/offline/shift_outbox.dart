@@ -198,6 +198,52 @@ class ShiftOutbox {
     );
   }
 
+  /// Pulihkan SELURUH operasi satu shift sekaligus.
+  ///
+  /// # KENAPA PER SHIFT, BUKAN PER BARIS
+  ///
+  /// markDeadCascade menandai open DAN close turunannya mati bersamaan, karena
+  /// close tak berarti apa-apa tanpa open yang berhasil: server_shift_id-nya
+  /// datang dari respons open.
+  ///
+  /// Memulihkan barisnya satu-satu membalik urutan itu. Kasir yang menekan
+  /// "Coba lagi" pada baris close — baris yang memuat uang laci, jadi yang
+  /// paling menarik perhatiannya — akan mengirim ulang close untuk shift yang
+  /// di server tak pernah ada. Ia gagal lagi, mati lagi, dan kasirnya menyangka
+  /// aplikasinya rusak.
+  ///
+  /// Urutan pengirimannya sendiri sudah dijaga penyinkron lewat dependsOn; yang
+  /// perlu dipastikan di sini hanyalah keduanya kembali ANTRE bersama.
+  ///
+  /// CELAH YANG DIKETAHUI: pengelompokan per-shift ini TIDAK dijaga tes.
+  /// Mengujinya butuh SQLite di lingkungan tes, dan OfflineDb membuka
+  /// databasenya lewat getApplicationDocumentsDirectory() yang perlu platform
+  /// channel — jadi ia harus disuntik dulu, perubahan yang lebih besar daripada
+  /// perbaikan ini sendiri. Yang terjaga tes hanyalah bahwa hitungannya sampai
+  /// ke banner. Kalau seseorang mengubah `local_shift_id` di WHERE menjadi
+  /// `local_id`, tak ada yang merah.
+  Future<void> retryShift(String localShiftId) async {
+    final db = await OfflineDb.instance.database;
+    await db.update(
+      'pending_ops',
+      {'attempts': 0, 'last_error': null, 'status': 'pending'},
+      where: "local_shift_id = ? AND status != 'done'",
+      whereArgs: [localShiftId],
+    );
+  }
+
+  /// Buang SELURUH operasi satu shift. Pasangan dari retryShift, dan alasannya
+  /// sama: menyisakan open yang mati tanpa close-nya (atau sebaliknya) hanya
+  /// memindahkan masalahnya, tidak menyelesaikannya.
+  Future<void> discardShift(String localShiftId) async {
+    final db = await OfflineDb.instance.database;
+    await db.delete(
+      'pending_ops',
+      where: "local_shift_id = ? AND status != 'done'",
+      whereArgs: [localShiftId],
+    );
+  }
+
   /// Hitungan antrian aktif (untuk banner). Dead-letter dikecualikan.
   Future<int> count() async {
     final db = await OfflineDb.instance.database;

@@ -8,6 +8,7 @@ import '../../app/theme.dart';
 import '../../core/format.dart';
 import '../../core/offline/offline_sync_service.dart';
 import '../../core/offline/sale_outbox.dart';
+import '../../core/offline/shift_outbox.dart';
 
 /// Sheet pemulihan transaksi offline yang gagal sinkron permanen (dead-letter).
 /// Mencegah kehilangan diam-diam: owner bisa lihat detail + alasan gagal, lalu
@@ -163,27 +164,37 @@ class _DeadLetterRecoverySheetState
                       return const Center(child: CircularProgressIndicator());
                     }
                     final items = snap.data ?? const [];
-                    if (items.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Tidak ada transaksi gagal. 🎉',
-                            style: TextStyle(color: kTextMid),
-                          ),
-                        ),
-                      );
-                    }
-                    return ListView.separated(
+                    // TIDAK boleh berhenti di sini saat daftar penjualan kosong.
+                    //
+                    // Sheet ini kini juga memuat seksi shift, dan keduanya
+                    // punya sumber sendiri. Berhenti pada penjualan yang kosong
+                    // membuat sheet berkata "Tidak ada transaksi gagal 🎉"
+                    // sementara bannernya baru saja berkata ada catatan shift
+                    // yang gagal — dua pernyataan yang bertentangan, di layar
+                    // yang sama, tentang uang laci yang hilang.
+                    //
+                    // Keadaan benar-benar kosong ditangani _SeksiShiftGagal:
+                    // ia yang tahu apakah masih ada sisa.
+                    return ListView(
                       controller: scrollController,
                       padding: const EdgeInsets.all(16),
-                      itemCount: items.length,
-                      separatorBuilder: (_, _) => const Gap(10),
-                      itemBuilder: (_, i) => _DeadLetterCard(
-                        sale: items[i],
-                        onRetry: () => _retry(items[i]),
-                        onDiscard: () => _discard(items[i]),
-                      ),
+                      children: [
+                        for (final ps in items) ...[
+                          _DeadLetterCard(
+                            sale: ps,
+                            onRetry: () => _retry(ps),
+                            onDiscard: () => _discard(ps),
+                          ),
+                          const Gap(10),
+                        ],
+                        // Seksi kedua: buka/tutup shift yang gagal permanen.
+                        // Sebelum ini tak punya permukaan UI sama sekali, jadi
+                        // catatan uang laci hilang tanpa ada yang tahu.
+                        _SeksiShiftGagal(
+                          onSelesai: _reload,
+                          adaPenjualanGagal: items.isNotEmpty,
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -279,6 +290,211 @@ class _DeadLetterCard extends StatelessWidget {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: onRetry,
+                  style: FilledButton.styleFrom(backgroundColor: kPrimary),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Coba Lagi'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Buka/tutup shift yang ditolak permanen, DIKELOMPOKKAN PER SHIFT.
+///
+/// # KENAPA PER SHIFT
+///
+/// markDeadCascade menandai open DAN close turunannya mati bersamaan: close tak
+/// berarti apa-apa tanpa open yang berhasil, karena server_shift_id-nya datang
+/// dari respons open.
+///
+/// Menampilkannya sebagai baris terpisah akan mengundang kasir menekan "Coba
+/// lagi" pada baris CLOSE — baris yang memuat uang laci, jadi yang paling
+/// menarik perhatiannya. Close itu lalu dikirim untuk shift yang di server tak
+/// pernah ada, gagal lagi, dan kasirnya menyangka aplikasinya rusak.
+class _SeksiShiftGagal extends ConsumerStatefulWidget {
+  const _SeksiShiftGagal({required this.onSelesai, required this.adaPenjualanGagal});
+  final VoidCallback onSelesai;
+
+  /// Dipakai memutuskan siapa yang menampilkan pesan "tidak ada apa-apa".
+  /// Hanya satu yang boleh menampilkannya, kalau tidak layarnya berkata dua
+  /// kali hal yang sama.
+  final bool adaPenjualanGagal;
+
+  @override
+  ConsumerState<_SeksiShiftGagal> createState() => _SeksiShiftGagalState();
+}
+
+class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
+  late Future<List<PendingOp>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(shiftOutboxProvider).deadLetters();
+  }
+
+  void _muatUlang() {
+    setState(() => _future = ref.read(shiftOutboxProvider).deadLetters());
+    ref.read(shiftDeadLetterCountProvider.notifier).refresh();
+    widget.onSelesai();
+  }
+
+  Future<void> _coba(String localShiftId) async {
+    await ref.read(shiftOutboxProvider).retryShift(localShiftId);
+    if (!mounted) return;
+    _muatUlang();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Dikembalikan ke antrean — akan dikirim saat online.')),
+    );
+  }
+
+  Future<void> _buang(String localShiftId) async {
+    final ya = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Buang catatan shift ini?'),
+        content: const Text(
+          'Catatan buka & tutup shift ini akan dihapus permanen dan TIDAK '
+          'terkirim ke server. Z-Report untuk shift itu tidak akan pernah '
+          'terbit, dan rekonsiliasi kasnya tak bisa diselesaikan.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: FilledButton.styleFrom(backgroundColor: kDanger),
+            child: const Text('Buang'),
+          ),
+        ],
+      ),
+    );
+    if (ya != true) return;
+    await ref.read(shiftOutboxProvider).discardShift(localShiftId);
+    if (!mounted) return;
+    _muatUlang();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<PendingOp>>(
+      future: _future,
+      builder: (context, snap) {
+        final ops = snap.data ?? const <PendingOp>[];
+        if (ops.isEmpty) {
+          if (widget.adaPenjualanGagal) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: Text(
+                'Tidak ada yang gagal terkirim. 🎉',
+                style: TextStyle(color: kTextMid),
+              ),
+            ),
+          );
+        }
+
+        // Kelompokkan per shift, dengan urutan kemunculan dipertahankan.
+        final perShift = <String, List<PendingOp>>{};
+        for (final op in ops) {
+          perShift.putIfAbsent(op.localShiftId ?? op.localId, () => []).add(op);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Gap(8),
+            Text(
+              'BUKA/TUTUP SHIFT GAGAL',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: kTextMid,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const Gap(8),
+            for (final e in perShift.entries) ...[
+              _KartuShiftGagal(
+                ops: e.value,
+                onCoba: () => _coba(e.key),
+                onBuang: () => _buang(e.key),
+              ),
+              const Gap(10),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _KartuShiftGagal extends StatelessWidget {
+  const _KartuShiftGagal({
+    required this.ops,
+    required this.onCoba,
+    required this.onBuang,
+  });
+
+  final List<PendingOp> ops;
+  final VoidCallback onCoba;
+  final VoidCallback onBuang;
+
+  @override
+  Widget build(BuildContext context) {
+    final jenis = ops.map((o) => o.opType).toSet().toList()..sort();
+    final galat = ops
+        .map((o) => o.lastError)
+        .whereType<String>()
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kDanger.withValues(alpha: 0.06),
+        border: Border.all(color: kDanger.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            jenis.join(' + '),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+          ),
+          const Gap(4),
+          Text(
+            '${ops.length} operasi dalam satu shift — dipulihkan bersamaan '
+            'supaya urutannya tetap benar.',
+            style: TextStyle(color: kTextMid, fontSize: 12, height: 1.4),
+          ),
+          if (galat.isNotEmpty) ...[
+            const Gap(6),
+            Text(
+              galat.first,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: kDanger, fontSize: 11),
+            ),
+          ],
+          const Gap(12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onBuang,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                  label: const Text('Buang'),
+                ),
+              ),
+              const Gap(8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onCoba,
                   style: FilledButton.styleFrom(backgroundColor: kPrimary),
                   icon: const Icon(Icons.refresh_rounded, size: 16),
                   label: const Text('Coba Lagi'),
