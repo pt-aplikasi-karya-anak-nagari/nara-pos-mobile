@@ -39,7 +39,6 @@ import 'widgets/baris_produk.dart';
 import 'widgets/header_aksi_kasir.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
-import 'widgets/empty_states.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
 
@@ -121,14 +120,13 @@ class KasirPage extends HookConsumerWidget {
     final category = ref.watch(selectedMainCategoryProvider);
     final scanMode = useState(false);
     final dynamicCats = ref.watch(categoryNamesProvider);
-    // Chip kiri: 'Terlaris' + 'Favorit' + 'Semua' + kategori asli outlet.
+    // Chip kiri: 'Terlaris' + 'Semua' + kategori asli outlet.
     // Urutan terbaik di paling kiri supaya kasir cepat akses item populer.
-    final categories = <String>['Terlaris', 'Favorit', 'Semua', ...dynamicCats];
+    final categories = <String>['Terlaris', 'Semua', ...dynamicCats];
     final isCheckingShift = useState(false);
 
     final totalItems = ref.watch(totalItemsProvider);
     final total = ref.watch(totalProvider);
-    final favCount = ref.watch(favoritesCountProvider);
     final activeShift = ref.watch(activeShiftProvider).value;
 
     // ── Collapsible cart panel state (tablet only) ──
@@ -158,10 +156,9 @@ class KasirPage extends HookConsumerWidget {
           if (outletId == null) return [];
 
           // Selalu baca state terbaru di dalam closure agar perubahan tab
-          // (Terlaris / Favorit / Semua / kategori lain) langsung
+          // (Terlaris / Semua / kategori lain) langsung
           // ter-refleksi setelah pagingController.refresh() dipicu.
           final currentCategory = ref.read(selectedMainCategoryProvider);
-          final isFav = currentCategory == 'Favorit';
           final isBestSeller = currentCategory == 'Terlaris';
           final query = ref.read(productSearchQueryProvider);
 
@@ -197,7 +194,7 @@ class KasirPage extends HookConsumerWidget {
             }
           }
 
-          final catId = isFav || currentCategory == 'Semua'
+          final catId = currentCategory == 'Semua'
               ? null
               : ref.read(selectedCategoryIdProvider);
           try {
@@ -207,14 +204,13 @@ class KasirPage extends HookConsumerWidget {
                   outletId,
                   categoryId: catId,
                   search: query,
-                  isFavorite: isFav,
                   page: pageKey,
                   limit: 10,
                 );
             return products;
           } catch (e) {
             // Offline: layani halaman pertama dari cache lokal dengan filter
-            // kategori/cari/favorit dilakukan di sisi klien. Halaman > 1
+            // kategori/cari dilakukan di sisi klien. Halaman > 1
             // dikosongkan supaya infinite-scroll berhenti rapi.
             if (isOfflineError(e)) {
               if (pageKey > 1) return <Product>[];
@@ -224,7 +220,6 @@ class KasirPage extends HookConsumerWidget {
               final q = query.toLowerCase();
               return cached.where((p) {
                 if (catId != null && p.categoryId != catId) return false;
-                if (isFav && !p.isFavorite) return false;
                 if (q.isNotEmpty && !p.name.toLowerCase().contains(q)) {
                   return false;
                 }
@@ -253,7 +248,6 @@ class KasirPage extends HookConsumerWidget {
       [
         ref.watch(selectedCategoryIdProvider),
         ref.watch(productSearchQueryProvider),
-        ref.watch(favoritesUpdateTriggerProvider),
         category,
       ],
     );
@@ -750,12 +744,6 @@ class KasirPage extends HookConsumerWidget {
               // viewport bertingkat memicu "RenderViewport does not
               // support returning intrinsic dimensions" + null-check error.
               final emptyHeight = MediaQuery.of(context).size.height * 0.6;
-              if (category == 'Favorit') {
-                return SizedBox(
-                  height: emptyHeight,
-                  child: const EmptyFavorites(),
-                );
-              }
               final query = ref.read(productSearchQueryProvider);
               final isSearching = query.trim().isNotEmpty;
               return SizedBox(
@@ -1047,7 +1035,6 @@ class KasirPage extends HookConsumerWidget {
                             children: [
                               _Header(
                                 category: category,
-                                favCount: favCount,
                                 categories: categories,
                               ),
                               Expanded(child: productArea),
@@ -1150,11 +1137,7 @@ class KasirPage extends HookConsumerWidget {
       backgroundColor: kBg,
       body: Column(
         children: [
-          _Header(
-            category: category,
-            favCount: favCount,
-            categories: categories,
-          ),
+          _Header(category: category, categories: categories),
           Expanded(child: productArea),
         ],
       ),
@@ -1252,14 +1235,9 @@ class KasirPage extends HookConsumerWidget {
 
 class _Header extends HookConsumerWidget {
   final String category;
-  final int favCount;
   final List<String> categories;
 
-  const _Header({
-    required this.category,
-    required this.favCount,
-    required this.categories,
-  });
+  const _Header({required this.category, required this.categories});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1435,19 +1413,16 @@ class _Header extends HookConsumerWidget {
                   itemBuilder: (_, i) {
                     final c = categories[i];
                     final active = c == category;
-                    final isFavChip = c == 'Favorit';
                     final isBestSellerChip = c == 'Terlaris';
-                    // Warna aktif khusus: fav=pink, terlaris=oranye, else=putih.
-                    final activeColor = isFavChip
-                        ? kFav
-                        : isBestSellerChip
+                    // Warna aktif khusus: terlaris=oranye, else=putih.
+                    final activeColor = isBestSellerChip
                         ? const Color(0xFFFF8A1F)
                         : Colors.white;
                     return GestureDetector(
                       onTap: () {
                         ref.read(selectedMainCategoryProvider.notifier).state =
                             c;
-                        if (c == 'Semua' || c == 'Favorit' || c == 'Terlaris') {
+                        if (c == 'Semua' || c == 'Terlaris') {
                           ref.read(selectedCategoryIdProvider.notifier).state =
                               null;
                         } else {
@@ -1474,13 +1449,7 @@ class _Header extends HookConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            if (isFavChip)
-                              HugeIcon(
-                                icon: AppIcons.favorite,
-                                size: 12,
-                                color: Colors.white,
-                              )
-                            else if (isBestSellerChip) ...[
+                            if (isBestSellerChip) ...[
                               HugeIcon(
                                 icon: AppIcons.fire,
                                 size: 12,

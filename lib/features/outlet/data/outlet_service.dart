@@ -175,21 +175,9 @@ class OutletService extends BaseApiService {
     String outletId, {
     String? categoryId,
     String? search,
-    bool? isFavorite,
     int? page,
     int? limit,
   }) async {
-    // Endpoint khusus favorit lebih hemat: backend langsung filter is_favorite=true
-    // sehingga query string tambahan tidak diperlukan.
-    if (isFavorite == true) {
-      return getFavoriteProducts(
-        outletId,
-        search: search,
-        page: page,
-        limit: limit,
-      );
-    }
-
     final Map<String, dynamic> params = {};
     if (categoryId != null && categoryId.isNotEmpty) {
       params['category_id'] = categoryId;
@@ -205,26 +193,6 @@ class OutletService extends BaseApiService {
     );
   }
 
-  /// Mengambil hanya produk yang ditandai favorit.
-  /// Memanggil endpoint dedicated `/outlets/:outletId/products/favorites`.
-  Future<List<Product>> getFavoriteProducts(
-    String outletId, {
-    String? search,
-    int? page,
-    int? limit,
-  }) async {
-    final Map<String, dynamic> params = {};
-    if (search != null && search.isNotEmpty) params['search'] = search;
-    if (page != null) params['page'] = page;
-    if (limit != null) params['limit'] = limit;
-
-    return get(
-      ApiEndpoint.outletFavorites(outletId),
-      queryParameters: params.isEmpty ? null : params,
-      converter: _productListConverter,
-    );
-  }
-
   /// Produk terlaris berdasar SUM(quantity) di transaction_items dalam
   /// window [days] hari terakhir (default 30). Backend return list dgn
   /// urutan paling laku di awal. Limit default 10, max 50.
@@ -233,10 +201,7 @@ class OutletService extends BaseApiService {
     int days = 30,
     int limit = 10,
   }) async {
-    final params = <String, dynamic>{
-      'days': days,
-      'limit': limit,
-    };
+    final params = <String, dynamic>{'days': days, 'limit': limit};
     return get(
       ApiEndpoint.outletBestSellers(outletId),
       queryParameters: params,
@@ -287,10 +252,6 @@ class OutletService extends BaseApiService {
       converter: (raw) =>
           (raw is Map ? raw['barcode']?.toString() : null) ?? '',
     );
-  }
-
-  Future<void> toggleFavorite(String productId) async {
-    await post('/products/$productId/favorite', data: {});
   }
 
   /// Tandai / pulihkan status "86" (habis manual) sebuah produk dari kasir.
@@ -417,9 +378,8 @@ class OutletService extends BaseApiService {
   Future<Map<String, dynamic>> getPaymentMethodsSummary(String outletId) async {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletPaymentMethodsSummary(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -431,9 +391,8 @@ class OutletService extends BaseApiService {
   Future<Map<String, dynamic>> getReceiptSettings(String outletId) async {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletReceiptSettings(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -444,9 +403,8 @@ class OutletService extends BaseApiService {
     return put<Map<String, dynamic>>(
       ApiEndpoint.outletReceiptSettings(outletId),
       data: body,
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -459,9 +417,8 @@ class OutletService extends BaseApiService {
   Future<Map<String, dynamic>> getImageSettings(String outletId) async {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletImageSettings(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -472,18 +429,16 @@ class OutletService extends BaseApiService {
     return put<Map<String, dynamic>>(
       ApiEndpoint.outletImageSettings(outletId),
       data: body,
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
   Future<Map<String, dynamic>> getLoyaltySettings(String outletId) async {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletLoyaltySettings(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -493,9 +448,8 @@ class OutletService extends BaseApiService {
   Future<Map<String, dynamic>> getAppSettings(String outletId) async {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletAppSettings(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -519,9 +473,8 @@ class OutletService extends BaseApiService {
   Future<Map<String, dynamic>> getRolePrinterConfig(String outletId) async {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletRolePrinterConfigMine(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -607,9 +560,8 @@ class OutletService extends BaseApiService {
     return put<Map<String, dynamic>>(
       ApiEndpoint.outletLoyaltySettings(outletId),
       data: body,
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -620,9 +572,8 @@ class OutletService extends BaseApiService {
     return get<Map<String, dynamic>>(
       ApiEndpoint.outletPromotionsValidate(outletId),
       queryParameters: {'code': code},
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
   }
 
@@ -632,9 +583,8 @@ class OutletService extends BaseApiService {
   Future<List<String>> getMyPermissions(String outletId) async {
     final data = await get<Map<String, dynamic>>(
       ApiEndpoint.outletMyPermissions(outletId),
-      converter: (data) => data is Map
-          ? Map<String, dynamic>.from(data)
-          : <String, dynamic>{},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
     );
     final list = data['permissions'];
     if (list is List) {
@@ -690,8 +640,8 @@ final outletsProvider = AsyncNotifierProvider<OutletsNotifier, List<Outlet>>(
 /// tebakan yang berpeluang ditolak server saat disimpan.
 final assignableRolesProvider =
     FutureProvider.family<List<AssignableRole>, String>((ref, outletId) async {
-  return ref.watch(outletServiceProvider).getAssignableRoles(outletId);
-});
+      return ref.watch(outletServiceProvider).getAssignableRoles(outletId);
+    });
 
 final outletEmployeesProvider = FutureProvider.family<List<User>, String>((
   ref,
@@ -713,7 +663,3 @@ final outletCategoriesProvider = FutureProvider.family<List<Category>, String>((
 
 /// Daftar produk favorit untuk satu outlet, langsung dari endpoint khusus.
 /// Akan auto-refetch saat di-invalidate (mis. setelah toggle favorit).
-final outletFavoriteProductsProvider =
-    FutureProvider.family<List<Product>, String>((ref, outletId) async {
-      return ref.watch(outletServiceProvider).getFavoriteProducts(outletId);
-    });

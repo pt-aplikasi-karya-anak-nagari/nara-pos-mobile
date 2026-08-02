@@ -52,7 +52,6 @@ const Map<String, Map<String, String>> _strings = {
 
   // categories
   'cat.all': {'id': 'Semua', 'en': 'All'},
-  'cat.favorit': {'id': 'Favorit', 'en': 'Favorites'},
   'cat.makanan': {'id': 'Makanan', 'en': 'Food'},
   'cat.minuman': {'id': 'Minuman', 'en': 'Drinks'},
   'cat.snack': {'id': 'Snack', 'en': 'Snacks'},
@@ -61,10 +60,6 @@ const Map<String, Map<String, String>> _strings = {
   'kasir.search': {'id': 'Cari produk...', 'en': 'Search products...'},
   'kasir.view_order': {'id': 'Lihat Pesanan', 'en': 'View Order'},
   'kasir.active': {'id': 'Kasir Aktif', 'en': 'Cashier Active'},
-  'kasir.empty_fav': {
-    'id': 'Belum ada produk favorit',
-    'en': 'No favorite products yet',
-  },
   'kasir.not_found': {
     'id': 'Produk tidak ditemukan',
     'en': 'Product not found',

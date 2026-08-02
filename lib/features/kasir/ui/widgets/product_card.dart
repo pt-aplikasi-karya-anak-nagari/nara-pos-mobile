@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:gap/gap.dart';
@@ -44,8 +43,6 @@ class ProductCard extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final qty = ref.watch(qtyProvider(product.remoteId));
-    final isFavLocal = useState(product.isFavorite);
-    final isFav = isFavLocal.value;
     final mainCategory = ref.watch(selectedMainCategoryProvider);
     final density = ref.watch(gridDensityProvider);
     final isCompact = density == 1; // High density (small cards)
@@ -593,81 +590,6 @@ class ProductCard extends HookConsumerWidget {
                                 ),
                               ),
                             ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: GestureDetector(
-                              onTap: () async {
-                                // Optimistic UI: toggle state instantly and animate
-                                isFavLocal.value = !isFavLocal.value;
-                                product.isFavorite = isFavLocal.value;
-
-                                // Fire and forget API call
-                                await ref
-                                    .read(outletServiceProvider)
-                                    .toggleFavorite(product.remoteId ?? '');
-
-                                // Invalidate provider favorit agar daftar Favorit ter-refresh.
-                                final outletId = ref.read(
-                                  activeOutletIdProvider,
-                                );
-                                if (outletId != null) {
-                                  ref.invalidate(
-                                    outletFavoriteProductsProvider(outletId),
-                                  );
-                                }
-
-                                ref
-                                    .read(
-                                      favoritesUpdateTriggerProvider.notifier,
-                                    )
-                                    .update((s) => s + 1);
-                              },
-                              child: TweenAnimationBuilder<double>(
-                                key: ValueKey(
-                                  isFav,
-                                ), // Restart animation on change
-                                duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeOutBack,
-                                tween: Tween(begin: 0.8, end: 1.0),
-                                builder: (context, scale, child) =>
-                                    Transform.scale(scale: scale, child: child),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: isFav ? Colors.red : Colors.white,
-                                    borderRadius: BorderRadius.circular(6),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: isFav
-                                        ? const Icon(
-                                            Icons.favorite,
-                                            color: Colors.white,
-                                            size: 10,
-                                          )
-                                        : HugeIcon(
-                                            icon: AppIcons.favorite,
-                                            color: Colors.red.withValues(
-                                              alpha: 0.7,
-                                            ),
-                                            size: 10,
-                                          ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -752,8 +674,7 @@ class ProductCard extends HookConsumerWidget {
                           maxLines: 5,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if ((mainCategory == 'Semua' ||
-                                mainCategory == 'Favorit') &&
+                        if (mainCategory == 'Semua' &&
                             product.categoryName != null) ...[
                           const Gap(1),
                           Text(

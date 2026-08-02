@@ -194,7 +194,6 @@ Map<String, dynamic> _productToJson(CartItem c) {
     'discount_value': p.discountValue,
     'discount_name': p.discountName,
     'outlet_id': p.outletRemoteId,
-    'is_favorite': p.isFavorite,
     'variants': p.variants
         .map((v) => {
               'id': v.remoteId,

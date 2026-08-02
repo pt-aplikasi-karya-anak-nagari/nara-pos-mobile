@@ -60,8 +60,6 @@ class ApiEndpoint {
   static String outletDetail(String outletId) => '/outlets/$outletId';
   static String outletProducts(String outletId) =>
       '/outlets/$outletId/products';
-  static String outletFavorites(String outletId) =>
-      '/outlets/$outletId/products/favorites';
   static String outletBestSellers(String outletId) =>
       '/outlets/$outletId/products/best-sellers';
   static String outletCustomers(String outletId) =>

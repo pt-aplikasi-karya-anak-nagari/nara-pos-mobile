@@ -8,7 +8,6 @@ const kAccent = Color(0xFFFF6B35);
 const kSuccess = Color(0xFF22C55E);
 const kDanger = Color(0xFFE53E3E);
 const kWarning = Color(0xFFF59E0B);
-const kFav = Color(0xFFEF4444);
 
 // ─── Surface palette — dinamis berdasarkan brightness ───────────────────
 //

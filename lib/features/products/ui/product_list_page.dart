@@ -30,7 +30,6 @@ import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 String _tabLabel(WidgetRef ref, String t) {
   final keys = {
     'Semua': 'cat.all',
-    'Favorit': 'cat.favorit',
     'Makanan': 'cat.makanan',
     'Minuman': 'cat.minuman',
     'Snack': 'cat.snack',
@@ -76,9 +75,8 @@ class ProductListPage extends HookConsumerWidget {
           if (activeOutletId == null) return [];
 
           String? catId;
-          bool isFav = activeCategory.value == 'Favorit';
 
-          if (activeCategory.value != 'Semua' && !isFav) {
+          if (activeCategory.value != 'Semua') {
             final cats = ref
                 .read(categoriesByOutletStreamProvider(activeOutletId))
                 .value;
@@ -92,7 +90,6 @@ class ProductListPage extends HookConsumerWidget {
               .getProducts(
                 activeOutletId,
                 categoryId: catId,
-                isFavorite: isFav,
                 search: query.value.isNotEmpty ? query.value : null,
                 page: pageKey,
                 limit: 10,
@@ -227,7 +224,6 @@ class ProductListPage extends HookConsumerWidget {
                               final cats = catsAsync.value ?? [];
                               final tabs = [
                                 'Semua',
-                                'Favorit',
                                 ...cats.map((c) => c.name),
                               ];
 
@@ -556,7 +552,7 @@ class _MobileProductContent extends ConsumerWidget {
         ? ref.watch(categoriesByOutletStreamProvider(outletId!))
         : const AsyncValue<List<Category>>.data([]);
     final cats = catsAsync.value ?? [];
-    final tabs = ['Semua', 'Favorit', ...cats.map((c) => c.name)];
+    final tabs = ['Semua', ...cats.map((c) => c.name)];
 
     return Column(
       children: [
@@ -665,11 +661,7 @@ class _OutletSelectionPlaceholder extends ConsumerWidget {
             const Gap(8),
             Text(
               ref.t('product.select_outlet_subtitle'),
-              style: TextStyle(
-                fontSize: 13,
-                color: kTextMid,
-                height: 1.4,
-              ),
+              style: TextStyle(fontSize: 13, color: kTextMid, height: 1.4),
               textAlign: TextAlign.center,
             ),
           ],
@@ -883,6 +875,7 @@ class _EmptyFormPane extends ConsumerWidget {
 
 class _ProductTile extends ConsumerWidget {
   final Product product;
+
   /// Dipanggil setelah aksi yang mengubah daftar (delete, edit-save). Parent
   /// memakai callback ini untuk refresh paging controller.
   final VoidCallback? onChanged;
@@ -1013,14 +1006,6 @@ class _ProductTile extends ConsumerWidget {
                               ),
                             ),
                           ),
-                        if (product.isFavorite) ...[
-                          const SizedBox(width: 6),
-                          const HugeIcon(
-                            icon: AppIcons.favorite,
-                            color: kFav,
-                            size: 14,
-                          ),
-                        ],
                       ],
                     ),
                     const Gap(2),
@@ -1054,11 +1039,7 @@ class _ProductTile extends ConsumerWidget {
                   size: 20,
                 ),
               ),
-              HugeIcon(
-                icon: AppIcons.chevronRight,
-                color: kTextMid,
-                size: 20,
-              ),
+              HugeIcon(icon: AppIcons.chevronRight, color: kTextMid, size: 20),
             ],
           ),
         ),
@@ -1250,17 +1231,10 @@ class _LabelPrintSheet extends HookConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: kDivider),
               ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 20,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               child: Column(
                 children: [
-                  HugeIcon(
-                    icon: AppIcons.qrCode,
-                    color: kTextMid,
-                    size: 28,
-                  ),
+                  HugeIcon(icon: AppIcons.qrCode, color: kTextMid, size: 28),
                   const SizedBox(height: 8),
                   Text(
                     'Produk belum memiliki barcode atau SKU',
@@ -1314,10 +1288,7 @@ class _LabelPrintSheet extends HookConsumerWidget {
                 ),
               ),
               const Spacer(),
-              _QtyStepper(
-                value: qty.value,
-                onChanged: (v) => qty.value = v,
-              ),
+              _QtyStepper(value: qty.value, onChanged: (v) => qty.value = v),
             ],
           ),
           const SizedBox(height: 20),
@@ -1461,11 +1432,7 @@ class _ExportImportPopup extends ConsumerWidget {
           value: 'save',
           child: Row(
             children: [
-              HugeIcon(
-                icon: AppIcons.download,
-                color: kTextDark,
-                size: 18,
-              ),
+              HugeIcon(icon: AppIcons.download, color: kTextDark, size: 18),
               const SizedBox(width: 10),
               const Text('Simpan ke Perangkat', style: TextStyle(fontSize: 14)),
             ],

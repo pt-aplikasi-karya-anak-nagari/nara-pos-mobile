@@ -69,7 +69,6 @@ class Product {
       variants.isEmpty ? stock : variants.fold(0, (s, v) => s + v.stock);
 
   // Local UI state
-  bool isFavorite;
 
   Product({
     this.remoteId,
@@ -99,7 +98,6 @@ class Product {
     this.discountName = '',
     this.outletRemoteId,
     this.variants = const [],
-    this.isFavorite = false,
   });
 
   bool get hasDiscount => discountType != 'none' && discountValue > 0;
@@ -133,7 +131,6 @@ class Product {
     String? discountName,
     String? outletRemoteId,
     List<ProductVariant>? variants,
-    bool? isFavorite,
   }) {
     return Product(
       remoteId: remoteId ?? this.remoteId,
@@ -163,7 +160,6 @@ class Product {
       discountName: discountName ?? this.discountName,
       outletRemoteId: outletRemoteId ?? this.outletRemoteId,
       variants: variants ?? this.variants,
-      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 
@@ -214,7 +210,6 @@ class Product {
       discountValue: (json['discount_value'] as num? ?? 0).toDouble(),
       discountName: json['discount_name'] as String? ?? '',
       outletRemoteId: json['outlet_id']?.toString(),
-      isFavorite: json['is_favorite'] as bool? ?? false,
       variants: (json['variants'] as List? ?? [])
           .map((v) => ProductVariant.fromJson(v))
           .toList(),
@@ -251,7 +246,6 @@ class Product {
         'discount_value': discountValue,
         'discount_name': discountName,
         'outlet_id': outletRemoteId,
-        'is_favorite': isFavorite,
         'variants': variants.map((v) => v.toJson()).toList(),
       };
 

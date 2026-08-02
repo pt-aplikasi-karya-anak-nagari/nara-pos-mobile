@@ -256,17 +256,6 @@ final qtyProvider = Provider.family<int, String?>((ref, productId) {
       .fold(0, (s, c) => s + c.qty);
 });
 
-// ─── Favorites (persisted on Product.isFavorite) ──────────────────────────────
-final favoriteProductsProvider = Provider<List<Product>>((ref) {
-  final products = ref.watch(productsStreamProvider).value ?? const <Product>[];
-  return products.where((p) => p.isFavorite).toList();
-});
-
-final favoritesCountProvider = Provider<int>(
-  (ref) => ref.watch(favoriteProductsProvider).length,
-);
-
-final favoritesUpdateTriggerProvider = StateProvider<int>((ref) => 0);
 
 final selectedMainCategoryProvider = StateProvider<String>((ref) => 'Semua');
 

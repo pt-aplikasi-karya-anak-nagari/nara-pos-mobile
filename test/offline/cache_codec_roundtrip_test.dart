@@ -232,7 +232,6 @@ void main() {
           discountValue: 15,
           discountName: 'Promo Sore',
           outletRemoteId: 'O1',
-          isFavorite: true,
           variants: [
             ProductVariant(
               remoteId: 'V1',
@@ -265,7 +264,6 @@ void main() {
       expect(back.barcode, asli.barcode);
       expect(back.emoji, asli.emoji);
       expect(back.imageUrl, asli.imageUrl);
-      expect(back.isFavorite, asli.isFavorite);
     });
 
     test('bendera ketersediaan bertahan pada nilai NON-default', () {
