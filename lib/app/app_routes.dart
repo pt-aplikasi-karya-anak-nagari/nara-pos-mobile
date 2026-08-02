@@ -1,4 +1,8 @@
 class AppRoutes {
+  // Gerbang izin — halaman pertama, sebelum login.
+  static const String izin = '/izin';
+  static const String izinName = 'izin';
+
   // Auth
   static const String login = '/login';
   static const String loginName = 'login';

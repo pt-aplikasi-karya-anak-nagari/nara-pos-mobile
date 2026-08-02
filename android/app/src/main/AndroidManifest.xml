@@ -1,4 +1,46 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ══════════════════ IZIN SISTEM ══════════════════
+         Diminta di muka lewat gerbang izin (lib/features/izin), sebelum login.
+
+         SEBELUM INI TAK ADA SATU PUN <uses-permission> DI SINI. Yang membuat
+         cetak Bluetooth tetap jalan adalah manifest milik plugin
+         print_bluetooth_thermal, yang ikut ter-merge — bukan berkas ini.
+         Bergantung pada itu rapuh: satu pembaruan plugin yang mencabutnya akan
+         mematikan pencetakan struk tanpa satu baris pun berubah di repo ini.
+         Karena itu izin intinya dideklarasikan ulang di sini secara eksplisit;
+         deklarasi kembar yang identik digabung diam-diam oleh manifest merger.
+
+         permission_handler TIDAK menyumbang izin apa pun — daftar panjang di
+         paketnya milik aplikasi CONTOH-nya, bukan pluginnya. -->
+
+    <!-- Printer struk thermal. BLUETOOTH & BLUETOOTH_ADMIN untuk Android <= 11;
+         sejak Android 12 keduanya digantikan SCAN & CONNECT. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Android <= 11 menolak memindai perangkat Bluetooth tanpa izin lokasi.
+         maxSdkVersion menutupnya di Android 12+, supaya kasir tidak dimintai
+         izin lokasi yang memang tak dipakai aplikasi ini untuk apa pun.
+
+         Tanpa deklarasi ini, jalur cadangan Permission.location di
+         SystemPermissionService selalu gagal — dan itulah yang terjadi selama
+         ini pada perangkat Android 11 ke bawah. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- Android 13+ menahan SEMUA notifikasi sampai izin ini diberikan.
+         Aplikasi ini memakai FCM untuk memberitahu kasir ada pesanan QR baru;
+         tanpa deklarasi ini pemberitahuan itu tak pernah muncul di Android 13+,
+         tanpa galat dan tanpa apa pun yang bisa dilihat. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Pemindai barcode produk (mobile_scanner). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:label="NARA POS"
         android:name="${applicationName}"

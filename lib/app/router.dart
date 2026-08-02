@@ -33,6 +33,8 @@ import '../features/bahan_baku/ui/bahan_baku_page.dart';
 import '../features/bahan_baku/ui/stock_transfer_page.dart';
 import '../features/expenses/ui/expenses_page.dart';
 import '../features/inventory/ui/inventory_page.dart';
+import '../features/izin/gerbang_izin.dart';
+import '../features/izin/ui/halaman_izin.dart';
 import '../features/tables/ui/table_management_page.dart';
 import '../shared/widgets/main_shell.dart';
 import '../shared/widgets/wadah_branch_beranimasi.dart';
@@ -45,20 +47,18 @@ final routerProvider = Provider<GoRouter>((ref) {
     navigatorKey: _rootNavigatorKey,
     initialLocation: AppRoutes.kasir,
     refreshListenable: _AuthListenable(ref),
-    redirect: (context, state) {
-      final auth = ref.read(authProvider);
-      final authed = auth.isAuthenticated;
-      final location = state.matchedLocation;
-      final atLogin = location == AppRoutes.login;
-
-      if (!authed && !atLogin) return AppRoutes.login;
-
-      if (authed && atLogin) {
-        return AppRoutes.kasir;
-      }
-      return null;
-    },
+    redirect: (context, state) => tentukanTujuan(
+      lokasi: state.matchedLocation,
+      izinLengkap: ref.read(gerbangIzinProvider),
+      authed: ref.read(authProvider).isAuthenticated,
+    ),
     routes: [
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: AppRoutes.izin,
+        name: AppRoutes.izinName,
+        builder: (_, _) => const HalamanIzin(),
+      ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,
         path: AppRoutes.login,
@@ -332,5 +332,48 @@ final routerProvider = Provider<GoRouter>((ref) {
 class _AuthListenable extends ChangeNotifier {
   _AuthListenable(Ref ref) {
     ref.listen(authProvider, (_, _) => notifyListeners());
+    // Gerbang izin WAJIB ikut didengar. Tanpa ini redirect hanya dijalankan
+    // ulang saat status auth berubah — jadi setelah pengguna memberikan
+    // izinnya, ia tetap tertahan di halaman izin sampai ada hal lain yang
+    // kebetulan memicu navigasi.
+    ref.listen(gerbangIzinProvider, (_, _) => notifyListeners());
   }
+}
+
+/// Ke mana pengguna diarahkan, dari gabungan izin sistem dan status login.
+///
+/// Fungsi MURNI, dipisah dari GoRouter supaya tiap kombinasinya bisa diuji —
+/// termasuk yang paling penting: bahwa halaman login dan halaman utama
+/// benar-benar TAK BISA dicapai sebelum izinnya lengkap.
+///
+/// # URUTANNYA DISENGAJA
+///
+/// Gerbang izin berada DI DEPAN gerbang login, bukan sesudahnya. Alasannya
+/// bukan kerapian: izin harus diminta saat perangkat sedang DISIAPKAN — oleh
+/// orang yang memang sedang menyiapkannya — bukan saat kasir menekan Cetak
+/// dengan pelanggan berdiri menunggu di depannya.
+///
+/// # KENAPA izinLengkap BOLEH null
+///
+/// Memeriksa izin selalu asinkron, sementara redirect harus menjawab seketika.
+/// null berarti "belum diperiksa", dan diperlakukan seperti belum lengkap:
+/// menahan di halaman izin. Memperlakukannya seperti lengkap akan meloloskan
+/// satu frame pertama ke halaman utama — gerbang yang bocor tepat di celah
+/// yang paling sulit terlihat.
+String? tentukanTujuan({
+  required String lokasi,
+  required bool? izinLengkap,
+  required bool authed,
+}) {
+  final diIzin = lokasi == AppRoutes.izin;
+  final diLogin = lokasi == AppRoutes.login;
+
+  if (izinLengkap != true) return diIzin ? null : AppRoutes.izin;
+
+  // Izin sudah lengkap tapi masih tertahan di halamannya → teruskan.
+  if (diIzin) return authed ? AppRoutes.kasir : AppRoutes.login;
+
+  if (!authed && !diLogin) return AppRoutes.login;
+  if (authed && diLogin) return AppRoutes.kasir;
+  return null;
 }

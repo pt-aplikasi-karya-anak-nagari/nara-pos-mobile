@@ -12,6 +12,20 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<!-- ══ Keterangan izin (WAJIB ada di iOS) ══
+	     iOS MENGHENTIKAN PAKSA aplikasi begitu API yang butuh izin dipanggil
+	     tanpa keterangan penggunaannya di sini — bukan menolak, tapi crash.
+	     Sebelum ini tak satu pun kunci ini ada, jadi menyentuh Bluetooth atau
+	     kamera di iOS berarti aplikasi mati seketika. Teksnya juga yang dibaca
+	     pengguna di dialog izin, dan yang diperiksa peninjau App Store. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>NARA POS memakai Bluetooth untuk menyambung ke printer struk termal di kasir.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>NARA POS memakai Bluetooth untuk menyambung ke printer struk termal di kasir.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kamera dipakai untuk memindai barcode produk saat transaksi dan saat menambah produk.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Galeri dipakai untuk memilih foto produk dan logo struk.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
