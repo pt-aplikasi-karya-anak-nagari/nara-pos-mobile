@@ -26,7 +26,10 @@ final _salesRawCache = EntityCache<Map<String, dynamic>>(
 class TransactionApiService extends BaseApiService {
   TransactionApiService(super.dio);
 
-  Future<Map<String, dynamic>> checkout(String outletId, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> checkout(
+    String outletId,
+    Map<String, dynamic> data,
+  ) async {
     return await post<Map<String, dynamic>>(
       '/transactions/checkout/$outletId',
       data: data,
@@ -75,7 +78,11 @@ class TransactionApiService extends BaseApiService {
   }
 
   /// Riwayat transaksi untuk satu pelanggan.
-  Future<List<dynamic>> getCustomerHistory(String customerId, {int page = 1, int limit = 100}) async {
+  Future<List<dynamic>> getCustomerHistory(
+    String customerId, {
+    int page = 1,
+    int limit = 100,
+  }) async {
     return await get<List<dynamic>>(
       '/customers/$customerId/transactions',
       queryParameters: {'page': page, 'limit': limit},
@@ -383,29 +390,34 @@ class TransactionRepository {
       // detail meja, (3) membebaskan meja saat semua transaksi di meja
       // ini lunas. Empty string = tidak terkait meja (Take Away dll).
       'table_id': tableId ?? '',
-      'items': cart.map((item) => {
-        'product_id': item.product.remoteId ?? '',
-        'quantity': item.qty,
-        if (item.variantId != null) 'variant_id': item.variantId,
-        'name': item.displayName,
-        'price': item.effectivePrice,
-        // Snapshot flag pajak per item. Server otoritatif atas pajak &
-        // mengecualikan item non-pajak; dikirim agar payload konsisten
-        // dengan preview kasir.
-        'is_taxable': item.isTaxable,
-        if (item.note.trim().isNotEmpty) 'note': item.note.trim(),
-        // Snapshot diskon per item (manual override > diskon master produk).
-        // Backend pakai field ini untuk mengisi kolom diskon di transaction_items
-        // sehingga riwayat / laporan / struk konsisten dengan apa yang
-        // ditampilkan di kasir.
-        'discount_type': item.effectiveDiscountType,
-        'discount_value': item.effectiveDiscountValue,
-        'discount_name': item.effectiveDiscountName,
-        // C4: snapshot add-on/topping (harga sudah termasuk di price di atas).
-        if (item.modifiers.isNotEmpty)
-          'modifiers':
-              item.modifiers.map((m) => m.toCheckoutJson()).toList(),
-      }).toList(),
+      'items': cart
+          .map(
+            (item) => {
+              'product_id': item.product.remoteId ?? '',
+              'quantity': item.qty,
+              if (item.variantId != null) 'variant_id': item.variantId,
+              'name': item.displayName,
+              'price': item.effectivePrice,
+              // Snapshot flag pajak per item. Server otoritatif atas pajak &
+              // mengecualikan item non-pajak; dikirim agar payload konsisten
+              // dengan preview kasir.
+              'is_taxable': item.isTaxable,
+              if (item.note.trim().isNotEmpty) 'note': item.note.trim(),
+              // Snapshot diskon per item (manual override > diskon master produk).
+              // Backend pakai field ini untuk mengisi kolom diskon di transaction_items
+              // sehingga riwayat / laporan / struk konsisten dengan apa yang
+              // ditampilkan di kasir.
+              'discount_type': item.effectiveDiscountType,
+              'discount_value': item.effectiveDiscountValue,
+              'discount_name': item.effectiveDiscountName,
+              // C4: snapshot add-on/topping (harga sudah termasuk di price di atas).
+              if (item.modifiers.isNotEmpty)
+                'modifiers': item.modifiers
+                    .map((m) => m.toCheckoutJson())
+                    .toList(),
+            },
+          )
+          .toList(),
     };
 
     final oId = outletRemoteId ?? outletId.toString();
@@ -414,8 +426,9 @@ class TransactionRepository {
     // dipakai supaya struk tetap bisa dicetak & cart bisa dikosongkan
     // walau belum ada respons backend.
     Future<Sale> queueOffline() async {
-      final localId =
-          await _ref.read(saleOutboxProvider).enqueue(oId, checkoutData);
+      final localId = await _ref
+          .read(saleOutboxProvider)
+          .enqueue(oId, checkoutData);
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
       final sale = Sale(
         createdAt: DateTime.now(),
@@ -444,17 +457,19 @@ class TransactionRepository {
       );
       sale.id = localId;
       sale.items = cart
-          .map((item) => SaleItem(
-                productRemoteId: item.product.remoteId ?? '',
-                productName: item.product.name,
-                productEmoji: item.product.emoji,
-                variant: item.variantName,
-                price: item.effectivePrice,
-                originalPrice: item.basePrice,
-                qty: item.qty,
-                note: item.note,
-                modifiersLabel: item.modifiersLabel,
-              ))
+          .map(
+            (item) => SaleItem(
+              productRemoteId: item.product.remoteId ?? '',
+              productName: item.product.name,
+              productEmoji: item.product.emoji,
+              variant: item.variantName,
+              price: item.effectivePrice,
+              originalPrice: item.basePrice,
+              qty: item.qty,
+              note: item.note,
+              modifiersLabel: item.modifiersLabel,
+            ),
+          )
           .toList();
       return sale;
     }
@@ -474,14 +489,18 @@ class TransactionRepository {
     }
   }
 
-  Stream<List<Sale>> watchAll() { return Stream.value([]); }
-  
+  Stream<List<Sale>> watchAll() {
+    return Stream.value([]);
+  }
+
   Future<Sale> getDetail(String id) async {
     final res = await apiService.getDetail(id);
     return Sale.fromJson(res);
   }
 
-  Sale? getById(String id) { return null; }
+  Sale? getById(String id) {
+    return null;
+  }
 
   /// Cari transaksi berdasarkan invoice number (mis. "INV-1234").
   /// Memuat history outlet lalu filter — cocok untuk scan QR struk.
@@ -492,6 +511,7 @@ class TransactionRepository {
     }
     return null;
   }
+
   /// Ambil daftar pesanan yang sedang berjalan (unpaid) di sebuah meja.
   /// Hasilnya sudah menyertakan items per transaksi (lihat
   /// transactionRepository.GetActiveByTable di backend), jadi UI bisa
@@ -555,7 +575,11 @@ class TransactionRepository {
   /// Void transaksi UNPAID (bill "Bayar Nanti" yang salah input). Backend
   /// set status=cancelled, restore stok, lepas meja bila sudah kosong.
   /// [overridePin] diteruskan bila outlet mensyaratkan PIN otorisasi manajer.
-  Future<Sale> voidSale(String saleId, {String? reason, String? overridePin}) async {
+  Future<Sale> voidSale(
+    String saleId, {
+    String? reason,
+    String? overridePin,
+  }) async {
     final res = await apiService.voidTransaction(
       saleId,
       reason: reason,
@@ -570,7 +594,13 @@ class TransactionRepository {
   /// [paymentProofUrl] opsional. Kalau di-set (mis. pembayaran QRIS yang
   /// fotonya sudah di-upload terlebih dulu), nilainya disimpan di kolom
   /// payment_proof_url transaksi.
-  Future<Sale> markAsPaid(String saleId, {required String paymentMethod, double cashAmount = 0, double changeAmount = 0, String? paymentProofUrl}) async {
+  Future<Sale> markAsPaid(
+    String saleId, {
+    required String paymentMethod,
+    double cashAmount = 0,
+    double changeAmount = 0,
+    String? paymentProofUrl,
+  }) async {
     final res = await apiService.markAsPaid(
       saleId,
       paymentMethod: paymentMethod,
@@ -687,19 +717,7 @@ class TransactionRepository {
     );
     return res
         .map((e) => Sale.fromJson(e as Map<String, dynamic>))
-        .where(
-          // Aktif = LUNAS (auto-pay QRIS), ATAU sudah dikonfirmasi/masuk dapur
-          // walau belum bayar (open-bill: tab jalan, dilunasi di kasir), ATAU
-          // unpaid TANPA charge gateway (pilihan "bayar di kasir" — kasir harus
-          // menagih lalu Tandai Lunas). Menunggu-QRIS (ada paymentRef) tetap
-          // disembunyikan — belum perlu ditangani.
-          (s) =>
-              (s.isPaid ||
-                  s.isConfirmed ||
-                  (!s.isPaid && !s.isConfirmed && s.paymentRef == null)) &&
-              s.fulfillmentStatus != 'completed' &&
-              !s.isRefunded,
-        )
+        .where(pesananMejaPerluDitangani)
         .toList();
   }
 }
@@ -721,14 +739,19 @@ final menuOrdersProvider = FutureProvider<List<Sale>>((ref) async {
   return ref.watch(transactionRepositoryProvider).getMenuOrders(outletId);
 });
 
-final transactionDetailProvider = FutureProvider.family<Sale, String>((ref, id) async {
+final transactionDetailProvider = FutureProvider.family<Sale, String>((
+  ref,
+  id,
+) async {
   return ref.watch(transactionRepositoryProvider).getDetail(id);
 });
 
 /// Riwayat pembelian satu pelanggan, di-fetch dari backend dan auto-refetch
 /// saat di-invalidate (mis. setelah checkout).
-final customerSalesProvider =
-    FutureProvider.family<List<Sale>, String>((ref, customerId) async {
+final customerSalesProvider = FutureProvider.family<List<Sale>, String>((
+  ref,
+  customerId,
+) async {
   return ref.watch(transactionRepositoryProvider).getCustomerSales(customerId);
 });
 
@@ -740,6 +763,43 @@ final customerSalesProvider =
 /// atau setelah staff melunasi salah satu transaksinya.
 final activeTableTransactionsProvider =
     FutureProvider.family<List<Sale>, String>((ref, tableId) async {
-  if (tableId.isEmpty) return const [];
-  return ref.watch(transactionRepositoryProvider).getActiveSalesByTable(tableId);
-});
+      if (tableId.isEmpty) return const [];
+      return ref
+          .watch(transactionRepositoryProvider)
+          .getActiveSalesByTable(tableId);
+    });
+
+/// True bila pesanan QR ini masih PEKERJAAN kasir — layak muncul di tab
+/// "Pesanan dari Scan Meja".
+///
+/// Fungsi MURNI supaya tiap keadaannya bisa diuji tanpa jaringan.
+///
+/// Layak ditangani = lunas (auto-pay QRIS), ATAU sudah dikonfirmasi/masuk
+/// dapur walau belum bayar (open-bill: tab jalan, dilunasi di kasir), ATAU
+/// belum bayar TANPA charge gateway ("bayar di kasir" — kasir menagih lalu
+/// Tandai Lunas). Menunggu-QRIS (punya paymentRef) disembunyikan: belum ada
+/// yang perlu dikerjakan.
+///
+/// Tiga keadaan MATI dikecualikan, dan ketiganya pernah atau bisa bocor lewat
+/// cabang ketiga di atas — sama-sama bukan lunas, bukan dikonfirmasi, dan
+/// tanpa paymentRef:
+///
+///   selesai     pesanan yang sudah rampung; menampilkannya lagi membuat
+///               antrean tak pernah kosong.
+///   diretur     uangnya sudah kembali ke pelanggan.
+///   DIBATALKAN  pelanggan membatalkan dari halaman menu QR. Inilah yang
+///               bocor: kasir menekan "Tandai Lunas" dan barulah backend
+///               menolak ("transaksi sudah cancelled"). Penjaga terakhirnya
+///               bekerja — yang salah adalah menampilkan pesanan mati sebagai
+///               pekerjaan, sementara pesanan yang benar-benar perlu
+///               ditangani tenggelam di antaranya.
+bool pesananMejaPerluDitangani(Sale s) {
+  final adaYangDikerjakan =
+      s.isPaid ||
+      s.isConfirmed ||
+      (!s.isPaid && !s.isConfirmed && s.paymentRef == null);
+  return adaYangDikerjakan &&
+      s.fulfillmentStatus != 'completed' &&
+      !s.isRefunded &&
+      !s.isCancelled;
+}
