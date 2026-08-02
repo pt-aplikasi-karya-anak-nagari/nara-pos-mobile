@@ -59,7 +59,7 @@ class NotificationService {
   Stream<AppNotification> get onNotificationReceived =>
       _newNotifController.stream;
 
-  static const _channelId = 'mako_transactions';
+  static const _channelId = 'mako_transactions_v2';
   static const _channelName = 'Transaksi';
   static const _channelDesc = 'Notifikasi transaksi berhasil';
 
@@ -72,36 +72,38 @@ class NotificationService {
   /// nanti sound diganti / di-aktifkan, BUMP suffix-nya (v4, v5, ...).
   /// Backend juga harus pakai channel_id yang sama — lihat
   /// `service/fcm_service.go` `ChannelID`.
-  static const _fcmChannelId = 'mako_fcm_v3';
+  static const _fcmChannelId = 'mako_fcm_v4';
   static const _fcmChannelName = 'Pesan Realtime';
   static const _fcmChannelDesc =
       'Notifikasi push dari server (pesanan QR, dll)';
 
-  /// Custom sound untuk channel FCM. Saat ini **DISABLED** — pakai sound
-  /// default OS supaya notif tetap muncul walau file belum di-bundle.
+  /// Bunyi laci kas untuk SETIAP notifikasi aplikasi — bukan nada default OS.
   ///
-  /// Cara enable custom sound:
+  /// Alasannya bukan selera: kasir bekerja membelakangi layar, dan nada
+  /// notifikasi bawaan sama persis dengan puluhan aplikasi lain di tablet
+  /// yang sama. Bunyi laci kas dikenali TANPA melihat, dan hanya berarti satu
+  /// hal — ada uang yang perlu diurus.
   ///
-  ///   1. Letakkan file audio:
-  ///      - Android: `android/app/src/main/res/raw/mako_chime.mp3`
-  ///        (boleh .ogg/.wav, nama harus lowercase + underscore)
-  ///      - iOS:     `ios/Runner/mako_chime.caf` lalu **add ke Xcode
-  ///        project** (drag ke Runner > "Add to target Runner")
+  /// Berkasnya sudah di-bundle di dua tempat (bukan dari assets/ Flutter —
+  /// OS yang memutarnya, bukan aplikasi):
+  ///   Android `android/app/src/main/res/raw/coin_drawer.mp3`
+  ///   iOS     `ios/Runner/coin_drawer.caf` (terdaftar di Copy Bundle
+  ///           Resources; iOS hanya menerima caf/aiff/wav — mp3 diabaikan
+  ///           diam-diam dan jatuh ke nada default)
   ///
-  ///   2. Set kedua const di bawah:
-  ///        _customSoundResource = 'mako_chime';
-  ///        _customSoundIosFile  = 'mako_chime.caf';
+  /// # KENAPA NOMOR CHANNEL IKUT NAIK
   ///
-  ///   3. **BUMP** `_fcmChannelId` ke versi baru (mis. `mako_fcm_v4`)
-  ///      karena Android cache channel sound di first-create.
+  /// Android MENGUNCI sound sebuah channel saat channel itu PERTAMA dibuat.
+  /// Mengubah nilai di sini tanpa menaikkan id channel tidak mengubah apa pun
+  /// di perangkat yang sudah memasang aplikasi — bunyinya tetap yang lama,
+  /// selamanya, dan tak ada galat apa pun yang menjelaskannya. Karena itu
+  /// _fcmChannelId dinaikkan ke v4 dan channel transaksi ke _v2.
   ///
-  ///   4. Backend `fcm_service.go`: update `ChannelID` + tambah
-  ///      `Sound: "mako_chime"` di `AndroidNotification` & APNs.
-  ///
-  ///   5. **Uninstall + install ulang app** di device (atau bump channel
-  ///      sudah cukup; uninstall lebih bersih).
-  static const String? _customSoundResource = null; // null → default OS
-  static const String? _customSoundIosFile = null;
+  /// Backend HARUS memakai channel id yang sama — lihat `internal/fcm/
+  /// service.go`. Push dengan channel id lama akan berbunyi dengan nada
+  /// channel lama itu.
+  static const String _customSoundResource = 'coin_drawer';
+  static const String _customSoundIosFile = 'coin_drawer.caf';
 
   Future<void> init() async {
     if (_initialized) return;
@@ -148,13 +150,12 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    // Sound: kalau `_customSoundResource` di-set, pakai itu — kalau null,
-    // OS akan pakai default. Penting: kalau resource ditulis tapi file
-    // belum di-bundle, channel sound jadi broken & notif bisa tidak muncul
-    // sama sekali. Itu sebabnya default-nya null.
-    final channelSound = _customSoundResource == null
-        ? null
-        : RawResourceAndroidNotificationSound(_customSoundResource);
+    // Nama resource HARUS cocok dengan berkas di res/raw. Kalau tidak,
+    // channel-nya lahir dengan sound rusak dan notifikasinya bisa tidak
+    // berbunyi sama sekali — tanpa galat. Diikat tes yang membaca res/raw.
+    const channelSound = RawResourceAndroidNotificationSound(
+      _customSoundResource,
+    );
     await androidImpl?.createNotificationChannel(
       AndroidNotificationChannel(
         _fcmChannelId,
@@ -309,11 +310,14 @@ class NotificationService {
     if (!_foregroundController.isClosed) {
       _foregroundController.add(message);
     }
-    // Per-notif sound override — null berarti pakai channel default
-    // (yang sendiri-nya null = sound default OS).
-    final androidSound = _customSoundResource == null
-        ? null
-        : RawResourceAndroidNotificationSound(_customSoundResource);
+    // Sound per-notif disamakan dengan sound channel. Android memakai sound
+    // CHANNEL untuk notifikasi yang dirender OS (app di background), dan
+    // sound per-notif untuk yang dirender aplikasi (foreground) — keduanya
+    // harus sama, kalau tidak bunyinya berbeda tergantung app sedang dibuka
+    // atau tidak.
+    const androidSound = RawResourceAndroidNotificationSound(
+      _customSoundResource,
+    );
     _plugin.show(
       id: id,
       title: title,
