@@ -35,6 +35,7 @@ import '../features/expenses/ui/expenses_page.dart';
 import '../features/inventory/ui/inventory_page.dart';
 import '../features/tables/ui/table_management_page.dart';
 import '../shared/widgets/main_shell.dart';
+import '../shared/widgets/wadah_branch_beranimasi.dart';
 import 'app_routes.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -64,9 +65,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: AppRoutes.loginName,
         builder: (_, _) => const LoginPage(),
       ),
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             MainShell(navigationShell: navigationShell),
+        // Bukan .indexedStack: bawaan itu menukar branch dalam SATU frame,
+        // tanpa apa pun di antaranya. Wadah ini menyilangkan opasitasnya
+        // sementara SELURUH branch tetap hidup — keranjang yang sedang diisi
+        // dan posisi gulir daftar produk tak boleh hilang hanya karena kasir
+        // menengok tab Riwayat.
+        navigatorContainerBuilder: (context, navigationShell, children) =>
+            WadahBranchBeranimasi(
+              aktif: navigationShell.currentIndex,
+              anak: children,
+            ),
         branches: [
           StatefulShellBranch(
             routes: [

@@ -13,6 +13,7 @@ import '../../features/drafts/ui/draft_list_sheet.dart';
 import '../../features/kasir/scan_trigger.dart';
 import '../../features/kasir/ui/kasir_page.dart';
 import '../../features/notifications/data/notification_history.dart';
+import 'wadah_branch_beranimasi.dart';
 import '../../features/tables/ui/table_management_page.dart';
 import '../../features/profil/data/profil_state.dart';
 import '../../features/user/data/auth_service.dart';
@@ -242,33 +243,54 @@ class RailKanan extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (tampilkanAksi) ...[
-                    for (final aksi in _aksiCepat(context, ref))
-                      SizedBox(
-                        height: tinggiItem,
-                        width: lebar,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          child: aksi,
-                        ),
-                      ),
-                    // Pemisah: aksi cepat mengubah PESANAN yang sedang dibuat,
-                    // tujuan navigasi memindahkan HALAMAN. Dua jenis yang
-                    // berbeda, dan garis ini yang membedakannya sekilas pandang.
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
-                      ),
-                      child: Divider(
-                        height: 1,
-                        color: Colors.black.withValues(alpha: 0.08),
-                      ),
+                  // AnimatedSize + AnimatedOpacity: saat kasir berpindah ke
+                  // tab lain, empat aksi ini menyusut dan memudar alih-alih
+                  // lenyap seketika. Tanpa itu, keempat tujuan navigasi
+                  // MELOMPAT ke atas dalam satu frame — dan jari yang sudah
+                  // mengarah ke "Riwayat" mendarat di tombol lain.
+                  AnimatedSize(
+                    duration: WadahBranchBeranimasi.durasi,
+                    curve: Curves.easeOut,
+                    alignment: Alignment.bottomCenter,
+                    child: AnimatedOpacity(
+                      opacity: tampilkanAksi ? 1 : 0,
+                      duration: WadahBranchBeranimasi.durasi,
+                      curve: Curves.easeOut,
+                      child: tampilkanAksi
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final aksi in _aksiCepat(context, ref))
+                                  SizedBox(
+                                    height: tinggiItem,
+                                    width: lebar,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      child: aksi,
+                                    ),
+                                  ),
+                                // Pemisah: aksi cepat mengubah PESANAN yang
+                                // sedang dibuat, tujuan navigasi memindahkan
+                                // HALAMAN. Dua jenis yang berbeda, dan garis
+                                // ini yang membedakannya sekilas pandang.
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 8,
+                                  ),
+                                  child: Divider(
+                                    height: 1,
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const SizedBox(width: lebar),
                     ),
-                  ],
+                  ),
                   for (var i = 0; i < items.length; i++)
                     SizedBox(
                       height: tinggiItem,
