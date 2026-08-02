@@ -662,21 +662,25 @@ class KasirPage extends HookConsumerWidget {
       expanded: 16,
       large: 16,
     );
-    // Pada tablet, panel kasir di kanan memakan ruang sehingga kartu produk
-    // lebih sempit → butuh aspect ratio lebih kecil agar kolom konten di
-    // bawah gambar cukup tinggi dan tidak overflow.
-    // Pada tablet, panel kasir di kanan memakan ruang sehingga kartu produk
-    // lebih sempit → butuh aspect ratio lebih kecil agar kolom konten di
-    // bawah gambar cukup tinggi dan tidak overflow.
-    // Disesuaikan dengan density (makin banyak kolom, makin sempit).
-    final baseAspect = context.responsive<double>(
-      compact: 0.64,
-      medium: 0.58,
-      expanded: 0.60,
-      large: 0.62,
-    );
-    // Adjust aspect slightly based on density to prevent overflow
-    final gridAspect = baseAspect - (density * 0.03);
+    // Grid produk TIDAK lagi memakai childAspectRatio.
+    //
+    // # KENAPA
+    //
+    // childAspectRatio memaksa SETIAP petak setinggi sama. Konsekuensinya dua
+    // arah, dan dua-duanya terlihat di layar:
+    //
+    //   nama panjang    dipangkas jadi satu baris + elipsis. Dua produk yang
+    //                   berbeda hanya di kata terakhir tampil identik, dan
+    //                   kasir memilih yang salah tanpa cara untuk tahu.
+    //   nama pendek     kartunya tetap setinggi yang terpanjang, jadi ada
+    //                   lubang kosong antara harga dan tombol.
+    //
+    // Angka rasionya sendiri harus ditebak ulang tiap kali tata letaknya
+    // berubah — komentar lamanya bahkan tercetak dua kali, tanda ia sudah
+    // beberapa kali disetel dengan coba-coba.
+    //
+    // PagedMasonryGridView menempatkan tiap kartu setinggi isinya sendiri, jadi
+    // tak ada lagi yang perlu ditebak.
 
     final productArea = RefreshIndicator(
       color: kPrimary,
@@ -703,10 +707,13 @@ class KasirPage extends HookConsumerWidget {
       },
       child: PagingListener<int, Product>(
         controller: pagingController,
-        builder: (context, state, fetchNextPage) => PagedGridView<int, Product>(
+        builder: (context, state, fetchNextPage) => PagedMasonryGridView<int, Product>.count(
           state: state,
           fetchNextPage: fetchNextPage,
           scrollController: scrollController,
+          crossAxisCount: gridCols,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
           // AlwaysScrollable supaya RefreshIndicator (tarik ke bawah) tetap
           // bisa dipakai walaupun grid kosong / hanya 1 baris.
           physics: const AlwaysScrollableScrollPhysics(),
@@ -715,12 +722,6 @@ class KasirPage extends HookConsumerWidget {
             16,
             horizontalPad,
             isTablet ? 24 : 100,
-          ),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: gridCols,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-            childAspectRatio: gridAspect,
           ),
           builderDelegate: PagedChildBuilderDelegate<Product>(
             itemBuilder: (context, item, index) => ProductCard(product: item),
@@ -844,7 +845,9 @@ class KasirPage extends HookConsumerWidget {
                 height: MediaQuery.of(context).size.height,
                 child: Skeletonizer(
                   enabled: true,
-                  child: GridView.builder(
+                  // Skeleton ikut masonry supaya transisi loading → data tak
+                  // menggeser tinggi kartu di mata kasir.
+                  child: MasonryGridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
@@ -853,12 +856,9 @@ class KasirPage extends HookConsumerWidget {
                       horizontalPad,
                       isTablet ? 24 : 100,
                     ),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: gridCols,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: gridAspect,
-                    ),
+                    crossAxisCount: gridCols,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                     itemCount: gridCols * 2,
                     itemBuilder: (_, _) => ProductCard(product: dummy),
                   ),
