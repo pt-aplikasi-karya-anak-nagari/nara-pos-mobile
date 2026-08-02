@@ -207,30 +207,24 @@ class StaffSessionFlow extends HookConsumerWidget {
     /// saja dari dashboard.
     ///
     /// Kode kosong yang dikirim ke server BUKAN jalan pintas klien: server
-    /// yang memutuskan menerimanya, dan ia tetap memverifikasi bahwa stafnya
-    /// memang berhak bertugas di outlet itu.
-    Future<void> masukLangsung(StaffCandidate staf) async {
-      loading.value = true;
+    /// Pilih nama → minta PIN. TIDAK ada panggilan jaringan di sini.
+    ///
+    /// Sempat ada jalur "pilih nama langsung masuk", lalu dicabut bersamaan
+    /// dengan PIN kini dibuat otomatis. Alasannya bukan berbalik pikiran:
+    /// masuk-langsung dipilih ketika PIN pada praktiknya TAK BISA DIBAGIKAN —
+    /// Pemilik harus menyetelnya satu per satu, dan cabang server yang
+    /// membacanya bahkan tak pernah terjangkau. Begitu PIN lahir bersama
+    /// karyawannya dan bisa disalin dari dashboard, hambatan itu hilang.
+    ///
+    /// Kode email TIDAK dikirim otomatis lagi. Mengirimnya berarti setiap
+    /// pergantian giliran membanjiri kotak masuk Pemilik dengan kode yang tak
+    /// seorang pun akan pakai — PIN-nya sudah ada di tangan kasir. Tombol
+    /// "Kirim ulang kode" tetap ada untuk yang lupa PIN-nya.
+    void mintaPin(StaffCandidate staf) {
       error.value = null;
       stafTerpilih.value = staf;
-      final msg = await ref
-          .read(authProvider.notifier)
-          .verifyStaffSession(
-            challengeId: sesi.value!.challengeId,
-            staffUserId: staf.id,
-            code: '', // kosong = tanpa bukti kedua; server yang memutuskan
-          );
-      loading.value = false;
-      if (msg != null) {
-        HapticFeedback.vibrate();
-        // Kalau server menolak, JANGAN buntu: antar ke layar verifikasi supaya
-        // PIN atau kode email tetap bisa dipakai.
-        error.value = msg;
-        langkah.value = 2;
-        return;
-      }
-      HapticFeedback.mediumImpact();
-      onSelesai();
+      dikirimKe.value = null;
+      langkah.value = 2;
     }
 
     /// Minta kode baru tanpa meninggalkan layar ini.
@@ -344,7 +338,7 @@ class StaffSessionFlow extends HookConsumerWidget {
             // mintaKode tetap hidup sebagai cadangan: dipakai tombol "Kirim
             // ulang kode" di layar verifikasi, tempat masukLangsung mengantar
             // bila server menolak.
-            onPilih: masukLangsung,
+            onPilih: mintaPin,
           )
         else
           ..._verifikasi(
@@ -476,7 +470,7 @@ List<Widget> _daftarStaf({
     ),
     const Gap(6),
     Text(
-      'Disetujui oleh ${sesi.authorizerName}. Pilih nama untuk mulai bertugas.',
+      'Disetujui oleh ${sesi.authorizerName}. Pilih nama, lalu masukkan PIN.',
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
     const Gap(18),
@@ -539,8 +533,12 @@ List<Widget> _verifikasi({
           : (dikirimKe != null
                 ? 'Kode 6 digit dikirim ke $dikirimKe. Masukkan kode itu, atau '
                       'PIN otorisasi Pemilik.'
-                : 'Kode tidak terkirim. Masukkan PIN otorisasi Pemilik untuk '
-                      'melanjutkan.'),
+                // Karyawan lama yang dibuat sebelum PIN otomatis. Teks lama
+                // berbunyi "Kode tidak terkirim" — menuduh kegagalan yang tak
+                // pernah terjadi, karena kode memang sengaja tidak dikirim.
+                // Yang perlu diketahui orangnya adalah jalan keluarnya.
+                : '${staf.fullName} belum punya PIN. Minta Pemilik membuatkan '
+                      'dari dashboard, atau kirim kode ke emailnya.'),
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
     const Gap(18),
