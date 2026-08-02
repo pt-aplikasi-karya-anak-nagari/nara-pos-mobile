@@ -201,8 +201,14 @@ class StaffSessionFlow extends HookConsumerWidget {
     /// membuktikan hal yang sama dua kali — untuk membuka sesi yang
     /// wewenangnya jauh di bawah apa yang sudah dipegang passwordnya.
     ///
-    /// Pada perangkat yang hanya MENGINGAT pengesahan lama (Pemilik tak
-    /// hadir), jalur ini tidak dipakai — di sana PIN staf tetap diminta.
+    /// Sekarang jalur ini juga dipakai pada perangkat yang hanya MENGINGAT
+    /// pengesahan lama: device_token-nya sendiri sudah merupakan bukti bahwa
+    /// Pemilik pernah mengesahkan mesin ini, dan token itu bisa dicabut kapan
+    /// saja dari dashboard.
+    ///
+    /// Kode kosong yang dikirim ke server BUKAN jalan pintas klien: server
+    /// yang memutuskan menerimanya, dan ia tetap memverifikasi bahwa stafnya
+    /// memang berhak bertugas di outlet itu.
     Future<void> masukLangsung(StaffCandidate staf) async {
       loading.value = true;
       error.value = null;
@@ -225,31 +231,6 @@ class StaffSessionFlow extends HookConsumerWidget {
       }
       HapticFeedback.mediumImpact();
       onSelesai();
-    }
-
-    Future<void> mintaKode(StaffCandidate staf) async {
-      loading.value = true;
-      error.value = null;
-      try {
-        final ke = await ref
-            .read(authProvider.notifier)
-            .requestStaffSessionOtp(
-              challengeId: sesi.value!.challengeId,
-              staffUserId: staf.id,
-            );
-        stafTerpilih.value = staf;
-        dikirimKe.value = ke;
-        langkah.value = 2;
-      } catch (e) {
-        // Kegagalan kirim email bukan jalan buntu: PIN tetap bisa dipakai,
-        // jadi pengguna diantar ke layar verifikasi, bukan ditahan di sini.
-        stafTerpilih.value = staf;
-        dikirimKe.value = null;
-        error.value = _pesan(e);
-        langkah.value = 2;
-      } finally {
-        loading.value = false;
-      }
     }
 
     /// Minta kode baru tanpa meninggalkan layar ini.
@@ -352,9 +333,18 @@ class StaffSessionFlow extends HookConsumerWidget {
           ..._daftarStaf(
             sesi: sesi.value!,
             loading: loading.value,
-            // Pemilik hadir (baru mengetik password) → langsung masuk.
-            // Perangkat yang cuma mengingat pengesahan lama → minta bukti.
-            onPilih: perangkatDisahkan ? mintaKode : masukLangsung,
+            // Pilih nama → langsung bertugas, di KEDUA jalur masuk.
+            //
+            // Bukti pengelola sudah lewat sebelum layar ini: entah Pemilik
+            // baru mengetik passwordnya (start), atau perangkat memegang
+            // device_token yang hanya terbit setelah ia pernah lolos password
+            // di mesin ini (resume). Menahan kasir untuk bukti ketiga berarti
+            // menunggu email di depan mesin yang sedang melayani orang.
+            //
+            // mintaKode tetap hidup sebagai cadangan: dipakai tombol "Kirim
+            // ulang kode" di layar verifikasi, tempat masukLangsung mengantar
+            // bila server menolak.
+            onPilih: masukLangsung,
           )
         else
           ..._verifikasi(
@@ -486,8 +476,7 @@ List<Widget> _daftarStaf({
     ),
     const Gap(6),
     Text(
-      'Disetujui oleh ${sesi.authorizerName}. Kode verifikasi akan dikirim ke '
-      '${sesi.authorizerEmail}.',
+      'Disetujui oleh ${sesi.authorizerName}. Pilih nama untuk mulai bertugas.',
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
     const Gap(18),

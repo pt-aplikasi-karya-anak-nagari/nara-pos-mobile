@@ -9,24 +9,29 @@ import 'package:nara_pos_mobile/features/user/data/auth_api_service.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_service.dart';
 import 'package:nara_pos_mobile/features/user/ui/staff_session_page.dart';
 
-// Tombol "Kirim ulang kode" di layar persetujuan sesi kasir.
+// Layar "Siapa yang bertugas?" — pilih nama, langsung bertugas.
 //
-// # KENAPA LAYAR INI PERNAH BUNTU
+// # PERUBAHAN PERILAKU YANG DIJAGA BERKAS INI
 //
-// Kode 6 digit dikirim ke email Pemilik, dan satu-satunya jalan meminta kode
-// baru adalah menekan "Kembali", memilih ulang stafnya, lalu mengetik ulang —
-// pada perangkat yang belum disahkan itu berarti mengetik ulang password
-// Pemilik. Kode yang telat sampai, terhapus, atau salah ketik sampai
-// kedaluwarsa menjadi jalan buntu di depan mesin kasir yang sedang dipakai
-// melayani orang.
+// Dulu perangkat yang hanya MENGINGAT pengesahan lama (punya device_token,
+// Pemilik tak hadir) menuntut bukti ketiga: kode 6 digit ke email Pemilik, atau
+// PIN. Sekarang tidak lagi — memilih nama langsung membuka sesi.
 //
-// # BATAS YANG DISENGAJA
+// Alasannya: bukti pengelola sudah lewat sebelum layar ini. device_token adalah
+// 32 byte acak yang hanya terbit setelah Pemilik lolos password DI MESIN ITU,
+// dan bisa dicabut kapan saja dari dashboard. Menahan kasir untuk bukti ketiga
+// berarti menunggu email di depan mesin yang sedang dipakai melayani orang.
 //
-// Server MEMPERTAHANKAN sisa waktu tantangan saat kode diminta ulang, tidak
-// memperpanjangnya (anti-penyalahgunaan, disengaja & berkomentar di
-// staff_session_service.go). Jadi tombol ini menolong kasus "kodenya tak
-// sampai", BUKAN "waktunya sudah habis" — untuk yang kedua server menjawab
-// "ulangi dari awal", dan pesan itu harus sampai apa adanya ke layar.
+// Yang DILEPAS dan itu disengaja: bukti "siapa yang benar-benar berdiri di
+// kasir". Batas keamanannya berpindah ke penguasaan fisik perangkat yang sudah
+// disahkan.
+//
+// # KENAPA OTP & PIN TETAP DIUJI DI SINI
+//
+// Keduanya tidak dibuang, hanya tak lagi diminta di muka. Server masih
+// menerimanya, dan aplikasi masih mengantar ke layar verifikasi bila jalur
+// langsung DITOLAK — mis. staf sudah dinonaktifkan, atau outletnya berubah.
+// Tanpa jalur cadangan itu, penolakan berarti layar buntu.
 
 class _StoragePalsu extends StaffDeviceStorage {
   _StoragePalsu({this.token, this.outlet});
@@ -43,11 +48,15 @@ class _StoragePalsu extends StaffDeviceStorage {
   Future<void> hapus() async {}
 }
 
-/// Menghitung berapa kali kode diminta, dan boleh disuruh gagal.
 class _AuthPalsu extends AuthNotifier {
   int permintaanKode = 0;
-  String? galat;
+
+  /// Ditolaknya jalur LANGSUNG (verifyStaffSession), terpisah dari galat kirim
+  /// kode — dua kegagalan yang berbeda dan tak boleh saling menyamar.
+  String? galatVerifikasi;
+  String? galatKirimKode;
   bool stafPunyaPin = false;
+
   /// Kode yang diterima verifyStaffSession. String kosong = tanpa bukti kedua.
   final List<String> kodeDiverifikasi = [];
 
@@ -82,8 +91,7 @@ class _AuthPalsu extends AuthNotifier {
     required String password,
     required String outletId,
     String deviceLabel = '',
-  }) async =>
-      resumeStaffSession(deviceToken: 'x');
+  }) async => resumeStaffSession(deviceToken: 'x');
 
   @override
   Future<String?> verifyStaffSession({
@@ -92,7 +100,10 @@ class _AuthPalsu extends AuthNotifier {
     required String code,
   }) async {
     kodeDiverifikasi.add(code);
-    return galat;
+    // Kode kosong = jalur langsung. Kode terisi = jalur cadangan, yang di tes
+    // ini selalu diterima supaya kegagalan langkah pertama tak menyamar
+    // sebagai kegagalan langkah kedua.
+    return code.isEmpty ? galatVerifikasi : null;
   }
 
   @override
@@ -101,20 +112,23 @@ class _AuthPalsu extends AuthNotifier {
     required String staffUserId,
   }) async {
     permintaanKode++;
-    if (galat != null) throw galat!;
+    if (galatKirimKode != null) throw galatKirimKode!;
     return 'pem***@uji.invalid';
   }
 }
 
-Future<_AuthPalsu> _buka(
+/// Perangkat yang SUDAH disahkan (punya device_token). Pemilik tak hadir.
+Future<_AuthPalsu> _bukaTersimpan(
   WidgetTester tester, {
-  String? galat,
+  String? galatVerifikasi,
+  String? galatKirimKode,
   bool stafPunyaPin = false,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final auth = _AuthPalsu()
-    ..galat = galat
+    ..galatVerifikasi = galatVerifikasi
+    ..galatKirimKode = galatKirimKode
     ..stafPunyaPin = stafPunyaPin;
 
   await tester.pumpWidget(
@@ -126,9 +140,7 @@ Future<_AuthPalsu> _buka(
         ),
         authProvider.overrideWith(() => auth),
       ],
-      child: MaterialApp(
-        home: Scaffold(body: StaffSessionFlow(onSelesai: () {})),
-      ),
+      child: MaterialApp(home: Scaffold(body: StaffSessionFlow(onSelesai: () {}))),
     ),
   );
   await tester.pump(); // useEffect pemulihan perangkat
@@ -136,34 +148,116 @@ Future<_AuthPalsu> _buka(
   return auth;
 }
 
+/// Perangkat BARU tanpa device_token. Pemilik mengetik kredensialnya di sini.
+Future<_AuthPalsu> _bukaTanpaPerangkat(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  final auth = _AuthPalsu();
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        staffDeviceStorageProvider.overrideWithValue(_StoragePalsu()),
+        authProvider.overrideWith(() => auth),
+      ],
+      child: MaterialApp(home: Scaffold(body: StaffSessionFlow(onSelesai: () {}))),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+  return auth;
+}
+
 void main() {
-  testWidgets('sampai di layar persetujuan lewat perangkat tersimpan',
+  // ── Pilih nama, langsung bertugas ────────────────────────────────────────
+
+  testWidgets('perangkat tersimpan → pilih staf LANGSUNG masuk, tanpa kode',
       (tester) async {
-    final auth = await _buka(tester);
-    await tester.tap(find.text('putra'));
-    await tester.pump();
+    final auth = await _bukaTersimpan(tester);
 
     // Positifnya lebih dulu: kalau layarnya tak pernah tercapai, semua
-    // pernyataan soal tombolnya kehilangan arti.
-    expect(find.textContaining('Setujui sesi putra'), findsOneWidget);
-    expect(auth.permintaanKode, 1); // kode pertama dikirim otomatis
-  });
+    // pernyataan setelahnya kehilangan arti.
+    expect(find.text('putra'), findsOneWidget);
 
-  testWidgets('tombol kirim ulang ADA dan meminta kode baru', (tester) async {
-    final auth = await _buka(tester);
     await tester.tap(find.text('putra'));
     await tester.pump();
+
+    // Tak ada email yang dikirim, dan verifikasinya dipanggil dengan kode
+    // KOSONG — penanda "tanpa bukti kedua" yang dibaca server.
+    expect(auth.permintaanKode, 0);
+    expect(auth.kodeDiverifikasi, ['']);
+  });
+
+  testWidgets('Pemilik hadir → pilih staf langsung masuk, tanpa kode',
+      (tester) async {
+    final auth = await _bukaTanpaPerangkat(tester);
+
+    final isian = find.byType(TextField);
+    await tester.enterText(isian.at(0), 'owner@uji.invalid');
+    await tester.enterText(isian.at(1), 'rahasia');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pump();
+
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    expect(auth.permintaanKode, 0);
+    expect(auth.kodeDiverifikasi, ['']);
+  });
+
+  testWidgets('layarnya tidak lagi menjanjikan kode yang tak akan dikirim',
+      (tester) async {
+    // Teks lama berbunyi "Kode verifikasi akan dikirim ke pem***@uji.invalid".
+    // Membiarkannya berarti aplikasi menjanjikan email yang tak pernah datang —
+    // orang akan menunggu, lalu membuka kotak masuk, lalu mengira ada yang rusak.
+    await _bukaTersimpan(tester);
+
+    expect(find.textContaining('Kode verifikasi akan dikirim'), findsNothing);
+    expect(find.textContaining('Pilih nama untuk mulai bertugas'), findsOneWidget);
+    // Nama pengotorisasinya tetap disebut — itu yang menjelaskan atas restu
+    // siapa sesi ini terbit.
+    expect(find.textContaining('Pemilik Uji'), findsOneWidget);
+  });
+
+  // ── Jalur cadangan saat yang langsung DITOLAK ────────────────────────────
+
+  testWidgets('penolakan server mengantar ke verifikasi, bukan jalan buntu',
+      (tester) async {
+    // Jalur langsung bisa ditolak: staf dinonaktifkan, keanggotaan outlet
+    // dicabut, perangkat di-revoke. Tanpa jalur cadangan, penolakan berarti
+    // layar mati di depan mesin kasir yang sedang dipakai.
+    final auth = await _bukaTersimpan(
+      tester,
+      galatVerifikasi: 'staf itu tidak bisa bertugas di outlet ini',
+    );
+
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    expect(find.textContaining('staf itu tidak bisa bertugas'), findsOneWidget);
+    expect(find.textContaining('Setujui sesi putra'), findsOneWidget);
+    expect(auth.kodeDiverifikasi, ['']);
+  });
+
+  testWidgets('di layar cadangan, kirim ulang kode BEKERJA', (tester) async {
+    final auth = await _bukaTersimpan(tester, galatVerifikasi: 'ditolak');
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    // Kode belum pernah dikirim — jalur langsung tak mengirim apa pun.
+    expect(auth.permintaanKode, 0);
 
     await tester.tap(find.text('Kirim ulang kode'));
     await tester.pump();
 
-    expect(auth.permintaanKode, 2);
+    expect(auth.permintaanKode, 1);
     expect(find.textContaining('Kode baru dikirim'), findsOneWidget);
   });
 
   testWidgets('sesudah dipakai, tombolnya berjeda dengan hitungan terbaca',
       (tester) async {
-    final auth = await _buka(tester);
+    final auth = await _bukaTersimpan(tester, galatVerifikasi: 'ditolak');
     await tester.tap(find.text('putra'));
     await tester.pump();
     await tester.tap(find.text('Kirim ulang kode'));
@@ -173,41 +267,20 @@ void main() {
     // sebagai aplikasi yang macet, dan orang akan menekannya berkali-kali.
     expect(find.textContaining('Kirim ulang kode dalam'), findsOneWidget);
 
-    // Ketukan kedua selama jeda tidak mengirim apa pun.
     await tester.tap(find.textContaining('Kirim ulang kode dalam'));
     await tester.pump();
-    expect(auth.permintaanKode, 2);
+    expect(auth.permintaanKode, 1);
 
-    // Setelah jedanya habis, tombolnya hidup lagi.
     await tester.pump(const Duration(seconds: 31));
     expect(find.text('Kirim ulang kode'), findsOneWidget);
 
     await tester.tap(find.text('Kirim ulang kode'));
     await tester.pump();
-    expect(auth.permintaanKode, 3);
-  });
-
-  testWidgets('penolakan server sampai apa adanya, tanpa disamarkan',
-      (tester) async {
-    // Tantangan yang sudah kedaluwarsa TIDAK bisa diselamatkan tombol ini —
-    // server mempertahankan sisa waktu, tidak memperpanjangnya. Yang penting
-    // alasannya terbaca, bukan berubah jadi "Terjadi kesalahan sistem".
-    await _buka(tester, galat: 'sesi otorisasi sudah kedaluwarsa, ulangi dari awal');
-    await tester.pump();
-
-    // Kode pertama pun gagal, dan alur tetap mengantar ke layar verifikasi
-    // supaya PIN masih bisa dipakai.
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-
-    expect(
-      find.textContaining('sesi otorisasi sudah kedaluwarsa'),
-      findsOneWidget,
-    );
+    expect(auth.permintaanKode, 2);
   });
 
   testWidgets('kode lama dibersihkan saat yang baru dikirim', (tester) async {
-    await _buka(tester);
+    await _bukaTersimpan(tester, galatVerifikasi: 'ditolak');
     await tester.tap(find.text('putra'));
     await tester.pump();
 
@@ -224,92 +297,51 @@ void main() {
     expect(field.controller?.text, isEmpty);
   });
 
+  testWidgets('kegagalan kirim kode sampai apa adanya, tanpa disamarkan',
+      (tester) async {
+    await _bukaTersimpan(
+      tester,
+      galatVerifikasi: 'ditolak',
+      galatKirimKode: 'sesi otorisasi sudah kedaluwarsa, ulangi dari awal',
+    );
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+    await tester.tap(find.text('Kirim ulang kode'));
+    await tester.pump();
+
+    expect(find.textContaining('sesi otorisasi sudah kedaluwarsa'), findsOneWidget);
+  });
+
+  // ── Kata-kata di layar cadangan menyesuaikan keadaan staf ────────────────
+
   testWidgets('staf BER-PIN diarahkan memakai PIN-nya sendiri', (tester) async {
-    // Sebelum ini layar selalu menyuruh memakai "PIN otorisasi Anda" — yang
+    // Layar ini pernah selalu menyuruh memakai "PIN otorisasi Anda" — yang
     // dimaksud PIN PEMILIK, bukan PIN staf. Staf yang sudah diberi PIN dari
     // dashboard tak punya cara tahu bahwa PIN itulah yang diminta.
-    await _buka(tester, stafPunyaPin: true);
+    await _bukaTersimpan(tester, galatVerifikasi: 'ditolak', stafPunyaPin: true);
     await tester.tap(find.text('putra'));
     await tester.pump();
 
+    // Tiba di layar cadangan TANPA kode pernah dikirim: yang diminta hanya
+    // PIN-nya, dan tak boleh menyebut-nyebut email yang belum dikirim ke mana pun.
     expect(find.textContaining('Masukkan PIN putra'), findsOneWidget);
-    // Kode email tetap disebut sebagai jalan cadangan — bukan dihilangkan.
+    expect(find.textContaining('Belum punya PIN atau lupa'), findsNothing);
+
+    // Sesudah kode diminta, jalan cadangan lewat email BARU disebut — bukan
+    // dihilangkan, supaya staf yang lupa PIN tetap punya jalan keluar.
+    await tester.tap(find.text('Kirim ulang kode'));
+    await tester.pump();
     expect(find.textContaining('Belum punya PIN atau lupa'), findsOneWidget);
   });
 
   testWidgets('staf TANPA PIN tetap diarahkan ke kode email', (tester) async {
-    // Sisi sebaliknya. Perbaikan yang menyuruh semua orang mengetik "PIN Anda"
-    // akan menyesatkan staf yang memang belum diberi PIN — mereka akan mencoba
+    // Sisi sebaliknya. Menyuruh semua orang mengetik "PIN Anda" akan
+    // menyesatkan staf yang memang belum diberi PIN — mereka akan mencoba
     // menebak PIN yang tak pernah ada.
-    await _buka(tester, stafPunyaPin: false);
+    await _bukaTersimpan(tester, galatVerifikasi: 'ditolak', stafPunyaPin: false);
     await tester.tap(find.text('putra'));
     await tester.pump();
 
-    expect(find.textContaining('Kode 6 digit dikirim ke'), findsOneWidget);
     expect(find.textContaining('Masukkan PIN putra'), findsNothing);
-  });
-
-  // ── Pemilik hadir: pilih staf, langsung masuk ────────────────────────────
-  //
-  // Perangkat TANPA device_token berarti Pemilik baru saja mengetik email +
-  // passwordnya di sini. Ia ada di depan mesin dan sudah membuktikan dirinya;
-  // meminta kode ke emailnya sendiri sesudah itu berarti menyuruh orang yang
-  // sama membuktikan hal yang sama dua kali.
-
-  Future<_AuthPalsu> bukaTanpaPerangkat(WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final auth = _AuthPalsu();
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sharedPreferencesProvider.overrideWithValue(prefs),
-          // Tanpa token: perangkat ini belum pernah disahkan.
-          staffDeviceStorageProvider.overrideWithValue(_StoragePalsu()),
-          authProvider.overrideWith(() => auth),
-        ],
-        child: MaterialApp(
-          home: Scaffold(body: StaffSessionFlow(onSelesai: () {})),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-    return auth;
-  }
-
-  testWidgets('Pemilik hadir → pilih staf langsung masuk, TANPA kode',
-      (tester) async {
-    final auth = await bukaTanpaPerangkat(tester);
-
-    // Pemilik mengetik kredensialnya.
-    final isian = find.byType(TextField);
-    await tester.enterText(isian.at(0), 'owner@uji.invalid');
-    await tester.enterText(isian.at(1), 'rahasia');
-    await tester.tap(find.text('Lanjut'));
-    await tester.pump();
-
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-
-    // Kode TIDAK diminta — tak ada email yang dikirim.
-    expect(auth.permintaanKode, 0);
-    // Dan verifikasinya dipanggil dengan kode KOSONG: itulah penanda
-    // "tanpa bukti kedua" yang dibaca server.
-    expect(auth.kodeDiverifikasi, ['']);
-  });
-
-  testWidgets('perangkat yang diingat TETAP meminta bukti', (tester) async {
-    // Sisi sebaliknya, dan ini yang menjaga PIN tetap berarti. Di perangkat
-    // yang cuma mengingat pengesahan lama, Pemilik TIDAK hadir — membiarkan
-    // siapa pun memilih nama lalu masuk akan membuat PIN jadi hiasan.
-    final auth = await _buka(tester);
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-
-    expect(auth.permintaanKode, 1);
-    expect(auth.kodeDiverifikasi, isEmpty);
-    expect(find.textContaining('Setujui sesi putra'), findsOneWidget);
   });
 }
