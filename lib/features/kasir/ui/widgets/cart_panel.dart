@@ -14,7 +14,9 @@ import '../../providers.dart';
 import 'empty_states.dart';
 import 'customer_selector.dart';
 import 'line_discount_sheet.dart';
+import '../../../transactions/data/transaction_repository.dart';
 import 'menu_orders_tab.dart';
+import 'tab_badge.dart';
 import '../../../../shared/widgets/sheet_bawah.dart';
 
 /// Panel keranjang permanen yang ditampilkan di sisi kanan layar
@@ -31,6 +33,9 @@ class CartPanel extends ConsumerWidget {
     final total = ref.watch(totalProvider);
     final totalItems = ref.watch(totalItemsProvider);
     final taxSettings = ref.watch(taxSettingsProvider);
+    // null selama memuat/galat — sengaja DIBEDAKAN dari 0; lihat
+    // TabBerlencana.jumlah.
+    final pesananMeja = ref.watch(menuOrdersProvider).asData?.value;
     final notifier = ref.read(cartProvider.notifier);
 
     return DefaultTabController(
@@ -126,9 +131,22 @@ class CartPanel extends ConsumerWidget {
                     indicatorSize: TabBarIndicatorSize.tab,
                     padding: const EdgeInsets.all(4),
                     dividerColor: Colors.transparent,
-                    tabs: const [
-                      Tab(text: 'Langsung di Kasir'),
-                      Tab(text: 'Pesanan dari Scan Meja'),
+                    tabs: [
+                      // Keranjang: jumlah PRODUK, angka yang sama dengan chip
+                      // "Produk" di kepala panel. Memakai total qty di sini
+                      // akan membuat dua angka berbeda untuk hal yang sama di
+                      // satu layar.
+                      TabBerlencana(
+                        label: 'Langsung di Kasir',
+                        jumlah: cart.length,
+                      ),
+                      // menuOrdersProvider sudah menyaring lewat
+                      // pesananMejaPerluDitangani, jadi panjangnya memang
+                      // jumlah yang menunggu ditangani.
+                      TabBerlencana(
+                        label: 'Pesanan dari Scan Meja',
+                        jumlah: pesananMeja?.length,
+                      ),
                     ],
                   ),
                 ),
