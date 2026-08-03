@@ -8,6 +8,7 @@ import 'package:nara_pos_mobile/core/staff_device_storage.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_api_service.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_service.dart';
 import 'package:nara_pos_mobile/features/user/ui/staff_session_page.dart';
+import 'package:nara_pos_mobile/features/user/ui/widgets/keypad_kode.dart';
 
 // Layar "Siapa yang bertugas?" — pilih nama, lalu masukkan PIN.
 //
@@ -43,6 +44,20 @@ class _StoragePalsu extends StaffDeviceStorage {
   Future<void> hapus() async {}
 }
 
+/// Mengetik kode lewat KEYPAD, bukan papan ketik OS.
+///
+/// Kode 6 digit TERKIRIM OTOMATIS di digit terakhir — jadi jangan menambahkan
+/// ketukan "Mulai sesi" sesudahnya, karena itu mengirim permintaan kedua dan
+/// membuat tes menghitung dua kali sesuatu yang di aplikasi hanya sekali.
+Future<void> _ketikKode(WidgetTester tester, String kode) async {
+  for (final d in kode.split('')) {
+    final tombol = find.byKey(ValueKey('keypad-$d'));
+    await tester.ensureVisible(tombol);
+    await tester.tap(tombol);
+    await tester.pump();
+  }
+}
+
 class _AuthPalsu extends AuthNotifier {
   int permintaanKode = 0;
 
@@ -50,6 +65,7 @@ class _AuthPalsu extends AuthNotifier {
   /// kegagalan yang berbeda dan tak boleh saling menyamar.
   String? galatPin;
   String? galatKirimKode;
+
   /// Default TRUE: sesudah PIN dibuat otomatis saat karyawan ditambahkan,
   /// karyawan tanpa PIN hanya tersisa dari sebelum perubahan itu.
   bool stafPunyaPin = true;
@@ -134,7 +150,17 @@ Future<_AuthPalsu> _bukaTersimpan(
         ),
         authProvider.overrideWith(() => auth),
       ],
-      child: MaterialApp(home: Scaffold(body: StaffSessionFlow(onSelesai: () {}))),
+      child: MaterialApp(
+        home: Scaffold(
+          // SingleChildScrollView meniru KEDUA pemanggil sungguhan
+          // (LoginPage & StaffSessionPage). Tanpa itu harness ini lebih
+          // sempit daripada aplikasinya, dan konten yang wajar-wajar saja
+          // tampak sebagai overflow yang tak pernah dialami siapa pun.
+          body: SingleChildScrollView(
+            child: StaffSessionFlow(onSelesai: () {}),
+          ),
+        ),
+      ),
     ),
   );
   await tester.pump(); // useEffect pemulihan perangkat
@@ -155,7 +181,17 @@ Future<_AuthPalsu> _bukaTanpaPerangkat(WidgetTester tester) async {
         staffDeviceStorageProvider.overrideWithValue(_StoragePalsu()),
         authProvider.overrideWith(() => auth),
       ],
-      child: MaterialApp(home: Scaffold(body: StaffSessionFlow(onSelesai: () {}))),
+      child: MaterialApp(
+        home: Scaffold(
+          // SingleChildScrollView meniru KEDUA pemanggil sungguhan
+          // (LoginPage & StaffSessionPage). Tanpa itu harness ini lebih
+          // sempit daripada aplikasinya, dan konten yang wajar-wajar saja
+          // tampak sebagai overflow yang tak pernah dialami siapa pun.
+          body: SingleChildScrollView(
+            child: StaffSessionFlow(onSelesai: () {}),
+          ),
+        ),
+      ),
     ),
   );
   await tester.pump();
@@ -166,8 +202,9 @@ Future<_AuthPalsu> _bukaTanpaPerangkat(WidgetTester tester) async {
 void main() {
   // ── Pilih nama, langsung bertugas ────────────────────────────────────────
 
-  testWidgets('perangkat tersimpan → pilih staf antar ke layar PIN',
-      (tester) async {
+  testWidgets('perangkat tersimpan → pilih staf antar ke layar PIN', (
+    tester,
+  ) async {
     final auth = await _bukaTersimpan(tester);
 
     // Positifnya lebih dulu: kalau layarnya tak pernah tercapai, semua
@@ -184,8 +221,9 @@ void main() {
     expect(find.textContaining('Masukkan PIN putra'), findsOneWidget);
   });
 
-  testWidgets('Pemilik hadir → tetap diminta PIN, bukan langsung masuk',
-      (tester) async {
+  testWidgets('Pemilik hadir → tetap diminta PIN, bukan langsung masuk', (
+    tester,
+  ) async {
     // Password Pemilik membuktikan siapa yang MENYETUJUI, bukan siapa yang
     // akan bertugas. PIN-lah yang menjawab pertanyaan kedua, dan itu yang
     // membuat jejak transaksinya berarti.
@@ -211,7 +249,10 @@ void main() {
     await _bukaTersimpan(tester);
 
     expect(find.textContaining('Kode verifikasi akan dikirim'), findsNothing);
-    expect(find.textContaining('Pilih nama, lalu masukkan PIN'), findsOneWidget);
+    expect(
+      find.textContaining('Pilih nama, lalu masukkan PIN'),
+      findsOneWidget,
+    );
     // Nama pengotorisasinya tetap disebut — itu yang menjelaskan atas restu
     // siapa sesi ini terbit.
     expect(find.textContaining('Pemilik Uji'), findsOneWidget);
@@ -222,17 +263,46 @@ void main() {
     await tester.tap(find.text('putra'));
     await tester.pump();
 
-    await tester.enterText(find.byType(TextField).last, '246810');
-    await tester.tap(find.text('Mulai sesi'));
-    await tester.pump();
+    // 6 digit -> terkirim otomatis di digit terakhir; tak perlu menekan
+    // "Mulai sesi" (menekannya justru mengirim permintaan kedua).
+    await _ketikKode(tester, '246810');
 
     expect(auth.kodeDiverifikasi, ['246810']);
   });
 
+  testWidgets('PIN 4 digit dikirim lewat TOMBOL, bukan otomatis', (
+    tester,
+  ) async {
+    // Server menerima 4-6 digit. Keypad yang hanya mengirim saat 6 titik penuh
+    // akan mengunci setiap staf ber-PIN 4 digit di luar aplikasi — tanpa satu
+    // pun pesan yang menjelaskan sebabnya. Karena itu tombol "Mulai sesi"
+    // tidak boleh dihapus dari layar ini.
+    final auth = await _bukaTersimpan(tester, stafPunyaPin: true);
+    await tester.tap(find.text('putra'));
+    await tester.pump();
+
+    await _ketikKode(tester, '5029');
+    expect(
+      auth.kodeDiverifikasi,
+      isEmpty,
+      reason:
+          '4 digit belum boleh terkirim otomatis — staf ber-PIN 6 digit '
+          'akan mengirim separuh PIN-nya',
+    );
+
+    final tombol = find.text('Mulai sesi');
+    await tester.ensureVisible(tombol);
+    await tester.tap(tombol);
+    await tester.pump();
+
+    expect(auth.kodeDiverifikasi, ['5029']);
+  });
+
   // ── Jalur cadangan saat yang langsung DITOLAK ────────────────────────────
 
-  testWidgets('penolakan server sampai apa adanya, tanpa disamarkan',
-      (tester) async {
+  testWidgets('penolakan server sampai apa adanya, tanpa disamarkan', (
+    tester,
+  ) async {
     // PIN bisa ditolak karena bukan salah ketik: staf dinonaktifkan,
     // keanggotaan outlet dicabut, perangkat di-revoke. Mengubah semuanya jadi
     // "PIN salah" akan membuat kasir mencoba lagi berkali-kali dengan PIN yang
@@ -245,9 +315,7 @@ void main() {
 
     await tester.tap(find.text('putra'));
     await tester.pump();
-    await tester.enterText(find.byType(TextField).last, '246810');
-    await tester.tap(find.text('Mulai sesi'));
-    await tester.pump();
+    await _ketikKode(tester, '246810');
 
     expect(find.textContaining('staf itu tidak bisa bertugas'), findsOneWidget);
     expect(auth.kodeDiverifikasi, ['246810']);
@@ -268,8 +336,9 @@ void main() {
     expect(find.textContaining('Kode baru dikirim'), findsOneWidget);
   });
 
-  testWidgets('sesudah dipakai, tombolnya berjeda dengan hitungan terbaca',
-      (tester) async {
+  testWidgets('sesudah dipakai, tombolnya berjeda dengan hitungan terbaca', (
+    tester,
+  ) async {
     final auth = await _bukaTersimpan(tester, galatPin: 'PIN salah');
     await tester.tap(find.text('putra'));
     await tester.pump();
@@ -297,8 +366,7 @@ void main() {
     await tester.tap(find.text('putra'));
     await tester.pump();
 
-    await tester.enterText(find.byType(TextField).last, '123456');
-    await tester.pump();
+    await _ketikKode(tester, '123456');
 
     await tester.tap(find.text('Kirim ulang kode'));
     await tester.pump();
@@ -306,12 +374,13 @@ void main() {
     // Kode lama tak berlaku lagi begitu yang baru terbit. Membiarkannya
     // terketik membuat percobaan pertama sesudah kirim ulang pasti gagal —
     // dan orangnya menyangka kode barunya yang salah.
-    final field = tester.widget<TextField>(find.byType(TextField).last);
-    expect(field.controller?.text, isEmpty);
+    final keypad = tester.widget<KeypadKode>(find.byType(KeypadKode));
+    expect(keypad.nilai, isEmpty);
   });
 
-  testWidgets('kegagalan kirim kode sampai apa adanya, tanpa disamarkan',
-      (tester) async {
+  testWidgets('kegagalan kirim kode sampai apa adanya, tanpa disamarkan', (
+    tester,
+  ) async {
     await _bukaTersimpan(
       tester,
       galatPin: 'PIN salah',
@@ -322,7 +391,10 @@ void main() {
     await tester.tap(find.text('Kirim ulang kode'));
     await tester.pump();
 
-    expect(find.textContaining('sesi otorisasi sudah kedaluwarsa'), findsOneWidget);
+    expect(
+      find.textContaining('sesi otorisasi sudah kedaluwarsa'),
+      findsOneWidget,
+    );
   });
 
   // ── Kata-kata di layar cadangan menyesuaikan keadaan staf ────────────────

@@ -12,6 +12,7 @@ import '../../../core/app_icons.dart';
 import '../../../core/staff_device_storage.dart';
 import '../data/auth_api_service.dart';
 import '../data/auth_service.dart';
+import 'widgets/keypad_kode.dart';
 
 /// Mulai sesi kasir di perangkat bersama.
 ///
@@ -542,14 +543,19 @@ List<Widget> _verifikasi({
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
     const Gap(18),
-    TextField(
-      controller: kodeCtrl,
-      keyboardType: TextInputType.number,
-      obscureText: true,
-      enabled: !loading,
-      decoration: InputDecoration(
-        labelText: staf.hasPin ? 'PIN Anda atau kode email' : 'Kode email atau PIN',
-        hintText: '••••••',
+    // Papan angka, bukan papan ketik OS. Nilainya tetap disimpan di kodeCtrl
+    // supaya jalur verifikasi di bawah tak berubah sama sekali;
+    // ValueListenableBuilder yang membuat titik-titiknya ikut bergerak.
+    ValueListenableBuilder<TextEditingValue>(
+      valueListenable: kodeCtrl,
+      builder: (_, nilai, _) => KeypadKode(
+        nilai: nilai.text,
+        aktif: !loading,
+        onBerubah: (v) => kodeCtrl.text = v,
+        // Hanya di digit ke-6 — di sana tak ada lagi digit yang mungkin
+        // diketik. PIN 4-5 digit dikirim lewat tombol di bawah, yang karena
+        // itu tidak boleh dihilangkan.
+        onPenuh: loading ? null : onVerifikasi,
       ),
     ),
     // Kabar "kode baru dikirim" berdiri sendiri, tidak menumpang kotak error.
