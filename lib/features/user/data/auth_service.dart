@@ -220,29 +220,22 @@ class AuthNotifier extends Notifier<AuthState> {
     return _authApi.resumeStaffSession(deviceToken: deviceToken);
   }
 
-  /// Langkah 2 — kirim kode ke email pengotorisasi.
-  Future<String> requestStaffSessionOtp({
-    required String challengeId,
-    required String staffUserId,
-  }) {
-    return _authApi.requestStaffSessionOtp(
-      challengeId: challengeId,
-      staffUserId: staffUserId,
-    );
-  }
-
   /// Langkah 3 — verifikasi kode/PIN lalu simpan sesi staf.
   /// Mengembalikan null bila berhasil, atau pesan error.
   Future<String?> verifyStaffSession({
     required String challengeId,
     required String staffUserId,
     required String code,
+    /// Isi QR kartu login karyawan. Bila diisi, kartunya sendiri yang
+    /// menyebutkan SIAPA — staffUserId boleh kosong.
+    String cardToken = '',
   }) async {
     try {
       final data = await _authApi.verifyStaffSession(
         challengeId: challengeId,
         staffUserId: staffUserId,
         code: code.trim(),
+        cardToken: cardToken.trim(),
       );
       // Payload-nya sesi biasa, jadi disimpan lewat jalur yang sama —
       // termasuk blokade role-nya, yang tak akan terpicu karena yang terbit

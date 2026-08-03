@@ -11,8 +11,22 @@ import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/staff_device_storage.dart';
 import '../data/auth_api_service.dart';
+import '../../products/ui/barcode_scanner_page.dart';
 import '../data/auth_service.dart';
 import 'widgets/keypad_kode.dart';
+
+/// Pembuka pemindai kode.
+///
+/// Provider, bukan panggilan Navigator langsung, supaya tes bisa
+/// menggantinya. Tanpa ini jalur kartu hanya bisa diuji dengan kamera
+/// sungguhan — artinya tak pernah diuji, dan token yang diam-diam tak
+/// diteruskan tak akan tertangkap apa pun.
+final pemindaiKodeProvider = Provider<Future<String?> Function(BuildContext)>(
+  (ref) =>
+      (context) => Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      ),
+);
 
 /// Mulai sesi kasir di perangkat bersama.
 ///
@@ -62,18 +76,8 @@ class StaffSessionFlow extends HookConsumerWidget {
     final sesi = useState<StaffSessionStart?>(null);
     final outletId = useState<String?>(null);
     final stafTerpilih = useState<StaffCandidate?>(null);
-    final dikirimKe = useState<String?>(null);
     final loading = useState(false);
     final error = useState<String?>(null);
-    /// Kabar baik yang berumur pendek ("kode baru dikirim"), dipisah dari
-    /// [error] supaya keduanya tak pernah tampil sebagai satu kotak yang sama.
-    final catatan = useState<String?>(null);
-    /// Sisa detik sebelum kode boleh diminta lagi.
-    ///
-    /// Server TIDAK membatasi endpoint ini — beda dari OTP login biasa yang
-    /// punya cooldown bertingkat. Tanpa jeda di sini, satu ketukan berulang
-    /// mengirim email sungguhan sebanyak ketukannya.
-    final jeda = useState(0);
 
     // Nama outlet perangkat yang tersimpan. Non-null berarti perangkat ini
     // sudah disahkan, sehingga langkah password dilewati.
@@ -183,17 +187,6 @@ class StaffSessionFlow extends HookConsumerWidget {
       return () => dibatalkan = true;
     }, const []);
 
-    // Hitung mundur jeda kirim ulang. Dependensinya sengaja "sedang berjalan
-    // atau tidak", bukan angkanya: timer dibuat sekali saat jeda menyala dan
-    // dibatalkan sekali saat ia habis, bukan dibongkar-pasang tiap detik.
-    useEffect(() {
-      if (jeda.value <= 0) return null;
-      final t = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (jeda.value > 0) jeda.value = jeda.value - 1;
-      });
-      return t.cancel;
-    }, [jeda.value > 0]);
-
     /// Masuk LANGSUNG, tanpa bukti kedua.
     ///
     /// Dipakai saat Pemilik baru saja mengetik email + passwordnya di perangkat
@@ -217,56 +210,51 @@ class StaffSessionFlow extends HookConsumerWidget {
     /// membacanya bahkan tak pernah terjangkau. Begitu PIN lahir bersama
     /// karyawannya dan bisa disalin dari dashboard, hambatan itu hilang.
     ///
-    /// Kode email TIDAK dikirim otomatis lagi. Mengirimnya berarti setiap
-    /// pergantian giliran membanjiri kotak masuk Pemilik dengan kode yang tak
-    /// seorang pun akan pakai — PIN-nya sudah ada di tangan kasir. Tombol
-    /// "Kirim ulang kode" tetap ada untuk yang lupa PIN-nya.
+    /// Jalur kode email sudah DICABUT seluruhnya. Ia dulu jalan cadangan untuk
+    /// staf yang belum punya PIN; sejak PIN dibuat otomatis saat karyawan
+    /// ditambahkan, cadangan itu tak pernah dipakai — dan jalan masuk yang tak
+    /// pernah dipakai tetap jalan masuk yang harus dijaga.
     void mintaPin(StaffCandidate staf) {
       error.value = null;
       stafTerpilih.value = staf;
-      dikirimKe.value = null;
       langkah.value = 2;
     }
 
-    /// Minta kode baru tanpa meninggalkan layar ini.
+    /// Scan kartu karyawan → sesi terbit tanpa memilih nama & tanpa PIN.
     ///
-    /// Sebelumnya satu-satunya cara adalah menekan "Kembali", memilih ulang
-    /// stafnya, lalu mengetik ulang — dan pada perangkat yang belum disahkan
-    /// itu berarti mengetik ulang password Pemilik. Kode yang telat sampai
-    /// atau terlanjur terhapus jadi jalan buntu.
+    /// Kartunya sendiri yang menyebutkan SIAPA, jadi staff_user_id dikirim
+    /// kosong. Server yang menerjemahkan tokennya, dan penjaga outlet yang
+    /// sama dengan jalur PIN tetap berlaku di sana.
     ///
-    /// Server MEMPERTAHANKAN sisa waktu tantangan, tidak memperpanjangnya.
-    /// Jadi tombol ini menolong kasus "kodenya tak sampai", bukan
-    /// "waktunya habis" — untuk yang kedua server menjawab "ulangi dari awal",
-    /// dan pesan itu diteruskan apa adanya.
-    Future<void> kirimUlang() async {
-      final staf = stafTerpilih.value;
-      final s = sesi.value;
-      if (staf == null || s == null || jeda.value > 0 || loading.value) return;
+    /// Isi QR-nya TIDAK pernah ditampilkan atau dicatat — ia rahasia yang
+    /// setara kunci masuk, dan layar kasir menghadap pelanggan.
+    Future<void> scanKartu() async {
+      final hasil = await ref.read(pemindaiKodeProvider)(context);
+      if (hasil == null || hasil.trim().isEmpty) return;
 
       loading.value = true;
       error.value = null;
-      catatan.value = null;
-      try {
-        final ke = await ref
-            .read(authProvider.notifier)
-            .requestStaffSessionOtp(challengeId: s.challengeId, staffUserId: staf.id);
-        dikirimKe.value = ke;
-        // Kode lama sudah tak berlaku begitu yang baru terbit — membiarkannya
-        // terketik akan membuat percobaan pertama pasti gagal.
-        kodeCtrl.clear();
-        catatan.value = 'Kode baru dikirim ke $ke.';
-        jeda.value = 30;
-      } catch (e) {
-        error.value = _pesan(e);
-      } finally {
-        loading.value = false;
+      final msg = await ref
+          .read(authProvider.notifier)
+          .verifyStaffSession(
+            challengeId: sesi.value!.challengeId,
+            staffUserId: '',
+            code: '',
+            cardToken: hasil,
+          );
+      loading.value = false;
+      if (msg != null) {
+        HapticFeedback.vibrate();
+        error.value = msg;
+        return;
       }
+      HapticFeedback.mediumImpact();
+      onSelesai();
     }
 
     Future<void> verifikasi() async {
       if (kodeCtrl.text.trim().isEmpty) {
-        error.value = 'Masukkan PIN Anda, atau kode dari email Pemilik.';
+        error.value = 'Masukkan PIN Anda.';
         return;
       }
       loading.value = true;
@@ -340,17 +328,14 @@ class StaffSessionFlow extends HookConsumerWidget {
             // ulang kode" di layar verifikasi, tempat masukLangsung mengantar
             // bila server menolak.
             onPilih: mintaPin,
+            onScanKartu: scanKartu,
           )
         else
           ..._verifikasi(
             staf: stafTerpilih.value!,
-            dikirimKe: dikirimKe.value,
             kodeCtrl: kodeCtrl,
             loading: loading.value,
             onVerifikasi: verifikasi,
-            catatan: catatan.value,
-            jeda: jeda.value,
-            onKirimUlang: kirimUlang,
           ),
         // "Kembali" hanya bermakna kalau ada langkah sebelumnya yang bisa
         // dituju. Pada perangkat yang sudah disahkan, langkah 1 adalah yang
@@ -365,7 +350,6 @@ class StaffSessionFlow extends HookConsumerWidget {
                 ? null
                 : () {
                     error.value = null;
-                    catatan.value = null;
                     kodeCtrl.clear();
                     langkah.value = langkah.value - 1;
                   },
@@ -463,6 +447,7 @@ List<Widget> _daftarStaf({
   required StaffSessionStart sesi,
   required bool loading,
   required void Function(StaffCandidate) onPilih,
+  required VoidCallback onScanKartu,
 }) {
   return [
     const Text(
@@ -471,10 +456,40 @@ List<Widget> _daftarStaf({
     ),
     const Gap(6),
     Text(
-      'Disetujui oleh ${sesi.authorizerName}. Pilih nama, lalu masukkan PIN.',
+      'Disetujui oleh ${sesi.authorizerName}. Scan kartu, atau pilih nama '
+      'lalu masukkan PIN.',
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
-    const Gap(18),
+    const Gap(16),
+    // Scan DI ATAS daftar, bukan di bawahnya.
+    //
+    // Ia jalan tercepat dan yang paling sering dipakai begitu kartu dibagikan;
+    // menaruhnya sesudah daftar nama berarti kasir menggulir melewati jalan
+    // lambat untuk sampai ke jalan cepat, tiap pergantian giliran.
+    OutlinedButton.icon(
+      key: const ValueKey('sesi-scan-kartu'),
+      onPressed: loading ? null : onScanKartu,
+      icon: const Icon(Icons.qr_code_scanner, size: 20),
+      label: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Text('Scan kartu karyawan'),
+      ),
+    ),
+    const Gap(14),
+    Row(
+      children: [
+        Expanded(child: Divider(color: kDivider)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            'atau pilih nama',
+            style: TextStyle(fontSize: 11, color: kTextLight),
+          ),
+        ),
+        Expanded(child: Divider(color: kDivider)),
+      ],
+    ),
+    const Gap(14),
     ...sesi.staff.map(
       (s) => Card(
         margin: const EdgeInsets.only(bottom: 10),
@@ -504,13 +519,9 @@ List<Widget> _daftarStaf({
 
 List<Widget> _verifikasi({
   required StaffCandidate staf,
-  required String? dikirimKe,
   required TextEditingController kodeCtrl,
   required bool loading,
   required VoidCallback onVerifikasi,
-  required String? catatan,
-  required int jeda,
-  required VoidCallback onKirimUlang,
 }) {
   return [
     Text(
@@ -518,28 +529,28 @@ List<Widget> _verifikasi({
       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
     ),
     const Gap(6),
-    // Tiga cara sah, dan urutan kalimatnya mengikuti yang PALING SERING
-    // dipakai — bukan yang paling kuat. Staf yang sudah diberi PIN oleh
-    // Pemilik cukup mengetik PIN-nya; kode email hanya jalan cadangan saat ia
-    // belum punya PIN atau lupa.
+    // SATU cara, bukan dua.
+    //
+    // Jalur kode email dicabut atas keputusan pemilik produk. Alasannya sudah
+    // tak berlaku: kode itu dulu jalan cadangan untuk staf yang belum punya
+    // PIN, sedangkan PIN kini dibuat OTOMATIS oleh server saat karyawan
+    // ditambahkan dan ditampilkan sekali ke Pemilik untuk disalin.
+    //
+    // Menyisakan dua jalan masuk yang salah satunya tak pernah dipakai bukan
+    // kelonggaran — itu satu permukaan serangan tambahan yang tak seorang pun
+    // memperhatikan, dan satu kalimat tambahan yang harus dibaca kasir yang
+    // sedang buru-buru.
     //
     // PIN staf hanya berlaku di perangkat yang sudah disahkan Pemilik, dan
     // layar ini memang cuma tercapai dari perangkat seperti itu.
     Text(
       staf.hasPin
-          ? (dikirimKe != null
-                ? 'Masukkan PIN ${staf.fullName}. Belum punya PIN atau lupa? '
-                      'Pakai kode 6 digit yang dikirim ke $dikirimKe.'
-                : 'Masukkan PIN ${staf.fullName} untuk mulai bertugas.')
-          : (dikirimKe != null
-                ? 'Kode 6 digit dikirim ke $dikirimKe. Masukkan kode itu, atau '
-                      'PIN otorisasi Pemilik.'
-                // Karyawan lama yang dibuat sebelum PIN otomatis. Teks lama
-                // berbunyi "Kode tidak terkirim" — menuduh kegagalan yang tak
-                // pernah terjadi, karena kode memang sengaja tidak dikirim.
-                // Yang perlu diketahui orangnya adalah jalan keluarnya.
-                : '${staf.fullName} belum punya PIN. Minta Pemilik membuatkan '
-                      'dari dashboard, atau kirim kode ke emailnya.'),
+          ? 'Masukkan PIN ${staf.fullName} untuk mulai bertugas.'
+          // Hanya mungkin untuk karyawan lama yang dibuat sebelum PIN
+          // otomatis. Yang perlu diketahui orangnya adalah jalan keluarnya,
+          // bukan bahwa ada yang salah.
+          : '${staf.fullName} belum punya PIN. Minta Pemilik membuatkan dari '
+                'dashboard, lalu coba lagi.',
       style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
     ),
     const Gap(18),
@@ -558,41 +569,12 @@ List<Widget> _verifikasi({
         onPenuh: loading ? null : onVerifikasi,
       ),
     ),
-    // Kabar "kode baru dikirim" berdiri sendiri, tidak menumpang kotak error.
-    // Menampilkan keberhasilan dengan warna kegagalan membuat orang mengira
-    // permintaannya gagal padahal emailnya sudah di jalan.
-    if (catatan != null) ...[
-      const Gap(10),
-      Row(
-        children: [
-          Icon(Icons.check_circle_outline, size: 16, color: kSuccess),
-          const Gap(6),
-          Expanded(
-            child: Text(
-              catatan,
-              style: TextStyle(fontSize: 12, color: kSuccess),
-            ),
-          ),
-        ],
-      ),
-    ],
     const Gap(20),
     FilledButton(
       onPressed: loading ? null : onVerifikasi,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Text(loading ? 'Memverifikasi…' : 'Mulai sesi'),
-      ),
-    ),
-    const Gap(4),
-    // Jeda 30 detik supaya satu ketukan berulang tidak mengirim email
-    // sungguhan sebanyak ketukannya — endpoint ini tak dibatasi server.
-    // Hitungannya ditulis di label, bukan disembunyikan: tombol mati tanpa
-    // alasan terbaca sebagai aplikasi yang macet.
-    TextButton(
-      onPressed: (loading || jeda > 0) ? null : onKirimUlang,
-      child: Text(
-        jeda > 0 ? 'Kirim ulang kode dalam $jeda dtk' : 'Kirim ulang kode',
       ),
     ),
   ];

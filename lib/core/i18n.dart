@@ -137,7 +137,6 @@ const Map<String, Map<String, String>> _strings = {
   },
   'login.otp_send': {'id': 'Kirim Kode OTP', 'en': 'Send OTP Code'},
   'login.otp_verify': {'id': 'Verifikasi & Masuk', 'en': 'Verify & Login'},
-  'login.otp_resend': {'id': 'Kirim ulang kode', 'en': 'Resend code'},
   'login.otp_sent': {
     'id': 'Kode OTP telah dikirim. Periksa email Anda.',
     'en': 'OTP code has been sent. Please check your email.',

@@ -259,19 +259,6 @@ class AuthApiService extends BaseApiService {
     );
   }
 
-  /// Langkah 2: kirim kode ke email pengotorisasi. Mengembalikan alamat yang
-  /// sudah disamarkan supaya ia tahu kotak masuk mana yang harus dibuka.
-  Future<String> requestStaffSessionOtp({
-    required String challengeId,
-    required String staffUserId,
-  }) async {
-    final data = await post<Map<String, dynamic>>(
-      ApiEndpoint.staffSessionOtp,
-      data: {'challenge_id': challengeId, 'staff_user_id': staffUserId},
-    );
-    return data['sent_to']?.toString() ?? '';
-  }
-
   /// Langkah 3: [code] boleh kode email 6 digit ATAU PIN otorisasi milik
   /// pengotorisasi — server yang membedakan. Balasannya payload sesi biasa,
   /// atas nama STAF.
@@ -279,6 +266,7 @@ class AuthApiService extends BaseApiService {
     required String challengeId,
     required String staffUserId,
     required String code,
+    String cardToken = '',
   }) async {
     return post<Map<String, dynamic>>(
       ApiEndpoint.staffSessionVerify,
@@ -286,6 +274,7 @@ class AuthApiService extends BaseApiService {
         'challenge_id': challengeId,
         'staff_user_id': staffUserId,
         'code': code,
+        'card_token': cardToken,
       },
     );
   }

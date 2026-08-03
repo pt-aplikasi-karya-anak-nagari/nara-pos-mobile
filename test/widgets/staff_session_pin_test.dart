@@ -8,7 +8,6 @@ import 'package:nara_pos_mobile/core/staff_device_storage.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_api_service.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_service.dart';
 import 'package:nara_pos_mobile/features/user/ui/staff_session_page.dart';
-import 'package:nara_pos_mobile/features/user/ui/widgets/keypad_kode.dart';
 
 // Layar "Siapa yang bertugas?" — pilih nama, lalu masukkan PIN.
 //
@@ -106,24 +105,24 @@ class _AuthPalsu extends AuthNotifier {
     String deviceLabel = '',
   }) async => resumeStaffSession(deviceToken: 'x');
 
+  /// Token kartu yang diterima server palsu ini. Dipisah dari kodeDiverifikasi
+  /// supaya tes bisa membedakan sesi yang dibuka KARTU dari yang dibuka PIN —
+  /// menggabungkannya membuat keduanya tampak sama di assertion.
+  final List<String> kartuDiverifikasi = [];
+
   @override
   Future<String?> verifyStaffSession({
     required String challengeId,
     required String staffUserId,
     required String code,
+    String cardToken = '',
   }) async {
+    if (cardToken.isNotEmpty) {
+      kartuDiverifikasi.add(cardToken);
+      return galatPin;
+    }
     kodeDiverifikasi.add(code);
     return galatPin;
-  }
-
-  @override
-  Future<String> requestStaffSessionOtp({
-    required String challengeId,
-    required String staffUserId,
-  }) async {
-    permintaanKode++;
-    if (galatKirimKode != null) throw galatKirimKode!;
-    return 'pem***@uji.invalid';
   }
 }
 
@@ -249,10 +248,9 @@ void main() {
     await _bukaTersimpan(tester);
 
     expect(find.textContaining('Kode verifikasi akan dikirim'), findsNothing);
-    expect(
-      find.textContaining('Pilih nama, lalu masukkan PIN'),
-      findsOneWidget,
-    );
+    // Kalimatnya kini menyebut KEDUA jalan masuk sejak kartu ada. Yang
+    // dijaga tetap sama: ia menyebut PIN, dan tak menjanjikan email.
+    expect(find.textContaining('masukkan PIN'), findsWidgets);
     // Nama pengotorisasinya tetap disebut — itu yang menjelaskan atas restu
     // siapa sesi ini terbit.
     expect(find.textContaining('Pemilik Uji'), findsOneWidget);
@@ -321,83 +319,7 @@ void main() {
     expect(auth.kodeDiverifikasi, ['246810']);
   });
 
-  testWidgets('di layar cadangan, kirim ulang kode BEKERJA', (tester) async {
-    final auth = await _bukaTersimpan(tester, galatPin: 'PIN salah');
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-
-    // Kode belum pernah dikirim — jalur langsung tak mengirim apa pun.
-    expect(auth.permintaanKode, 0);
-
-    await tester.tap(find.text('Kirim ulang kode'));
-    await tester.pump();
-
-    expect(auth.permintaanKode, 1);
-    expect(find.textContaining('Kode baru dikirim'), findsOneWidget);
-  });
-
-  testWidgets('sesudah dipakai, tombolnya berjeda dengan hitungan terbaca', (
-    tester,
-  ) async {
-    final auth = await _bukaTersimpan(tester, galatPin: 'PIN salah');
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-    await tester.tap(find.text('Kirim ulang kode'));
-    await tester.pump();
-
-    // Hitungannya ditulis di label. Tombol yang mati tanpa alasan terbaca
-    // sebagai aplikasi yang macet, dan orang akan menekannya berkali-kali.
-    expect(find.textContaining('Kirim ulang kode dalam'), findsOneWidget);
-
-    await tester.tap(find.textContaining('Kirim ulang kode dalam'));
-    await tester.pump();
-    expect(auth.permintaanKode, 1);
-
-    await tester.pump(const Duration(seconds: 31));
-    expect(find.text('Kirim ulang kode'), findsOneWidget);
-
-    await tester.tap(find.text('Kirim ulang kode'));
-    await tester.pump();
-    expect(auth.permintaanKode, 2);
-  });
-
-  testWidgets('kode lama dibersihkan saat yang baru dikirim', (tester) async {
-    await _bukaTersimpan(tester, galatPin: 'PIN salah');
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-
-    await _ketikKode(tester, '123456');
-
-    await tester.tap(find.text('Kirim ulang kode'));
-    await tester.pump();
-
-    // Kode lama tak berlaku lagi begitu yang baru terbit. Membiarkannya
-    // terketik membuat percobaan pertama sesudah kirim ulang pasti gagal —
-    // dan orangnya menyangka kode barunya yang salah.
-    final keypad = tester.widget<KeypadKode>(find.byType(KeypadKode));
-    expect(keypad.nilai, isEmpty);
-  });
-
-  testWidgets('kegagalan kirim kode sampai apa adanya, tanpa disamarkan', (
-    tester,
-  ) async {
-    await _bukaTersimpan(
-      tester,
-      galatPin: 'PIN salah',
-      galatKirimKode: 'sesi otorisasi sudah kedaluwarsa, ulangi dari awal',
-    );
-    await tester.tap(find.text('putra'));
-    await tester.pump();
-    await tester.tap(find.text('Kirim ulang kode'));
-    await tester.pump();
-
-    expect(
-      find.textContaining('sesi otorisasi sudah kedaluwarsa'),
-      findsOneWidget,
-    );
-  });
-
-  // ── Kata-kata di layar cadangan menyesuaikan keadaan staf ────────────────
+  // ── Kata-kata di layar PIN menyesuaikan keadaan staf ─────────────────────
 
   testWidgets('staf BER-PIN diarahkan memakai PIN-nya sendiri', (tester) async {
     // Layar ini pernah selalu menyuruh memakai "PIN otorisasi Anda" — yang
@@ -407,19 +329,20 @@ void main() {
     await tester.tap(find.text('putra'));
     await tester.pump();
 
-    // Tiba di layar cadangan TANPA kode pernah dikirim: yang diminta hanya
-    // PIN-nya, dan tak boleh menyebut-nyebut email yang belum dikirim ke mana pun.
+    // Yang diminta hanya PIN-nya, tanpa satu kalimat pun tentang email.
     expect(find.textContaining('Masukkan PIN putra'), findsOneWidget);
-    expect(find.textContaining('Belum punya PIN atau lupa'), findsNothing);
 
-    // Sesudah kode diminta, jalan cadangan lewat email BARU disebut — bukan
-    // dihilangkan, supaya staf yang lupa PIN tetap punya jalan keluar.
-    await tester.tap(find.text('Kirim ulang kode'));
-    await tester.pump();
-    expect(find.textContaining('Belum punya PIN atau lupa'), findsOneWidget);
+    // Jalur kode email sudah dicabut: tak ada tombol, tak ada tawaran, tak ada
+    // kalimat yang menyiratkan ada jalan lain. Menyisakan salah satunya
+    // menjanjikan sesuatu yang tak akan pernah datang.
+    expect(find.text('Kirim ulang kode'), findsNothing);
+    expect(find.textContaining('kode'), findsNothing);
+    expect(find.textContaining('email'), findsNothing);
   });
 
-  testWidgets('staf TANPA PIN tetap diarahkan ke kode email', (tester) async {
+  testWidgets('staf TANPA PIN diarahkan MEMINTA PIN ke Pemilik', (
+    tester,
+  ) async {
     // Sisi sebaliknya. Menyuruh semua orang mengetik "PIN Anda" akan
     // menyesatkan staf yang memang belum diberi PIN — mereka akan mencoba
     // menebak PIN yang tak pernah ada.
@@ -428,5 +351,82 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('Masukkan PIN putra'), findsNothing);
+  });
+  // ── Scan kartu karyawan ──────────────────────────────────────────────────────
+
+  testWidgets('token hasil scan BENAR-BENAR diteruskan ke server', (
+    tester,
+  ) async {
+    // Tanpa tes ini, tombol scan bisa diam-diam mengirim token KOSONG:
+    // servernya menolak, kasir melihat "kartu tidak berlaku", dan tak ada
+    // apa pun yang menunjuk bahwa yang salah adalah aplikasinya, bukan
+    // kartunya.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final auth = _AuthPalsu()..stafPunyaPin = true;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          staffDeviceStorageProvider.overrideWithValue(
+            _StoragePalsu(token: 'token-perangkat', outlet: 'Outlet Uji'),
+          ),
+          authProvider.overrideWith(() => auth),
+          // Pemindai palsu: mengembalikan kartu tanpa menyentuh kamera.
+          pemindaiKodeProvider.overrideWithValue((_) async => 'NPCARD1:abc123'),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: StaffSessionFlow(onSelesai: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('sesi-scan-kartu')));
+    await tester.pumpAndSettle();
+
+    expect(
+      auth.kartuDiverifikasi,
+      ['NPCARD1:abc123'],
+      reason: 'token hasil scan tidak sampai ke server apa adanya',
+    );
+    expect(
+      auth.kodeDiverifikasi,
+      isEmpty,
+      reason:
+          'scan kartu jatuh ke jalur PIN — server akan menolaknya sebagai '
+          'PIN kosong, dan pesannya menyesatkan',
+    );
+  });
+
+  testWidgets('tombol scan kartu ada DI ATAS daftar nama', (tester) async {
+    // Scan adalah jalan tercepat dan yang paling sering dipakai begitu kartu
+    // dibagikan. Menaruhnya sesudah daftar nama membuat kasir menggulir melewati
+    // jalan lambat untuk sampai ke jalan cepat, tiap pergantian giliran.
+    await _bukaTersimpan(tester);
+
+    final scan = find.byKey(const ValueKey('sesi-scan-kartu'));
+    expect(scan, findsOneWidget);
+
+    final ySkan = tester.getTopLeft(scan).dy;
+    final yNama = tester.getTopLeft(find.text('putra')).dy;
+    expect(
+      ySkan,
+      lessThan(yNama),
+      reason: 'tombol scan ada DI BAWAH daftar nama',
+    );
+  });
+
+  testWidgets('layar pilih staf menyebut KEDUA jalan masuk', (tester) async {
+    // Kasir yang belum diberi kartu tak boleh mengira scan satu-satunya cara,
+    // dan yang sudah punya kartu tak boleh mengira ia wajib mengetik PIN.
+    await _bukaTersimpan(tester);
+    expect(find.textContaining('Scan kartu'), findsWidgets);
+    expect(find.textContaining('PIN'), findsWidgets);
   });
 }
