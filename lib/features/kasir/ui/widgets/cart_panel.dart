@@ -31,7 +31,6 @@ class CartPanel extends ConsumerWidget {
     final subtotal = ref.watch(subtotalProvider);
     final tax = ref.watch(taxProvider);
     final total = ref.watch(totalProvider);
-    final totalItems = ref.watch(totalItemsProvider);
     final taxSettings = ref.watch(taxSettingsProvider);
     // null selama memuat/galat — sengaja DIBEDAKAN dari 0; lihat
     // TabBerlencana.jumlah.
@@ -78,21 +77,6 @@ class CartPanel extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _CartStatChip(
-                          icon: AppIcons.inventory,
-                          label: '${cart.length} Produk',
-                        ),
-                        _CartStatChip(
-                          icon: AppIcons.receiptLong,
-                          label: '$totalItems Qty',
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -132,10 +116,13 @@ class CartPanel extends ConsumerWidget {
                     padding: const EdgeInsets.all(4),
                     dividerColor: Colors.transparent,
                     tabs: [
-                      // Keranjang: jumlah PRODUK, angka yang sama dengan chip
-                      // "Produk" di kepala panel. Memakai total qty di sini
-                      // akan membuat dua angka berbeda untuk hal yang sama di
-                      // satu layar.
+                      // Keranjang: jumlah PRODUK (bukan total qty).
+                      //
+                      // Chip "N Produk / M Qty" di kepala panel dicabut setelah
+                      // lencana ini ada — dua tempat yang menghitung hal yang
+                      // sama membuat mata kasir harus memilih mana yang
+                      // dipercaya, dan kepala panel adalah tempat yang lebih
+                      // mudah terlewat daripada tab yang sedang ia sentuh.
                       TabBerlencana(
                         label: 'Langsung di Kasir',
                         jumlah: cart.length,
@@ -497,39 +484,6 @@ class _TaxFreeBadge extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: kTextMid,
         ),
-      ),
-    );
-  }
-}
-
-class _CartStatChip extends StatelessWidget {
-  final IconAsset icon;
-  final String label;
-  const _CartStatChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: kBg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: kDivider, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          HugeIcon(icon: icon, color: kTextMid, size: 12),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: kTextDark,
-            ),
-          ),
-        ],
       ),
     );
   }
