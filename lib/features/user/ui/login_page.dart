@@ -13,6 +13,18 @@ import '../../../app/theme_mode_provider.dart';
 import '../../../core/i18n.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
 
+/// Apakah layar selebar ini pantas dibelah dua.
+///
+/// Ambangnya 900, bukan 720 seperti padding tablet. Kartu loginnya sendiri
+/// butuh 460, dan panel merek di bawah 340 hanya menyisakan judul terpotong.
+/// Memaksakan dua kolom di 720 menyempitkan keypad PIN sampai tombolnya sulit
+/// ditekan — dan kasir yang salah tekan PIN lebih buruk daripada login tanpa
+/// panel merek.
+///
+/// Fungsi terpisah supaya ambangnya bisa diuji tanpa merender seluruh alur
+/// sesi staf beserta jaringannya.
+bool tataLetakTerbelah(double lebarLayar) => lebarLayar >= 900;
+
 class LoginPage extends ConsumerWidget {
   const LoginPage({super.key});
 
@@ -25,57 +37,229 @@ class LoginPage extends ConsumerWidget {
     // seluruh kontrol "siapa yang bertugas & siapa yang menyetujui" bisa
     // dilewati hanya dengan memilih form yang lain — dan jejak transaksi
     // kembali menunjuk orang yang salah.
-    final isTablet = MediaQuery.sizeOf(context).width >= 720;
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: _LoginBackdrop()),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTablet ? 40 : 20,
-                  vertical: 28,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const _LogoIcon(size: 18, fontSize: 24),
-                      const Gap(24),
-                      Container(
-                        padding: EdgeInsets.all(isTablet ? 32 : 22),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: StaffSessionFlow(
-                          // Sesi sudah tersimpan oleh alurnya; router yang
-                          // mengamati auth state yang memindahkan layar.
-                          onSelesai: () {},
-                        ),
-                      ),
-                      const Gap(14),
-                      _LupaPasswordLink(),
-                      const Gap(10),
-                      _DaftarLink(),
-                      const Gap(24),
-                      const _LanguageSwitcher(isDark: false),
-                    ],
-                  ),
+    final lebar = MediaQuery.sizeOf(context).width;
+    final isTablet = lebar >= 720;
+
+    if (!tataLetakTerbelah(lebar)) {
+      return Scaffold(
+        body: Stack(
+          children: [
+            const Positioned.fill(child: _LoginBackdrop()),
+            SafeArea(
+              child: Center(
+                child: _KolomLogin(
+                  padatHorizontal: isTablet ? 40 : 20,
+                  padatKartu: isTablet ? 32 : 22,
+                  tampilkanLogo: true,
                 ),
               ),
             ),
+            const Positioned(top: 12, right: 12, child: _LoginThemeToggle()),
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Row(
+        // stretch supaya panel merek setinggi layar penuh. Aman di sini:
+        // tinggi Row-nya datang dari body Scaffold yang sudah terbatas.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Expanded(flex: 5, child: _PanelMerek()),
+          Expanded(
+            flex: 4,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                  ),
+                ),
+                SafeArea(
+                  child: Center(
+                    // Logo tak diulang di sini — sudah besar di panel kiri, dan
+                    // menampilkannya dua kali hanya memakan tinggi yang
+                    // dibutuhkan keypad.
+                    child: _KolomLogin(
+                      padatHorizontal: 40,
+                      padatKartu: 28,
+                      tampilkanLogo: false,
+                      berkartu: false,
+                    ),
+                  ),
+                ),
+                const Positioned(
+                  top: 12,
+                  right: 12,
+                  child: _LoginThemeToggle(),
+                ),
+              ],
+            ),
           ),
-          const Positioned(top: 12, right: 12, child: _LoginThemeToggle()),
+        ],
+      ),
+    );
+  }
+}
+
+/// Isi login — sama persis di kedua tata letak.
+///
+/// Satu widget, bukan dua salinan: kalau alurnya bercabang, perbaikan di layar
+/// ponsel diam-diam tidak sampai ke tablet, dan yang menemukannya kasir.
+class _KolomLogin extends StatelessWidget {
+  const _KolomLogin({
+    required this.padatHorizontal,
+    required this.padatKartu,
+    required this.tampilkanLogo,
+    this.berkartu = true,
+  });
+
+  final double padatHorizontal;
+  final double padatKartu;
+  final bool tampilkanLogo;
+
+  /// Di tata letak terbelah, sisi kanan SUDAH menjadi panelnya sendiri —
+  /// kartu di dalam panel jadi kotak di dalam kotak.
+  final bool berkartu;
+
+  @override
+  Widget build(BuildContext context) {
+    final isi = StaffSessionFlow(
+      // Sesi sudah tersimpan oleh alurnya; router yang mengamati auth state
+      // yang memindahkan layar.
+      onSelesai: () {},
+    );
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: padatHorizontal, vertical: 28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (tampilkanLogo) ...[
+              const _LogoIcon(size: 18, fontSize: 24),
+              const Gap(24),
+            ],
+            if (berkartu)
+              Container(
+                padding: EdgeInsets.all(padatKartu),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: isi,
+              )
+            else
+              isi,
+            const Gap(14),
+            _LupaPasswordLink(),
+            const Gap(10),
+            _DaftarLink(),
+            const Gap(24),
+            const _LanguageSwitcher(isDark: false),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Panel merek di kiri, hanya di layar selebar tablet mendatar.
+///
+/// # KENAPA BUKAN GAMBAR PROMOSI
+///
+/// Perangkat ini berdiri di konter, menyala sepanjang hari, dan menghadap
+/// pelanggan. Yang pantas dipajang di sana adalah merek gerainya sendiri —
+/// bukan iklan yang akan basi dalam sebulan dan harus diganti lewat rilis
+/// aplikasi. Semua yang dipakai di sini sudah ada di aset: logo, warna merek,
+/// dan kalimat produknya.
+class _PanelMerek extends StatelessWidget {
+  const _PanelMerek();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [kPrimary, Color.lerp(kPrimary, Colors.black, 0.35)!],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Lingkaran blur yang sama dengan latar layar ponsel — supaya kedua
+          // tata letak terbaca sebagai satu produk, bukan dua aplikasi.
+          Positioned(
+            top: -70,
+            left: -60,
+            child: _BlurCircle(
+              size: 260,
+              color: Colors.white.withValues(alpha: 0.07),
+            ),
+          ),
+          Positioned(
+            bottom: -90,
+            right: -70,
+            child: _BlurCircle(
+              size: 320,
+              color: Colors.white.withValues(alpha: 0.05),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(44),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 76,
+                    height: 76,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      key: const ValueKey('login-logo-merek'),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const Gap(28),
+                  const Text(
+                    'NARA POS',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const Gap(12),
+                  Text(
+                    'Take control of your business,\nright in your hand.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 16,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -157,8 +341,13 @@ class _LupaPasswordLink extends ConsumerWidget {
 class _DaftarLink extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    // Wrap, bukan Row: dua teks ini panjangnya ikut bahasa DAN ikut skala font
+    // sistem. Row akan meluber jadi garis kuning-hitam di ponsel sempit atau
+    // saat penggunanya membesarkan teks — persis di layar yang jadi satu-satunya
+    // pintu masuk aplikasi.
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(
           ref.t('login.no_account'),
@@ -186,8 +375,9 @@ class _DaftarLink extends ConsumerWidget {
 }
 
 class _LoginThemeToggle extends ConsumerWidget {
-  /// Set true kalau tombol berada di atas panel gelap (mis. branding
-  /// gradient di tablet) — supaya kontras icon tetap terbaca.
+  /// Selalu duduk di atas sisi terang (latar ponsel, atau kolom kanan di tata
+  /// letak terbelah) — tak pernah di atas panel merek — jadi kTextDark/kCard
+  /// cukup dan tak perlu varian gelap.
   const _LoginThemeToggle();
 
   @override
