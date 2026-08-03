@@ -318,6 +318,107 @@ void main() {
     });
   });
 
+  // Tata letak DUA KOLOM — riwayat di kiri keypad.
+  //
+  // # KENAPA INI PUNYA GRUPNYA SENDIRI
+  //
+  // Semua tes di atas memakai lebar 400, jadi selalu satu kolom. Dua kolom
+  // justru tata letak yang dipakai kasir di tablet, dan tak pernah sekali pun
+  // dirender di tes mana pun — sampai kalkulatornya crash di tangan pengguna.
+  //
+  // Yang membuatnya luput: panel riwayat hanya memakai ListView bila riwayatnya
+  // TIDAK kosong. Saat kosong isinya Center, yang tak punya viewport. Jadi
+  // merender dua kolom dengan riwayat kosong saja tidak cukup — kombinasi yang
+  // meledak adalah layar lebar DAN riwayat sudah terisi.
+  group('tata letak dua kolom', () {
+    testWidgets('riwayat TERISI di layar lebar tidak meledak', (t) async {
+      // Ini reproduksi crash-nya: IntrinsicHeight menanyakan tinggi alami ke
+      // seluruh anaknya, termasuk panel riwayat yang berisi ListView —
+      // dan RenderViewport menolak menjawab.
+      await buka(t, lebar: 900);
+      await tekan(t, ['8', '+', '2', '=']);
+      expect(
+        t.takeException(),
+        isNull,
+        reason:
+            'kalkulator crash begitu ada satu hasil di riwayat, di layar '
+            'lebar — persis kondisi kasir tablet setelah hitungan pertama',
+      );
+      expect(
+        find.byKey(const ValueKey('kalkulator-riwayat-0')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('riwayat panjang tidak meledak dan tetap bergulir', (t) async {
+      // Sisi sebaliknya: panel yang isinya jauh melebihi tinggi keypad tak
+      // boleh menyeret tinggi dialog ikut membesar — ia harus bergulir di
+      // dalam ruang yang sudah ditentukan keypad.
+      await buka(t, lebar: 900);
+      for (var i = 0; i < 30; i++) {
+        await tekan(t, ['$i'.substring(0, 1), '+', '1', '=']);
+      }
+      expect(t.takeException(), isNull);
+
+      final tinggiDialog = t.getSize(find.byType(DialogKalkulator)).height;
+      expect(
+        tinggiDialog,
+        lessThanOrEqualTo(1000),
+        reason:
+            '30 baris riwayat menyeret tinggi dialog melewati layar — '
+            'panelnya harus bergulir, bukan memanjang',
+      );
+      expect(find.byType(Scrollable), findsWidgets);
+    });
+
+    testWidgets('panel dan keypad TIDAK bertumpuk', (t) async {
+      // Lebar panel ditulis dua kali: sekali sebagai lebar panel yang
+      // diposisikan, sekali sebagai padding kiri keypad yang memberinya ruang.
+      // Kalau keduanya lepas sinkron, panel menimpa keypad dan tombolnya
+      // tertutup — tanpa satu pun galat. Semua tes lain tetap hijau di kondisi
+      // itu, termasuk yang memeriksa tinggi; hanya jarak mendatar yang
+      // membongkarnya.
+      await buka(t, lebar: 900);
+      final panel = t.getRect(
+        find.byKey(const ValueKey('kalkulator-panel-riwayat')),
+      );
+      final keypad = t.getRect(
+        find.byKey(const ValueKey('kalkulator-papan-tombol')),
+      );
+      expect(
+        panel.right,
+        lessThanOrEqualTo(keypad.left),
+        reason: 'panel riwayat menimpa keypad — tombolnya tertutup',
+      );
+      expect(
+        keypad.width,
+        greaterThan(0),
+        reason: 'keypad terdesak sampai tak bersisa',
+      );
+    });
+
+    testWidgets('riwayat KOSONG di layar lebar tetap setinggi keypad', (
+      t,
+    ) async {
+      // Alasan IntrinsicHeight dipakai sejak awal: tanpa penyamaan tinggi,
+      // kolom kiri mengerut mengikuti isinya dan panel kosongnya tampak
+      // seperti tampilan yang rusak. Perbaikan crash-nya tidak boleh
+      // mengorbankan itu.
+      await buka(t, lebar: 900);
+      final tinggiPanel = t
+          .getSize(find.byKey(const ValueKey('kalkulator-panel-riwayat')))
+          .height;
+      final tinggiKeypad = t
+          .getSize(find.byKey(const ValueKey('kalkulator-papan-tombol')))
+          .height;
+      expect(
+        tinggiPanel,
+        moreOrLessEquals(tinggiKeypad, epsilon: 1),
+        reason: 'panel riwayat harus setinggi keypad, bukan mengerut',
+      );
+    });
+  });
+
   testWidgets('ekspresi yang SEDANG disusun tampil di layar', (t) async {
     // Kasir yang terganggu di tengah hitungan bisa melihat lagi apa yang
     // sedang ia kerjakan — bukan hanya angka terakhir yang diketik.

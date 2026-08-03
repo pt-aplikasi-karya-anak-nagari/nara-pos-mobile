@@ -6,6 +6,14 @@ import '../../../../app/theme.dart';
 import '../../../../core/format.dart';
 import 'riwayat_kalkulator.dart';
 
+/// Lebar panel riwayat di tata letak dua kolom, dan jarak ke keypad.
+///
+/// Dipakai dua kali dan HARUS sama: sekali sebagai lebar panel yang
+/// diposisikan, sekali sebagai padding kiri keypad yang memberinya ruang.
+/// Kalau keduanya berbeda, panel dan keypad bertumpuk atau menyisakan celah.
+const double _lebarPanelRiwayat = 240;
+const double _jarakAntarKolom = 16;
+
 /// Kalkulator kasir — dialog cepat untuk hitungan di depan pelanggan.
 ///
 /// # KENAPA BUKAN MEMANGGIL KALKULATOR BAWAAN
@@ -169,6 +177,7 @@ class _DialogKalkulatorState extends ConsumerState<DialogKalkulator> {
 
           final papan = _papanTombol();
           final panel = _PanelRiwayat(
+            key: const ValueKey('kalkulator-panel-riwayat'),
             riwayat: riwayat,
             onPakai: _pakaiDariRiwayat,
             onBersihkan: () =>
@@ -205,18 +214,43 @@ class _DialogKalkulatorState extends ConsumerState<DialogKalkulator> {
                     ],
                   ),
                   if (muatDuaKolom)
-                    // IntrinsicHeight supaya panel riwayat setinggi keypad —
-                    // tanpa itu kolom kiri mengerut mengikuti isinya dan
-                    // daftar kosongnya tampak seperti tampilan rusak.
-                    IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(width: 240, child: panel),
-                          const SizedBox(width: 16),
-                          Expanded(child: papan),
-                        ],
-                      ),
+                    // Riwayat di kiri, setinggi keypad.
+                    //
+                    // # KENAPA STACK, BUKAN IntrinsicHeight
+                    //
+                    // IntrinsicHeight menanyakan tinggi alami ke SEMUA anaknya,
+                    // termasuk panel riwayat yang berisi ListView — dan
+                    // RenderViewport menolak menjawabnya, karena menjawab
+                    // berarti membangun seluruh anaknya dan membatalkan gunanya
+                    // jadi lazy. Akibatnya kalkulator crash begitu ada satu
+                    // baris riwayat di layar lebar.
+                    //
+                    // Stack membalik arah pertanyaannya. Keypad — yang tak
+                    // punya widget bergulir sama sekali — dibiarkan menentukan
+                    // tinggi Stack sebagai satu-satunya anak tak-terposisi.
+                    // Panelnya lalu DIBERI tinggi itu lewat top+bottom, jadi
+                    // tak ada yang perlu ditanyai tinggi alaminya, dan
+                    // ListView-nya tetap menerima batas yang jelas.
+                    //
+                    // CrossAxisAlignment.stretch tidak bisa dipakai sebagai
+                    // ganti: Row meneruskan constraints.maxHeight yang MASUK
+                    // ke anaknya, dan di sini tingginya tak terbatas.
+                    Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: _lebarPanelRiwayat + _jarakAntarKolom,
+                          ),
+                          child: papan,
+                        ),
+                        PositionedDirectional(
+                          start: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: _lebarPanelRiwayat,
+                          child: panel,
+                        ),
+                      ],
                     )
                   else ...[
                     SizedBox(height: 150, child: panel),
@@ -253,6 +287,7 @@ class _DialogKalkulatorState extends ConsumerState<DialogKalkulator> {
     ];
 
     return Column(
+      key: const ValueKey('kalkulator-papan-tombol'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -433,6 +468,7 @@ class _Tombol extends StatelessWidget {
 /// hitungan berikutnya.
 class _PanelRiwayat extends StatelessWidget {
   const _PanelRiwayat({
+    super.key,
     required this.riwayat,
     required this.onPakai,
     required this.onBersihkan,
