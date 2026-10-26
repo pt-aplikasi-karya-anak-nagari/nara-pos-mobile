@@ -72,6 +72,13 @@ class ProductFormPage extends HookConsumerWidget {
           ? existing.stock.toString()
           : '',
     );
+    // Stok yang DITAMPILKAN saat form dibuka (diambil sekali, sama seperti
+    // stockCtrl). `existing` mengikuti stream live, jadi nilainya saat simpan
+    // bisa sudah turun karena penjualan — memakai itu sebagai dasar akan salah.
+    // null = stok belum dilacak saat form dibuka.
+    final stockShownAtOpen = useState<int?>(
+      existing != null && existing.trackStock ? existing.stock : null,
+    );
     final discountType = useState(existing?.discountType ?? 'none');
     final discountValueCtrl = useTextEditingController(
       text: existing != null && existing.discountValue > 0
@@ -315,25 +322,35 @@ class ProductFormPage extends HookConsumerWidget {
           .toList();
 
       try {
-        final saved = await ref
-            .read(outletServiceProvider)
-            .saveProduct(selectedOutletId.value!, {
-              if (product.remoteId != null) 'id': product.remoteId,
-              'name': product.name,
-              'price': product.price,
-              'stock': product.stock,
-              'sku': product.sku,
-              'barcode': product.barcode,
-              'category_id': product.categoryId,
-              'is_available': product.isAvailable,
-              'track_stock': product.trackStock,
-              'is_taxable': product.isTaxable,
-              'description': product.description,
-              'discount_type': product.discountType,
-              'discount_value': product.discountValue,
-              'discount_name': product.discountName,
-              'variants': variantPayload,
-            });
+        final saved = await ref.read(outletServiceProvider).saveProduct(
+          selectedOutletId.value!,
+          {
+            if (product.remoteId != null) 'id': product.remoteId,
+            'name': product.name,
+            'price': product.price,
+            'stock': product.stock,
+            // Backend menerapkan SELISIH (stock − stock_base) ke stok
+            // terkini, jadi penjualan selagi form terbuka tidak tertimpa.
+            //  - lacak stok sejak awal → dasar = stok yang ditampilkan
+            //  - lacak stok nonaktif  → dasar = stock (selisih 0, tak disentuh)
+            //  - baru diaktifkan      → tanpa dasar: angka diketik = stok awal
+            if (product.remoteId != null && !trackStock.value)
+              'stock_base': product.stock
+            else if (product.remoteId != null && stockShownAtOpen.value != null)
+              'stock_base': stockShownAtOpen.value,
+            'sku': product.sku,
+            'barcode': product.barcode,
+            'category_id': product.categoryId,
+            'is_available': product.isAvailable,
+            'track_stock': product.trackStock,
+            'is_taxable': product.isTaxable,
+            'description': product.description,
+            'discount_type': product.discountType,
+            'discount_value': product.discountValue,
+            'discount_name': product.discountName,
+            'variants': variantPayload,
+          },
+        );
 
         // Upload gambar bila user pilih file baru. Saat create, kita pakai
         // ID dari produk yang baru dibuat. Saat edit, pakai ID existing.
@@ -367,7 +384,9 @@ class ProductFormPage extends HookConsumerWidget {
         final productIdForMods = product.remoteId ?? saved?.remoteId;
         if (productIdForMods != null && selectedOutletId.value != null) {
           try {
-            await ref.read(modifierRepositoryProvider).setProductGroups(
+            await ref
+                .read(modifierRepositoryProvider)
+                .setProductGroups(
                   selectedOutletId.value!,
                   productIdForMods,
                   selectedModifierGroupIds.value.toList(),
@@ -697,9 +716,7 @@ class ProductFormPage extends HookConsumerWidget {
           contentPadding: EdgeInsets.zero,
           activeThumbColor: kPrimary,
           title: Text(
-            sizes.value.isEmpty
-                ? 'Aktifkan Diskon Produk'
-                : 'Diskon Regular',
+            sizes.value.isEmpty ? 'Aktifkan Diskon Produk' : 'Diskon Regular',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -1053,10 +1070,7 @@ class ProductFormPage extends HookConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: kTextMid,
-                    ),
+                    Icon(Icons.keyboard_arrow_down_rounded, color: kTextMid),
                   ],
                 ),
               ),
@@ -1428,9 +1442,7 @@ class _VariantEditSheet extends HookWidget {
     // State diskon varian — paralel dengan section diskon di form produk.
     // Saat ditutup tombol "Simpan Varian", state ini disalin balik ke draft.
     final discountType = useState<String>(draft.discountType);
-    final discountNameCtrl = useTextEditingController(
-      text: draft.discountName,
-    );
+    final discountNameCtrl = useTextEditingController(text: draft.discountName);
     final discountValueCtrl = useTextEditingController(
       text: draft.discountValue > 0
           ? (draft.discountType == 'fixed'
@@ -1740,9 +1752,7 @@ class _ModifierGroupPickerSheetState extends State<_ModifierGroupPickerSheet> {
                       decoration: BoxDecoration(
                         color: active ? kPrimary.withValues(alpha: 0.07) : kBg,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: active ? kPrimary : kDivider,
-                        ),
+                        border: Border.all(color: active ? kPrimary : kDivider),
                       ),
                       child: Row(
                         children: [
