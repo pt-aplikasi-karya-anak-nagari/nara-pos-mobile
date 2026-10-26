@@ -68,10 +68,6 @@ class Sale {
   /// belum dikonfirmasi).
   int? queueNo;
 
-  /// Ref charge gateway QRIS (payment_ref). Null = tanpa charge (open-bill /
-  /// pilihan "bayar di kasir") — pembeda antrean kasir dari menunggu-QRIS.
-  String? paymentRef;
-
   /// Catatan level-pesanan dari pelanggan QR ("alergi kacang untuk semua").
   String? note;
 
@@ -153,7 +149,6 @@ class Sale {
     this.confirmedAt,
     this.fulfillmentStatus = 'pending',
     this.queueNo,
-    this.paymentRef,
     this.note,
     this.isRefunded = false,
     this.isPartiallyRefunded = false,
@@ -385,7 +380,6 @@ class Sale {
       fulfillmentStatus:
           json['fulfillment_status']?.toString() ?? 'pending',
       queueNo: (json['queue_no'] as num?)?.toInt(),
-      paymentRef: json['payment_ref']?.toString(),
       note: json['note']?.toString(),
       // Backend juga set `payment_status = 'refunded'` di endpoint refund
       // baru (lihat repository.Refund). Cek both supaya kompat data lama

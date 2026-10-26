@@ -17,10 +17,9 @@ import 'package:nara_pos_mobile/features/transactions/domain/sale.dart';
 //
 // # KENAPA BOCORNYA HALUS
 //
-// Cabang ketiga saringan ini — "belum bayar, belum dikonfirmasi, tanpa
-// paymentRef" — dirancang untuk pesanan "bayar di kasir". Pesanan yang sudah
-// DIBATALKAN memenuhi ketiganya juga. Tak ada satu pun syarat yang tampak
-// salah kalau dibaca sendiri-sendiri.
+// Pesanan "bayar di kasir" (belum bayar, belum dikonfirmasi) harus muncul.
+// Pesanan yang sudah DIBATALKAN juga belum bayar dan belum dikonfirmasi —
+// tanpa penjaga status, keduanya tak terbedakan.
 //
 // Ongkosnya bukan cuma pesan merah: di kafe ramai, pesanan yang benar-benar
 // perlu ditangani tenggelam di antara pesanan hantu yang tak bisa diapa-apakan.
@@ -31,7 +30,6 @@ Sale pesanan({
   DateTime? dikonfirmasi,
   String fulfillment = 'pending',
   bool diretur = false,
-  String? paymentRef,
 }) {
   return Sale(
     id: 'TRX-1',
@@ -45,7 +43,6 @@ Sale pesanan({
     confirmedAt: dikonfirmasi,
     fulfillmentStatus: fulfillment,
     isRefunded: diretur,
-    paymentRef: paymentRef,
     source: 'menu_qr',
   );
 }
@@ -90,7 +87,7 @@ void main() {
   });
 
   group('pesanan HIDUP tetap muncul', () {
-    test('bayar di kasir: belum lunas, tanpa paymentRef', () {
+    test('bayar di kasir: belum lunas, belum dikonfirmasi', () {
       // Sisi yang membuat saringan ini ada. Ikut menyaringnya berarti pesanan
       // "bayar di kasir" tak pernah sampai ke kasir sama sekali.
       expect(pesananMejaPerluDitangani(pesanan()), isTrue);
@@ -120,10 +117,5 @@ void main() {
         isTrue,
       );
     });
-  });
-
-  test('menunggu QRIS (punya paymentRef) disembunyikan', () {
-    // Belum ada yang perlu dikerjakan kasir; pelanggan masih di halaman bayar.
-    expect(pesananMejaPerluDitangani(pesanan(paymentRef: 'CHG-123')), isFalse);
   });
 }
