@@ -774,15 +774,12 @@ final activeTableTransactionsProvider =
 ///
 /// Fungsi MURNI supaya tiap keadaannya bisa diuji tanpa jaringan.
 ///
-/// Layak ditangani = lunas (auto-pay QRIS), ATAU sudah dikonfirmasi/masuk
-/// dapur walau belum bayar (open-bill: tab jalan, dilunasi di kasir), ATAU
-/// belum bayar TANPA charge gateway ("bayar di kasir" — kasir menagih lalu
-/// Tandai Lunas). Menunggu-QRIS (punya paymentRef) disembunyikan: belum ada
-/// yang perlu dikerjakan.
+/// Pembayaran QR self-order selalu manual (tanpa payment gateway), jadi setiap
+/// pesanan yang masih HIDUP adalah pekerjaan kasir: sudah lunas, sudah
+/// dikonfirmasi/masuk dapur walau belum bayar (open-bill), atau belum bayar
+/// sama sekali ("bayar di kasir" — kasir menagih lalu Tandai Lunas).
 ///
-/// Tiga keadaan MATI dikecualikan, dan ketiganya pernah atau bisa bocor lewat
-/// cabang ketiga di atas — sama-sama bukan lunas, bukan dikonfirmasi, dan
-/// tanpa paymentRef:
+/// Tiga keadaan MATI dikecualikan:
 ///
 ///   selesai     pesanan yang sudah rampung; menampilkannya lagi membuat
 ///               antrean tak pernah kosong.
@@ -794,12 +791,7 @@ final activeTableTransactionsProvider =
 ///               pekerjaan, sementara pesanan yang benar-benar perlu
 ///               ditangani tenggelam di antaranya.
 bool pesananMejaPerluDitangani(Sale s) {
-  final adaYangDikerjakan =
-      s.isPaid ||
-      s.isConfirmed ||
-      (!s.isPaid && !s.isConfirmed && s.paymentRef == null);
-  return adaYangDikerjakan &&
-      s.fulfillmentStatus != 'completed' &&
+  return s.fulfillmentStatus != 'completed' &&
       !s.isRefunded &&
       !s.isCancelled;
 }
