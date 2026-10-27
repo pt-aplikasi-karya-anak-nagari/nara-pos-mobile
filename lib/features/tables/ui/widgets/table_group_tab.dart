@@ -7,6 +7,7 @@ import '../../data/table_repository.dart';
 import '../../domain/pos_table.dart';
 import '../../domain/table_group.dart';
 import '../table_management_page.dart';
+import 'kartu_meja.dart';
 import 'table_qr_dialog.dart';
 import 'table_status_dialog.dart';
 
@@ -175,12 +176,7 @@ class _GroupCard extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 2.5,
-              ),
+              gridDelegate: gridBarisMeja(context),
               itemCount: group.tables.length,
               itemBuilder: (context, index) {
                 final table = group.tables[index];
@@ -286,6 +282,8 @@ class _TableTile extends StatelessWidget {
               children: [
                 Text(
                   table.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -295,6 +293,8 @@ class _TableTile extends StatelessWidget {
                   isReadOnly && isOccupied
                       ? 'Terisi · Lihat pesanan'
                       : '${table.capacity} Kursi',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 10,
                     color: isReadOnly && isOccupied ? kDanger : kTextMid,
