@@ -14,6 +14,8 @@ analyzer:
   # (mis. file test bawaan plugin Firebase) yang bukan bagian dari aplikasi.
   exclude:
     - build/**
+    - android/**
+    - ios/**
 
 linter:
   # The lint rules applied to this project can be customized in the
