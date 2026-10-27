@@ -27,6 +27,7 @@ import '../../settings/data/app_settings.dart';
 import '../data/transaction_repository.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
+import '../domain/struk_wa.dart';
 import 'widgets/mini_payment_sheet.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
 
@@ -51,6 +52,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   final _receiptKey = GlobalKey();
   bool _sharing = false;
   bool _printing = false;
+  bool _mengirimWa = false;
   bool _rejecting = false;
   bool _refunding = false;
 
@@ -80,6 +82,42 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
       }
     } finally {
       if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  /// Kirim struk ke WhatsApp pelanggan. Isi pesan disusun backend; kasir
+  /// hanya memastikan nomornya.
+  Future<void> _kirimStrukWa(Sale sale) async {
+    if (_mengirimWa) return;
+    final nomor = await showDialog<String>(
+      context: context,
+      builder: (_) => _DialogNomorWa(nomorAwal: nomorAwalStrukWa(sale)),
+    );
+    if (nomor == null || !mounted) return;
+    setState(() => _mengirimWa = true);
+    try {
+      final tujuan = await ref
+          .read(transactionRepositoryProvider)
+          .kirimStrukWa(sale.id.toString(), phone: nomor);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Struk terkirim ke WhatsApp +$tujuan'),
+            backgroundColor: kSuccess,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal kirim struk: $e'),
+            backgroundColor: kDanger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _mengirimWa = false);
     }
   }
 
@@ -113,7 +151,6 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     }
   }
 
-
   /// Tolak bukti pembayaran dari customer (QR menu). Sebelum eksekusi,
   /// kasir konfirmasi via dialog supaya tidak salah tap. Backend men-clear
   /// payment_proof_url; customer di nara-scan-qr akan kembali ke flow
@@ -125,9 +162,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
 
     setState(() => _rejecting = true);
     try {
-      await ref
-          .read(transactionRepositoryProvider)
-          .rejectPaymentProof(sale.id);
+      await ref.read(transactionRepositoryProvider).rejectPaymentProof(sale.id);
       ref.invalidate(transactionDetailProvider(sale.id));
       ref.invalidate(salesFutureProvider);
       if (mounted) {
@@ -158,9 +193,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Tolak bukti pembayaran?',
           style: TextStyle(fontWeight: FontWeight.w700),
@@ -198,8 +231,9 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     // fallback false lalu andalkan penanganan 403 dari backend.
     bool requirePin = false;
     try {
-      requirePin =
-          (await ref.read(outletAppSettingsProvider.future)).requirePinRefund;
+      requirePin = (await ref.read(
+        outletAppSettingsProvider.future,
+      )).requirePinRefund;
     } catch (_) {
       requirePin = false;
     }
@@ -227,7 +261,9 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
 
       setState(() => _refunding = true);
       try {
-        await ref.read(transactionRepositoryProvider).refund(
+        await ref
+            .read(transactionRepositoryProvider)
+            .refund(
               sale.id,
               reason: input.reason,
               overridePin: input.pin.isEmpty ? null : input.pin,
@@ -301,9 +337,11 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     final showPin = requirePin || errorText != null;
 
     // Item yang masih bisa diretur (sisa qty > 0) untuk mode sebagian.
-    final refundableItems =
-        sale.items.where((it) => it.remainingQty > 0).toList();
-    final canPartial = refundableItems.length > 1 ||
+    final refundableItems = sale.items
+        .where((it) => it.remainingQty > 0)
+        .toList();
+    final canPartial =
+        refundableItems.length > 1 ||
         (refundableItems.isNotEmpty &&
             refundableItems.any((it) => it.remainingQty > 1)) ||
         sale.isPartiallyRefunded;
@@ -316,166 +354,170 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     };
     bool partial = partialInit && canPartial;
 
-    final result = await showDialog<
-        ({String reason, String pin, List<Map<String, dynamic>>? items})>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final reason = reasonController.text.trim();
-          final pin = pinController.text.trim();
-          final reasonValid = reason.length >= 5;
-          final pinValid = pin.length >= 4 && pin.length <= 6;
-          // PIN wajib bila outlet mensyaratkan. Bila hanya muncul akibat 403
-          // (bukan requirePin), PIN opsional tapi format tetap divalidasi.
-          final pinOk = requirePin ? pinValid : (pin.isEmpty || pinValid);
-          final selectedCount =
-              selectedQty.values.fold<int>(0, (s, q) => s + q);
-          // Mode sebagian wajib ≥1 item qty>0.
-          final itemsOk = !partial || selectedCount > 0;
-          final valid = reasonValid && pinOk && itemsOk;
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Text(
-              ref.t('refund.confirm_title'),
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (errorText != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: kDanger.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          errorText,
-                          style: const TextStyle(
-                            color: kDanger,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const Gap(12),
-                    ],
-                    Text(
-                      partial
-                          ? ref.t('refund.select_items_hint')
-                          : ref.t('refund.confirm_body'),
-                      style: TextStyle(color: kTextMid, height: 1.4),
-                    ),
-                    // Pemilih mode penuh vs sebagian. Hanya tampil bila memang
-                    // ada peluang retur sebagian (item/qty sisa cukup).
-                    if (canPartial) ...[
-                      const Gap(12),
-                      _RefundModeToggle(
-                        partial: partial,
-                        onChanged: (v) => setLocal(() => partial = v),
-                      ),
-                    ],
-                    if (partial) ...[
-                      const Gap(12),
-                      Text(
-                        ref.t('refund.select_items'),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: kTextDark,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const Gap(6),
-                      for (final it in refundableItems)
-                        _RefundItemStepper(
-                          item: it,
-                          value: selectedQty[it.id] ?? 0,
-                          onChanged: (v) =>
-                              setLocal(() => selectedQty[it.id] = v),
-                        ),
-                    ],
-                    const Gap(12),
-                    TextField(
-                      controller: reasonController,
-                      autofocus: !partial,
-                      minLines: 2,
-                      maxLines: 3,
-                      textInputAction: TextInputAction.newline,
-                      onChanged: (_) => setLocal(() {}),
-                      decoration: InputDecoration(
-                        hintText: 'Alasan refund (min. 5 karakter)',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    if (showPin) ...[
-                      const Gap(12),
-                      TextField(
-                        controller: pinController,
-                        obscureText: true,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: (_) => setLocal(() {}),
-                        decoration: InputDecoration(
-                          labelText: requirePin
-                              ? 'PIN Otorisasi'
-                              : 'PIN Otorisasi (bila diminta)',
-                          hintText: '4-6 digit',
-                          counterText: '',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+    final result =
+        await showDialog<
+          ({String reason, String pin, List<Map<String, dynamic>>? items})
+        >(
+          context: context,
+          builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setLocal) {
+              final reason = reasonController.text.trim();
+              final pin = pinController.text.trim();
+              final reasonValid = reason.length >= 5;
+              final pinValid = pin.length >= 4 && pin.length <= 6;
+              // PIN wajib bila outlet mensyaratkan. Bila hanya muncul akibat 403
+              // (bukan requirePin), PIN opsional tapi format tetap divalidasi.
+              final pinOk = requirePin ? pinValid : (pin.isEmpty || pinValid);
+              final selectedCount = selectedQty.values.fold<int>(
+                0,
+                (s, q) => s + q,
+              );
+              // Mode sebagian wajib ≥1 item qty>0.
+              final itemsOk = !partial || selectedCount > 0;
+              final valid = reasonValid && pinOk && itemsOk;
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Batal'),
-              ),
-              FilledButton(
-                onPressed: valid
-                    ? () {
-                        // Mode sebagian → kirim daftar item qty>0. Mode penuh →
-                        // items null supaya backend melakukan refund penuh.
-                        final List<Map<String, dynamic>>? items = partial
-                            ? [
-                                for (final e in selectedQty.entries)
-                                  if (e.value > 0)
-                                    <String, dynamic>{
-                                      'transaction_item_id': e.key,
-                                      'quantity': e.value,
-                                    },
-                              ]
-                            : null;
-                        Navigator.of(ctx).pop(
-                          (reason: reason, pin: pin, items: items),
-                        );
-                      }
-                    : null,
-                style: FilledButton.styleFrom(backgroundColor: kDanger),
-                child: Text(ref.t('refund.action')),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+                title: Text(
+                  ref.t('refund.confirm_title'),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (errorText != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: kDanger.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              errorText,
+                              style: const TextStyle(
+                                color: kDanger,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const Gap(12),
+                        ],
+                        Text(
+                          partial
+                              ? ref.t('refund.select_items_hint')
+                              : ref.t('refund.confirm_body'),
+                          style: TextStyle(color: kTextMid, height: 1.4),
+                        ),
+                        // Pemilih mode penuh vs sebagian. Hanya tampil bila memang
+                        // ada peluang retur sebagian (item/qty sisa cukup).
+                        if (canPartial) ...[
+                          const Gap(12),
+                          _RefundModeToggle(
+                            partial: partial,
+                            onChanged: (v) => setLocal(() => partial = v),
+                          ),
+                        ],
+                        if (partial) ...[
+                          const Gap(12),
+                          Text(
+                            ref.t('refund.select_items'),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: kTextDark,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const Gap(6),
+                          for (final it in refundableItems)
+                            _RefundItemStepper(
+                              item: it,
+                              value: selectedQty[it.id] ?? 0,
+                              onChanged: (v) =>
+                                  setLocal(() => selectedQty[it.id] = v),
+                            ),
+                        ],
+                        const Gap(12),
+                        TextField(
+                          controller: reasonController,
+                          autofocus: !partial,
+                          minLines: 2,
+                          maxLines: 3,
+                          textInputAction: TextInputAction.newline,
+                          onChanged: (_) => setLocal(() {}),
+                          decoration: InputDecoration(
+                            hintText: 'Alasan refund (min. 5 karakter)',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                        if (showPin) ...[
+                          const Gap(12),
+                          TextField(
+                            controller: pinController,
+                            obscureText: true,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: (_) => setLocal(() {}),
+                            decoration: InputDecoration(
+                              labelText: requirePin
+                                  ? 'PIN Otorisasi'
+                                  : 'PIN Otorisasi (bila diminta)',
+                              hintText: '4-6 digit',
+                              counterText: '',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Batal'),
+                  ),
+                  FilledButton(
+                    onPressed: valid
+                        ? () {
+                            // Mode sebagian → kirim daftar item qty>0. Mode penuh →
+                            // items null supaya backend melakukan refund penuh.
+                            final List<Map<String, dynamic>>? items = partial
+                                ? [
+                                    for (final e in selectedQty.entries)
+                                      if (e.value > 0)
+                                        <String, dynamic>{
+                                          'transaction_item_id': e.key,
+                                          'quantity': e.value,
+                                        },
+                                  ]
+                                : null;
+                            Navigator.of(
+                              ctx,
+                            ).pop((reason: reason, pin: pin, items: items));
+                          }
+                        : null,
+                    style: FilledButton.styleFrom(backgroundColor: kDanger),
+                    child: Text(ref.t('refund.action')),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
     reasonController.dispose();
     pinController.dispose();
     return result;
@@ -503,18 +545,18 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     }
 
     // Tanpa bukti → flow lama: buka sheet untuk input metode & cash.
-    final result = await tampilkanSheetBawah<
-      ({String method, double cash, String proofUrl})
-    >(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => MiniPaymentSheet(total: sale.total),
-    );
+    final result =
+        await tampilkanSheetBawah<
+          ({String method, double cash, String proofUrl})
+        >(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => MiniPaymentSheet(total: sale.total),
+        );
     if (result == null) return;
     final cashAmount = result.method == 'Tunai' ? result.cash : 0.0;
-    final changeAmount =
-        (result.method == 'Tunai' && result.cash > sale.total)
+    final changeAmount = (result.method == 'Tunai' && result.cash > sale.total)
         ? result.cash - sale.total
         : 0.0;
     await _executeMarkAsPaid(
@@ -533,9 +575,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Terima & Lunaskan?',
           style: TextStyle(fontWeight: FontWeight.w700),
@@ -551,10 +591,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
             ),
             const Gap(12),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: kBg,
                 borderRadius: BorderRadius.circular(10),
@@ -672,7 +709,8 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     // Transaksi lunas (atau sudah diretur sebagian) & masih ada item bersisa
     // → user dgn Permission.refund boleh refund. Retur penuh tidak bisa
     // diretur lagi. Tombolnya ada di AppBar (di samping cetak & share).
-    final canRefund = sale != null &&
+    final canRefund =
+        sale != null &&
         (sale.isPaid || sale.isPartiallyRefunded) &&
         !sale.isRefunded &&
         sale.hasRefundableItems &&
@@ -709,6 +747,21 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                 )
               : const HugeIcon(icon: AppIcons.share, color: kPrimary),
         ),
+      if (sale != null && bisaKirimStrukWa(sale))
+        IconButton(
+          tooltip: 'Kirim struk via WhatsApp',
+          onPressed: _mengirimWa ? null : () => _kirimStrukWa(sale),
+          icon: _mengirimWa
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: kPrimary,
+                  ),
+                )
+              : const Icon(Icons.chat_outlined, color: kPrimary),
+        ),
       // Refund — hanya untuk transaksi lunas & user berizin. Dipindah ke AppBar
       // (di samping cetak & share) supaya konsisten dgn aksi lain.
       if (sale != null && canRefund)
@@ -724,10 +777,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                     color: kDanger,
                   ),
                 )
-              : const Icon(
-                  Icons.assignment_return_rounded,
-                  color: kDanger,
-                ),
+              : const Icon(Icons.assignment_return_rounded, color: kDanger),
         ),
     ];
 
@@ -742,30 +792,32 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
             child: Skeletonizer(
               enabled: true,
               child: _ReceiptCard(
-                sale: Sale(
-                  createdAt: DateTime.now(),
-                  subtotal: 25000,
-                  tax: 2500,
-                  total: 27500,
-                  paymentMethod: 'Cash',
-                  invoiceId: 'INV-XXXXXXXXXX',
-                  outletName: 'Outlet',
-                  cashAmount: 50000,
-                  changeAmount: 22500,
-                )..items = [
-                  SaleItem(
-                    productName: 'Nama Produk',
-                    productEmoji: '📦',
-                    price: 10000,
-                    qty: 1,
-                  ),
-                  SaleItem(
-                    productName: 'Nama Produk',
-                    productEmoji: '📦',
-                    price: 15000,
-                    qty: 1,
-                  ),
-                ],
+                sale:
+                    Sale(
+                        createdAt: DateTime.now(),
+                        subtotal: 25000,
+                        tax: 2500,
+                        total: 27500,
+                        paymentMethod: 'Cash',
+                        invoiceId: 'INV-XXXXXXXXXX',
+                        outletName: 'Outlet',
+                        cashAmount: 50000,
+                        changeAmount: 22500,
+                      )
+                      ..items = [
+                        SaleItem(
+                          productName: 'Nama Produk',
+                          productEmoji: '📦',
+                          price: 10000,
+                          qty: 1,
+                        ),
+                        SaleItem(
+                          productName: 'Nama Produk',
+                          productEmoji: '📦',
+                          price: 15000,
+                          qty: 1,
+                        ),
+                      ],
               ),
             ),
           ),
@@ -802,8 +854,10 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     // yang sudah diretur (penuh/sebagian) sudah pernah lunas → jangan tampilkan
     // aksi bayar walau payment_status bukan 'paid' lagi.
     final Widget? bottomActions =
-        (sale == null || sale.isPaid || sale.isRefunded ||
-                sale.isPartiallyRefunded)
+        (sale == null ||
+            sale.isPaid ||
+            sale.isRefunded ||
+            sale.isPartiallyRefunded)
         ? null
         : SafeArea(
             minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -815,7 +869,9 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                         child: SizedBox(
                           height: 52,
                           child: OutlinedButton.icon(
-                            onPressed: _rejecting ? null : () => _rejectProof(sale),
+                            onPressed: _rejecting
+                                ? null
+                                : () => _rejectProof(sale),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: kDanger,
                               side: BorderSide(color: kDanger, width: 1.5),
@@ -858,7 +914,10 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                                 borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            icon: Icon(Icons.check_rounded, color: Colors.white),
+                            icon: Icon(
+                              Icons.check_rounded,
+                              color: Colors.white,
+                            ),
                             label: const Text(
                               'Terima & Lunaskan',
                               style: TextStyle(
@@ -1067,11 +1126,7 @@ class _ReceiptCard extends ConsumerWidget {
           const Gap(6),
           Row(
             children: [
-              HugeIcon(
-                icon: AppIcons.storefront,
-                color: kTextMid,
-                size: 14,
-              ),
+              HugeIcon(icon: AppIcons.storefront, color: kTextMid, size: 14),
               const SizedBox(width: 6),
               Text(
                 'Tipe: ${sale.orderType}',
@@ -1087,11 +1142,7 @@ class _ReceiptCard extends ConsumerWidget {
             const Gap(6),
             Row(
               children: [
-                Icon(
-                  Icons.table_restaurant_rounded,
-                  color: kTextMid,
-                  size: 14,
-                ),
+                Icon(Icons.table_restaurant_rounded, color: kTextMid, size: 14),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -1108,11 +1159,7 @@ class _ReceiptCard extends ConsumerWidget {
             const Gap(6),
             Row(
               children: [
-                HugeIcon(
-                  icon: AppIcons.person,
-                  color: kTextMid,
-                  size: 14,
-                ),
+                HugeIcon(icon: AppIcons.person, color: kTextMid, size: 14),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -1129,11 +1176,7 @@ class _ReceiptCard extends ConsumerWidget {
             const Gap(6),
             Row(
               children: [
-                HugeIcon(
-                  icon: AppIcons.person,
-                  color: kTextMid,
-                  size: 14,
-                ),
+                HugeIcon(icon: AppIcons.person, color: kTextMid, size: 14),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -1217,8 +1260,9 @@ class _ReceiptCard extends ConsumerWidget {
                               ? ref.t('refund.status_partial').toUpperCase()
                               : 'TRANSAKSI DI-REFUND',
                           style: TextStyle(
-                            color:
-                                sale.isPartiallyRefunded ? kWarning : kDanger,
+                            color: sale.isPartiallyRefunded
+                                ? kWarning
+                                : kDanger,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1352,10 +1396,7 @@ class _ReceiptCard extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: kBg,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: kDivider,
-                              width: 0.5,
-                            ),
+                            border: Border.all(color: kDivider, width: 0.5),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1488,10 +1529,7 @@ class _PaymentProofCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         onTap: () => _showZoomDialog(context, absoluteUrl),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 6,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         leading: Container(
           width: 44,
           height: 44,
@@ -1521,10 +1559,7 @@ class _PaymentProofCard extends StatelessWidget {
         ),
         trailing: !isPaid
             ? Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: kPrimary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -1778,11 +1813,7 @@ class _StepperButton extends StatelessWidget {
         onTap: enabled ? onTap : null,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(
-            icon,
-            size: 18,
-            color: enabled ? kPrimary : kTextLight,
-          ),
+          child: Icon(icon, size: 18, color: enabled ? kPrimary : kTextLight),
         ),
       ),
     );
@@ -1820,6 +1851,76 @@ class _ReceiptBreakdownRow extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Dialog nomor WhatsApp tujuan struk. Mengembalikan nomor (apa adanya,
+/// backend yang menormalkan) atau null bila dibatalkan.
+class _DialogNomorWa extends StatefulWidget {
+  const _DialogNomorWa({required this.nomorAwal});
+
+  final String nomorAwal;
+
+  @override
+  State<_DialogNomorWa> createState() => _DialogNomorWaState();
+}
+
+class _DialogNomorWaState extends State<_DialogNomorWa> {
+  late final TextEditingController _ctrl = TextEditingController(
+    text: widget.nomorAwal,
+  );
+  String? _galat;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _kirim() {
+    if (normalkanNomorWa(_ctrl.text) == null) {
+      setState(() => _galat = 'Masukkan nomor Indonesia, mis. 0812xxxxxxx');
+      return;
+    }
+    Navigator.of(context).pop(_ctrl.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Kirim struk via WhatsApp'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Struk lengkap beserta tautannya dikirim ke nomor ini.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctrl,
+            autofocus: widget.nomorAwal.isEmpty,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.send,
+            onSubmitted: (_) => _kirim(),
+            onChanged: (_) {
+              if (_galat != null) setState(() => _galat = null);
+            },
+            decoration: InputDecoration(
+              labelText: 'No. WhatsApp pelanggan',
+              hintText: '0812xxxxxxx',
+              errorText: _galat,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Batal'),
+        ),
+        FilledButton(onPressed: _kirim, child: const Text('Kirim')),
       ],
     );
   }

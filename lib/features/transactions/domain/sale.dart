@@ -1,11 +1,10 @@
-
 import '../../customers/domain/customer.dart';
 import 'sale_item.dart';
 
 class Sale {
-    String id;
+  String id;
 
-    DateTime createdAt;
+  DateTime createdAt;
 
   double subtotal;
   double originalSubtotal;
@@ -41,12 +40,15 @@ class Sale {
 
   String customerName;
 
+  /// No. HP pelanggan yang tercatat di transaksi (mis. pesanan QR). Dipakai
+  /// sebagai nomor awal saat mengirim struk via WhatsApp.
+  String customerPhone;
+
   String orderType;
   String invoiceId;
 
-
   bool isPaid;
-    DateTime? paidAt;
+  DateTime? paidAt;
 
   /// Status pembayaran MENTAH (lowercase) dari backend: unpaid | paid |
   /// refunded | partially_refunded | cancelled | pending. Sumber kebenaran untuk
@@ -72,18 +74,22 @@ class Sale {
   String? note;
 
   bool isRefunded;
+
   /// True bila transaksi diretur SEBAGIAN (retur per-item). Backend field:
   /// `payment_status = 'partially_refunded'`. Berbeda dari [isRefunded] yang
   /// berarti retur PENUH. Transaksi partial masih bisa diretur lagi selama
   /// masih ada item dengan sisa qty (lihat [hasRefundableItems]).
   bool isPartiallyRefunded;
+
   /// Akumulasi nominal yang sudah diretur (backend field `refunded_amount`).
   /// 0 = belum ada retur. Dihitung server; mobile hanya menampilkan.
   double refundedAmount;
   DateTime? refundedAt;
+
   /// User yang melakukan refund (mis. owner / admin outlet via dashboard
   /// web). Backend field: `refunded_by`. Null = belum di-refund.
   String? refundedBy;
+
   /// Alasan refund yang di-input owner saat klik tombol Refund di
   /// dashboard web. Wajib (min 5 char) di backend.
   String? refundReason;
@@ -99,6 +105,7 @@ class Sale {
 
   String? tableId;
   String? tableName;
+
   /// Nama group meja (mis. "Lantai 2", "Outdoor"). Backend mengirim via
   /// LEFT JOIN ke `table_groups`. Null jika meja tidak punya group atau
   /// transaksi tidak dine-in. Dipakai untuk render lokasi meja yang
@@ -124,7 +131,7 @@ class Sale {
   /// konfirmasi "tersimpan offline". Tidak berasal dari backend.
   bool pendingSync;
 
-    List<SaleItem> items = [];
+  List<SaleItem> items = [];
 
   Sale({
     this.id = '',
@@ -141,6 +148,7 @@ class Sale {
     this.cashAmount = 0,
     this.changeAmount = 0,
     this.customerName = '',
+    this.customerPhone = '',
     this.orderType = 'Dine In',
     this.invoiceId = '',
     this.isPaid = true,
@@ -351,7 +359,8 @@ class Sale {
     final isPartial = statusLower == 'partially_refunded';
     final sale = Sale(
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ?? DateTime.now()
+          ? DateTime.tryParse(json['created_at'].toString())?.toLocal() ??
+                DateTime.now()
           : DateTime.now(),
       subtotal: _d(json['subtotal_amount']),
       // Nilai awal; DITIMPA di bawah begitu items terbaca. Endpoint DAFTAR
@@ -364,21 +373,22 @@ class Sale {
       total: _d(json['final_amount']),
       paymentMethod: json['payment_method']?.toString() ?? '',
       paymentMethodType: json['payment_method_type']?.toString() ?? '',
-      tenders: (json['payments'] as List?)
+      tenders:
+          (json['payments'] as List?)
               ?.map((e) => SaleTender.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
       cashAmount: _d(json['cash_amount']),
       changeAmount: _d(json['change_amount']),
       customerName: json['customer_name']?.toString() ?? '',
+      customerPhone: json['customer_phone']?.toString() ?? '',
       orderType: json['order_type']?.toString() ?? 'Dine In',
       invoiceId: json['invoice_no']?.toString() ?? '',
       isPaid: json['payment_status'] == 'paid',
       paymentStatus: statusLower ?? 'unpaid',
       paidAt: paidAt,
       confirmedAt: confirmedAt,
-      fulfillmentStatus:
-          json['fulfillment_status']?.toString() ?? 'pending',
+      fulfillmentStatus: json['fulfillment_status']?.toString() ?? 'pending',
       queueNo: (json['queue_no'] as num?)?.toInt(),
       note: json['note']?.toString(),
       // Backend juga set `payment_status = 'refunded'` di endpoint refund
@@ -386,8 +396,8 @@ class Sale {
       // (yang cuma punya refunded_at) maupun data baru (status='refunded').
       // Retur SEBAGIAN dikecualikan: refunded_at bisa terisi tapi status
       // 'partially_refunded' → bukan refund penuh.
-      isRefunded: statusLower == 'refunded' ||
-          (refundedAt != null && !isPartial),
+      isRefunded:
+          statusLower == 'refunded' || (refundedAt != null && !isPartial),
       isPartiallyRefunded: isPartial,
       refundedAmount: _d(json['refunded_amount']),
       refundedAt: refundedAt,
@@ -481,8 +491,8 @@ class SaleTender {
       type.isNotEmpty ? type.toLowerCase() : Sale.tebakTipeTender(method);
 
   factory SaleTender.fromJson(Map<String, dynamic> json) => SaleTender(
-        method: json['payment_method']?.toString() ?? '',
-        type: json['payment_type']?.toString() ?? '',
-        amount: Sale._d(json['amount']),
-      );
+    method: json['payment_method']?.toString() ?? '',
+    type: json['payment_type']?.toString() ?? '',
+    amount: Sale._d(json['amount']),
+  );
 }

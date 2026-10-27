@@ -120,6 +120,18 @@ class TransactionApiService extends BaseApiService {
   /// Backend set status=cancelled, restore stok, lepas meja. Reason opsional.
   /// [overridePin] wajib bila outlet mengaktifkan `require_pin_void` (backend
   /// balas 403 bila PIN salah/kosong).
+  /// Kirim struk transaksi ke WhatsApp pelanggan. Isi pesan disusun
+  /// backend; [phone] kosong = pakai nomor yang tercatat di transaksi.
+  /// Mengembalikan nomor tujuan yang sudah dinormalkan (62…).
+  Future<String> kirimStrukWa(String transactionId, {String? phone}) async {
+    final res = await post<Map<String, dynamic>>(
+      '/transactions/$transactionId/receipt/whatsapp',
+      data: {if (phone != null && phone.trim().isNotEmpty) 'phone': phone},
+      converter: (res) => res as Map<String, dynamic>,
+    );
+    return res['sent_to']?.toString() ?? '';
+  }
+
   Future<Map<String, dynamic>> voidTransaction(
     String transactionId, {
     String? reason,
@@ -575,6 +587,10 @@ class TransactionRepository {
   /// Void transaksi UNPAID (bill "Bayar Nanti" yang salah input). Backend
   /// set status=cancelled, restore stok, lepas meja bila sudah kosong.
   /// [overridePin] diteruskan bila outlet mensyaratkan PIN otorisasi manajer.
+  /// Kirim struk via WhatsApp. Lihat [TransactionApiService.kirimStrukWa].
+  Future<String> kirimStrukWa(String saleId, {String? phone}) =>
+      apiService.kirimStrukWa(saleId, phone: phone);
+
   Future<Sale> voidSale(
     String saleId, {
     String? reason,
@@ -791,7 +807,5 @@ final activeTableTransactionsProvider =
 ///               pekerjaan, sementara pesanan yang benar-benar perlu
 ///               ditangani tenggelam di antaranya.
 bool pesananMejaPerluDitangani(Sale s) {
-  return s.fulfillmentStatus != 'completed' &&
-      !s.isRefunded &&
-      !s.isCancelled;
+  return s.fulfillmentStatus != 'completed' && !s.isRefunded && !s.isCancelled;
 }
