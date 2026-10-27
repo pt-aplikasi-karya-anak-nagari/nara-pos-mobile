@@ -15,17 +15,18 @@ import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/beep_service.dart';
 import '../../../core/format.dart';
-import '../../../core/realtime/realtime_service.dart';
 import '../../../core/i18n.dart';
 import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../../core/outlet_scope.dart';
+import '../../../core/realtime/realtime_service.dart';
 import '../../../core/responsive.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
 import '../../drafts/ui/draft_list_sheet.dart';
 import '../../outlet/data/outlet_service.dart';
 import '../../printer/data/printer_service.dart';
-import '../../printer/data/role_printer_config_repository.dart';
 import '../../printer/data/receipt_settings_repository.dart';
+import '../../printer/data/role_printer_config_repository.dart';
 import '../../products/domain/product.dart';
 import '../../products/ui/barcode_scanner_page.dart';
 import '../../shifts/data/shift_repository.dart';
@@ -36,12 +37,11 @@ import '../../transactions/domain/sale.dart';
 import '../providers.dart';
 import '../scan_trigger.dart';
 import 'widgets/baris_produk.dart';
-import 'widgets/header_aksi_kasir.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
+import 'widgets/header_aksi_kasir.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
-import '../../../shared/widgets/sheet_bawah.dart';
 
 class KasirPage extends HookConsumerWidget {
   const KasirPage({super.key});
@@ -1260,29 +1260,16 @@ class _Header extends HookConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-
-                    decoration: BoxDecoration(
-                      image: const DecorationImage(
-                        alignment: Alignment.topRight,
-                        image: AssetImage('assets/images/logo.png'),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'NARA',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
+                      Text(
+                        'NARA POS',
+                        style: Theme.of(context).textTheme.headlineSmall!
+                            .copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       Text(
                         "Take control of your business, right in your hand.",
