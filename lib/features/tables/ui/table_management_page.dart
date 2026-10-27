@@ -12,6 +12,7 @@ import '../../outlet/data/outlet_service.dart';
 import '../data/table_repository.dart';
 import '../domain/pos_table.dart';
 import '../domain/table_group.dart';
+import 'widgets/kartu_meja.dart';
 import 'widgets/table_group_tab.dart';
 import 'widgets/table_status_dialog.dart';
 // TableStatusDialog dipakai dalam mode read-only (dialog manajemen meja
@@ -589,20 +590,20 @@ class _TableGridView extends ConsumerWidget {
           return const Center(child: Text('Belum ada meja di area ini.'));
         }
         return GridView.builder(
-          padding: const EdgeInsets.all(24),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 1.0,
-          ),
+          padding: const EdgeInsets.all(20),
+          gridDelegate: gridKartuMeja(context),
           itemCount: tables.length,
           itemBuilder: (context, index) {
             final t = tables[index];
             final isOccupied = t.status == TableStatus.occupied;
-            final color = isOccupied ? kDanger : kSuccess;
-
-            return GestureDetector(
+            return KartuMeja(
+              nama: t.name,
+              kapasitas: t.capacity,
+              terisi: isOccupied,
+              labelStatus: isOccupied
+                  ? ref.t('table.occupied')
+                  : ref.t('table.available'),
+              durasi: isOccupied ? _TableDurationLabel(tableId: t.id) : null,
               // Mode kasir (read-only) → tap meja buka TableStatusDialog
               // (rincian pesanan + tombol pilih meja / lanjut order).
               // Mode manajemen → tap meja buka form edit struktur.
@@ -622,71 +623,6 @@ class _TableGridView extends ConsumerWidget {
                   table: t,
                 );
               },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: color.withValues(alpha: 0.3),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.table_restaurant, color: color, size: 28),
-                    const SizedBox(height: 4),
-                    Text(
-                      t.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    Text(
-                      '${t.capacity} Kursi',
-                      style: TextStyle(fontSize: 11, color: kTextMid),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            isOccupied
-                                ? ref.t('table.occupied')
-                                : ref.t('table.available'),
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (isOccupied) ...[
-                            const SizedBox(width: 6),
-                            _TableDurationLabel(tableId: t.id),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             );
           },
         );
