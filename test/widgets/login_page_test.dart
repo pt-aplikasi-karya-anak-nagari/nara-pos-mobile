@@ -11,13 +11,16 @@ import 'package:nara_pos_mobile/features/user/data/auth_service.dart';
 import 'package:nara_pos_mobile/features/user/ui/login_page.dart';
 import 'package:nara_pos_mobile/features/user/ui/staff_session_page.dart';
 
-// Tata letak halaman login: satu kolom di ponsel, terbelah dua di tablet
-// mendatar.
+// Tata letak halaman login: SATU kolom di tengah, di semua ukuran layar,
+// dengan logo + nama produk di bilah atas.
 //
 // # YANG DIJAGA BERKAS INI
 //
 // Perangkat kasir dipakai dalam dua bentuk yang sangat berbeda — ponsel di
 // tangan pemilik, dan tablet mendatar yang berdiri di konter sepanjang hari.
+// Keduanya kini memakai tata letak yang sama; yang dijaga adalah bahwa merek
+// tetap terlihat, alurnya hanya ada satu, kolomnya tak melebar tanpa batas,
+// dan tak ada yang meluber di layar pendek maupun sempit.
 // Tata letak yang hanya diuji di satu ukuran akan pecah di ukuran lain, dan
 // yang menemukannya kasir di tengah antrean.
 //
@@ -87,38 +90,25 @@ Future<void> _buka(WidgetTester tester, Size ukuran) async {
 }
 
 void main() {
-  group('ambang tata letak', () {
-    test('ponsel & tablet tegak TIDAK dibelah', () {
-      expect(tataLetakTerbelah(390), isFalse, reason: 'ponsel');
-      expect(tataLetakTerbelah(768), isFalse, reason: 'tablet tegak');
+  testWidgets('merek tampil di bilah atas, di ponsel maupun tablet', (t) async {
+    for (final ukuran in const [Size(430, 900), Size(1280, 800)]) {
+      await _buka(t, ukuran);
       expect(
-        tataLetakTerbelah(899),
-        isFalse,
-        reason:
-            'tepat di bawah ambang — kartu login 460 + panel 340 tak muat, '
-            'dan yang mengalah selalu lebar keypad PIN',
+        find.byKey(const ValueKey('login-logo-merek')),
+        findsOneWidget,
+        reason: 'logo di $ukuran',
       );
-    });
-
-    test('tablet mendatar dibelah', () {
-      expect(tataLetakTerbelah(900), isTrue, reason: 'tepat di ambang');
-      expect(tataLetakTerbelah(1280), isTrue);
-    });
+      expect(find.text('NARA POS'), findsOneWidget, reason: 'nama di $ukuran');
+      expect(t.takeException(), isNull);
+    }
   });
 
-  testWidgets('layar lebar: panel merek tampil di samping login', (t) async {
+  testWidgets('kolom login tak melebar di tablet mendatar', (t) async {
+    // Kolom selebar layar membuat mata menyapu 1280 piksel untuk satu baris
+    // nama staf — dan keypad PIN jadi raksasa.
     await _buka(t, const Size(1280, 800));
-    expect(find.byKey(const ValueKey('login-logo-merek')), findsOneWidget);
-    expect(find.text('NARA POS'), findsOneWidget);
-    expect(t.takeException(), isNull);
-  });
-
-  testWidgets('layar sempit: panel merek TIDAK ikut tampil', (t) async {
-    // Panel merek di layar ponsel akan memakan separuh lebar yang dibutuhkan
-    // keypad PIN.
-    await _buka(t, const Size(430, 900));
-    expect(find.byKey(const ValueKey('login-logo-merek')), findsNothing);
-    expect(t.takeException(), isNull);
+    final lebar = t.getSize(find.byType(StaffSessionFlow)).width;
+    expect(lebar, lessThanOrEqualTo(kLebarKolomLogin));
   });
 
   testWidgets('alur login hanya ADA SATU di tiap tata letak', (t) async {

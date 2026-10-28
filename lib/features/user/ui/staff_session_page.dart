@@ -357,7 +357,7 @@ class StaffSessionFlow extends HookConsumerWidget {
           ),
         ],
         if (perangkatDisahkan) ...[
-          const Gap(4),
+          const Gap(20),
           _PerangkatTerdaftar(
             namaOutlet: outletPerangkat.value!,
             loading: loading.value,
@@ -389,7 +389,7 @@ List<Widget> _kredensial({
   return [
     Text(
       perluPilihOutlet ? 'Pilih outlet' : 'Masuk sebagai Pemilik',
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      style: _gayaJudul,
     ),
     const Gap(6),
     Text(
@@ -397,7 +397,7 @@ List<Widget> _kredensial({
           ? 'Akun Anda terhubung ke beberapa outlet. Pilih tempat perangkat ini dipakai.'
           : 'Masukkan email & password Anda untuk membuka sesi kasir di perangkat ini. '
                 'Anda tidak akan masuk sebagai diri sendiri — Anda hanya menyetujui.',
-      style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
+      style: _gayaKeterangan,
     ),
     const Gap(18),
     if (perluPilihOutlet)
@@ -434,10 +434,8 @@ List<Widget> _kredensial({
       const Gap(20),
       FilledButton(
         onPressed: loading ? null : onLanjut,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Text(loading ? 'Memeriksa…' : 'Lanjut'),
-        ),
+        style: _gayaTombolUtama,
+        child: Text(loading ? 'Memeriksa…' : 'Lanjut'),
       ),
     ],
   ];
@@ -450,15 +448,12 @@ List<Widget> _daftarStaf({
   required VoidCallback onScanKartu,
 }) {
   return [
-    const Text(
-      'Siapa yang bertugas?',
-      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-    ),
+    const Text('Siapa yang bertugas?', style: _gayaJudul),
     const Gap(6),
     Text(
       'Disetujui oleh ${sesi.authorizerName}. Scan kartu, atau pilih nama '
       'lalu masukkan PIN.',
-      style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
+      style: _gayaKeterangan,
     ),
     const Gap(16),
     // Scan DI ATAS daftar, bukan di bawahnya.
@@ -466,14 +461,16 @@ List<Widget> _daftarStaf({
     // Ia jalan tercepat dan yang paling sering dipakai begitu kartu dibagikan;
     // menaruhnya sesudah daftar nama berarti kasir menggulir melewati jalan
     // lambat untuk sampai ke jalan cepat, tiap pergantian giliran.
-    OutlinedButton.icon(
+    FilledButton.tonalIcon(
       key: const ValueKey('sesi-scan-kartu'),
       onPressed: loading ? null : onScanKartu,
-      icon: const Icon(Icons.qr_code_scanner, size: 20),
-      label: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('Scan kartu karyawan'),
+      style: FilledButton.styleFrom(
+        minimumSize: const Size.fromHeight(52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
+      icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+      label: const Text('Scan kartu karyawan'),
     ),
     const Gap(14),
     Row(
@@ -490,30 +487,9 @@ List<Widget> _daftarStaf({
       ],
     ),
     const Gap(14),
-    ...sesi.staff.map(
-      (s) => Card(
-        margin: const EdgeInsets.only(bottom: 10),
-        child: ListTile(
-          onTap: loading ? null : () => onPilih(s),
-          leading: CircleAvatar(
-            backgroundColor: kPrimary.withValues(alpha: 0.12),
-            child: Text(
-              s.fullName.isNotEmpty ? s.fullName[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: kPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          title: Text(
-            s.fullName,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(s.role),
-          trailing: HugeIcon(icon: AppIcons.chevronRight, color: kTextMid),
-        ),
-      ),
-    ),
+    // Satu daftar bergaris, bukan tumpukan kartu: lebih tenang dibaca dan
+    // lebih banyak nama muat tanpa menggulir.
+    _DaftarStaf(staf: sesi.staff, loading: loading, onPilih: onPilih),
   ];
 }
 
@@ -526,7 +502,7 @@ List<Widget> _verifikasi({
   return [
     Text(
       'Setujui sesi ${staf.fullName}',
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      style: _gayaJudul,
     ),
     const Gap(6),
     // SATU cara, bukan dua.
@@ -551,7 +527,7 @@ List<Widget> _verifikasi({
           // bukan bahwa ada yang salah.
           : '${staf.fullName} belum punya PIN. Minta Pemilik membuatkan dari '
                 'dashboard, lalu coba lagi.',
-      style: TextStyle(fontSize: 13, color: kTextMid, height: 1.5),
+      style: _gayaKeterangan,
     ),
     const Gap(18),
     // Papan angka, bukan papan ketik OS. Nilainya tetap disimpan di kodeCtrl
@@ -572,12 +548,126 @@ List<Widget> _verifikasi({
     const Gap(20),
     FilledButton(
       onPressed: loading ? null : onVerifikasi,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Text(loading ? 'Memverifikasi…' : 'Mulai sesi'),
-      ),
+      style: _gayaTombolUtama,
+      child: Text(loading ? 'Memverifikasi…' : 'Mulai sesi'),
     ),
   ];
+}
+
+const _gayaJudul = TextStyle(
+  fontSize: 22,
+  fontWeight: FontWeight.w700,
+  letterSpacing: -0.3,
+);
+
+final _gayaTombolUtama = FilledButton.styleFrom(
+  minimumSize: const Size.fromHeight(52),
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+);
+
+TextStyle get _gayaKeterangan =>
+    TextStyle(fontSize: 14, color: kTextMid, height: 1.5);
+
+class _DaftarStaf extends StatelessWidget {
+  const _DaftarStaf({
+    required this.staf,
+    required this.loading,
+    required this.onPilih,
+  });
+
+  final List<StaffCandidate> staf;
+  final bool loading;
+  final void Function(StaffCandidate) onPilih;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kDivider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < staf.length; i++) ...[
+            if (i > 0) Divider(height: 1, thickness: 1, color: kDivider),
+            _BarisStaf(
+              staf: staf[i],
+              onTap: loading ? null : () => onPilih(staf[i]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BarisStaf extends StatelessWidget {
+  const _BarisStaf({required this.staf, required this.onTap});
+  final StaffCandidate staf;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final inisial =
+        staf.fullName.isNotEmpty ? staf.fullName[0].toUpperCase() : '?';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: kPrimary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  inisial,
+                  style: const TextStyle(
+                    color: kPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Gap(14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      staf.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: kTextDark,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Gap(2),
+                    Text(
+                      staf.role,
+                      style: TextStyle(color: kTextMid, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              HugeIcon(icon: AppIcons.chevronRight, color: kTextLight, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _Langkah extends StatelessWidget {
@@ -599,7 +689,7 @@ class _Langkah extends StatelessWidget {
         final kini = i == aktif;
         return Expanded(
           child: Container(
-            height: 4,
+            height: 3,
             margin: EdgeInsets.only(right: idx < jumlah - 1 ? 6 : 0),
             decoration: BoxDecoration(
               color: selesai || kini
