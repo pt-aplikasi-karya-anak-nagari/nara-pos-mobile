@@ -119,14 +119,36 @@ class ProductCache {
     return rows.isNotEmpty && rows.first['lengkap_pada'] != null;
   }
 
-  Future<void> tandaiKatalogLengkap(String outletId) async {
+  /// Katalog lokal kini sama dengan server pada [versiKatalog] (0 = server
+  /// tak memberi versi katalog).
+  Future<void> tandaiKatalogLengkap(
+    String outletId, {
+    int versiKatalog = 0,
+  }) async {
     final db = await OfflineDb.instance.database;
     final kini = DateTime.now().toIso8601String();
     await db.insert('catalog_state', {
       'outlet_id': outletId,
       'lengkap_pada': kini,
       'dicek_pada': kini,
+      'versi_katalog': versiKatalog,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Versi katalog server yang terakhir disamakan dengan katalog lokal. 0 bila
+  /// katalog belum pernah tersimpan lengkap — server lalu selalu mengirim
+  /// daftar versi lengkap.
+  Future<int> versiKatalog(String outletId) async {
+    final db = await OfflineDb.instance.database;
+    final rows = await db.query(
+      'catalog_state',
+      columns: ['lengkap_pada', 'versi_katalog'],
+      where: 'outlet_id = ?',
+      whereArgs: [outletId],
+      limit: 1,
+    );
+    if (rows.isEmpty || rows.first['lengkap_pada'] == null) return 0;
+    return (rows.first['versi_katalog'] as int?) ?? 0;
   }
 
   /// Simpan/perbarui [products] tanpa membuang produk lain yang sudah ada.

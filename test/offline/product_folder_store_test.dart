@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nara_pos_mobile/core/offline/folder_offline.dart';
 import 'package:nara_pos_mobile/core/offline/product_folder_store.dart';
 import 'package:nara_pos_mobile/core/offline/product_offline_sync.dart';
+import 'package:nara_pos_mobile/features/outlet/data/outlet_service.dart';
 import 'package:nara_pos_mobile/features/products/domain/product.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -217,36 +218,92 @@ void main() {
     });
   });
 
+  group('VersiKatalogServer.dari', () {
+    test('bentuk baru: tidak berubah', () {
+      final v = VersiKatalogServer.dari({
+        'catalog_version': 42,
+        'unchanged': true,
+        'items': <Object>[],
+      });
+      expect(v.versiKatalog, 42);
+      expect(v.tidakBerubah, isTrue);
+      expect(v.items, isEmpty);
+    });
+
+    test('bentuk baru: berubah, berisi versi produk', () {
+      final v = VersiKatalogServer.dari({
+        'catalog_version': 43,
+        'unchanged': false,
+        'items': [
+          {'id': 'p1', 'version': 'a'},
+          {'id': 'p2', 'version': 'b'},
+        ],
+      });
+      expect(v.tidakBerubah, isFalse);
+      expect(v.items, {'p1': 'a', 'p2': 'b'});
+    });
+
+    test('server lama: daftar polos → versi katalog 0', () {
+      final v = VersiKatalogServer.dari([
+        {'id': 'p1', 'version': 'a'},
+      ]);
+      expect(v.versiKatalog, 0);
+      expect(v.tidakBerubah, isFalse);
+      expect(v.items, {'p1': 'a'});
+    });
+  });
+
   group('ProductOfflineSync — flag per produk', () {
-    /// Server palsu: id → (versi, produk). Mencatat setiap panggilan API.
+    // Server palsu: versi tiap produk + versi katalog outlet. Tes yang mengubah
+    // produk di server memanggil ubahServer() supaya versi katalog ikut naik,
+    // persis seperti trigger di database.
     late Map<String, String> versiServer;
-    late List<String> log;
+    late int versiKatalogServer;
+    late bool serverKenalVersiKatalog;
+    late bool punyaEndpointVersi;
+    int? gagalAmbilKe;
+
+    // Perangkat palsu.
     late Map<String, String> lokal; // id → versi lokal
     late Map<String, bool> flag; // id → tersimpan
     late bool lengkap;
-    bool punyaEndpointVersi = true;
-    int? gagalAmbilKe;
+    late int versiKatalogLokal;
+
+    late List<String> log;
+
+    void ubahServer(void Function() ubah) {
+      ubah();
+      versiKatalogServer++;
+    }
+
+    Product produkServer(String id) =>
+        Product(remoteId: id, name: id, price: 1, version: versiServer[id]!);
 
     ProductOfflineSync buat({DateTime Function()? jam}) {
       var panggilanAmbil = 0;
       return ProductOfflineSync(
-        ambilVersi: (o) async {
-          log.add('versi');
-          return punyaEndpointVersi ? Map.of(versiServer) : null;
+        ambilVersi: (o, sejak) async {
+          log.add('versi sejak $sejak');
+          if (!punyaEndpointVersi) return null;
+          if (!serverKenalVersiKatalog) {
+            return VersiKatalogServer.dari([
+              for (final e in versiServer.entries)
+                {'id': e.key, 'version': e.value},
+            ]);
+          }
+          final sama = sejak > 0 && sejak == versiKatalogServer;
+          return VersiKatalogServer(
+            versiKatalog: versiKatalogServer,
+            tidakBerubah: sama,
+            items: sama ? const {} : Map.of(versiServer),
+          );
         },
+        versiKatalogLokal: (o) async => lengkap ? versiKatalogLokal : 0,
         ambilPerId: (o, ids) async {
           panggilanAmbil++;
           log.add('ambil ${ids.length}');
           if (panggilanAmbil == gagalAmbilKe) throw Exception('putus');
-          return [
-            for (final id in ids)
-              Product(
-                remoteId: id,
-                name: id,
-                price: 1,
-                version: versiServer[id]!,
-              ),
-          ];
+          return [for (final id in ids) produkServer(id)];
         },
         ambilHalaman: (o, page, limit) async {
           log.add('halaman $page');
@@ -254,16 +311,13 @@ void main() {
           final mulai = (page - 1) * limit;
           if (mulai >= semua.length) return [];
           return [
-            for (final id in semua.skip(mulai).take(limit))
-              Product(
-                remoteId: id,
-                name: id,
-                price: 1,
-                version: versiServer[id]!,
-              ),
+            for (final id in semua.skip(mulai).take(limit)) produkServer(id),
           ];
         },
-        versiLokal: (o) async => Map.of(lokal),
+        versiLokal: (o) async {
+          log.add('banding');
+          return Map.of(lokal);
+        },
         tandaiBasi: (o, ids) async {
           for (final id in ids) {
             flag[id] = false;
@@ -279,97 +333,96 @@ void main() {
           lokal.removeWhere((id, _) => !tetap.contains(id));
           flag.removeWhere((id, _) => !tetap.contains(id));
         },
-        tandaiLengkap: (o) async => lengkap = true,
+        tandaiLengkap: (o, v) async {
+          lengkap = true;
+          versiKatalogLokal = v;
+        },
         jam: jam,
       );
     }
 
     setUp(() {
       versiServer = {for (var i = 0; i < 250; i++) 'p$i': 'v1'};
-      log = [];
+      versiKatalogServer = 7;
+      serverKenalVersiKatalog = true;
+      punyaEndpointVersi = true;
+      gagalAmbilKe = null;
       lokal = {};
       flag = {};
       lengkap = false;
-      punyaEndpointVersi = true;
-      gagalAmbilKe = null;
+      versiKatalogLokal = 0;
+      log = [];
     });
 
     test(
-      'pertama kali: semua produk diambil per 100 dan ditandai tersimpan',
+      'pertama kali: semua produk diambil per 100, versi katalog disimpan',
       () async {
         final hasil = await buat().sinkron('o1');
 
-        expect(log, ['versi', 'ambil 100', 'ambil 100', 'ambil 50']);
+        expect(log, [
+          'versi sejak 0',
+          'banding',
+          'ambil 100',
+          'ambil 100',
+          'ambil 50',
+        ]);
         expect(hasil.jumlah, 250);
         expect(hasil.bertambah, 250);
         expect(hasil.lengkap, isTrue);
-        expect(lengkap, isTrue);
         expect(flag.values.every((f) => f), isTrue);
+        expect(versiKatalogLokal, 7);
       },
     );
 
     test(
-      'tidak ada yang berubah: hanya daftar versi, tanpa ambil produk',
+      'katalog tidak berubah: satu permintaan kecil, tanpa membandingkan atau mengambil',
       () async {
         await buat().sinkron('o1');
         log.clear();
 
         final hasil = await buat().sinkron('o1');
-        expect(log, ['versi']);
-        expect(hasil.jumlah, 0);
+        expect(log, ['versi sejak 7']);
+        expect(hasil.lengkap, isTrue);
         expect(hasil.adaPerubahan, isFalse);
       },
     );
 
     test(
-      'produk berubah: flag jadi belum tersimpan, diambil ulang, lalu tersimpan lagi',
+      'produk berubah: flag jadi belum tersimpan, hanya produk itu diambil, lalu tersimpan lagi',
       () async {
         await buat().sinkron('o1');
+        ubahServer(() {
+          versiServer['p7'] = 'v2';
+          versiServer['p8'] = 'v2';
+        });
         log.clear();
-        versiServer['p7'] = 'v2';
-        versiServer['p8'] = 'v2';
 
-        final basiSaatAmbil = <String, bool>{};
-        final sync = ProductOfflineSync(
-          ambilVersi: (o) async => Map.of(versiServer),
-          ambilPerId: (o, ids) async {
-            // Saat produk diambil, flag-nya harus sudah "belum tersimpan".
+        final flagSaatAmbil = <String, bool>{};
+        final sync = buat();
+        final asli = sync.ambilPerId;
+        final pantau = ProductOfflineSync(
+          ambilVersi: sync.ambilVersi,
+          versiKatalogLokal: sync.versiKatalogLokal,
+          ambilPerId: (o, ids) {
             for (final id in ids) {
-              basiSaatAmbil[id] = flag[id]!;
+              flagSaatAmbil[id] = flag[id]!;
             }
-            log.add('ambil ${ids.join(",")}');
-            return [
-              for (final id in ids)
-                Product(
-                  remoteId: id,
-                  name: id,
-                  price: 1,
-                  version: versiServer[id]!,
-                ),
-            ];
+            return asli(o, ids);
           },
-          ambilHalaman: (o, p, l) async => [],
-          versiLokal: (o) async => Map.of(lokal),
-          tandaiBasi: (o, ids) async {
-            for (final id in ids) {
-              flag[id] = false;
-            }
-          },
-          simpan: (o, list) async {
-            for (final p in list) {
-              lokal[p.remoteId!] = p.version;
-              flag[p.remoteId!] = true;
-            }
-          },
-          pangkas: (o, t) async {},
-          tandaiLengkap: (o) async {},
+          ambilHalaman: sync.ambilHalaman,
+          versiLokal: sync.versiLokal,
+          tandaiBasi: sync.tandaiBasi,
+          simpan: sync.simpan,
+          pangkas: sync.pangkas,
+          tandaiLengkap: sync.tandaiLengkap,
         );
 
-        final hasil = await sync.sinkron('o1');
-        expect(log, ['ambil p7,p8']);
-        expect(basiSaatAmbil, {'p7': false, 'p8': false});
+        final hasil = await pantau.sinkron('o1');
+        expect(log, ['versi sejak 7', 'banding', 'ambil 2']);
+        expect(flagSaatAmbil, {'p7': false, 'p8': false});
         expect(flag['p7'], isTrue);
         expect(lokal['p7'], 'v2');
+        expect(versiKatalogLokal, 8);
         expect(hasil.basi, 2);
         expect(
           hasil.daftarBerubah,
@@ -380,36 +433,42 @@ void main() {
     );
 
     test(
-      'putus saat mengambil: flag tetap belum tersimpan, diulang di sinkron berikutnya',
+      'putus saat mengambil: versi katalog tidak disimpan, diulang di pemeriksaan berikutnya',
       () async {
         await buat().sinkron('o1');
-        versiServer['p1'] = 'v2';
+        ubahServer(() => versiServer['p1'] = 'v2');
         gagalAmbilKe = 1;
-        lengkap = false;
 
         final gagal = await buat().sinkron('o1');
         expect(gagal.galat, isNotNull);
         expect(gagal.lengkap, isFalse);
         expect(flag['p1'], isFalse);
-        expect(lengkap, isFalse);
+        expect(
+          versiKatalogLokal,
+          7,
+          reason: 'versi lama tetap → server menyusun ulang',
+        );
 
         gagalAmbilKe = null;
         log.clear();
         final ulang = await buat().sinkron('o1');
-        expect(log, ['versi', 'ambil 1']);
+        expect(log, ['versi sejak 7', 'banding', 'ambil 1']);
         expect(flag['p1'], isTrue);
         expect(ulang.lengkap, isTrue);
+        expect(versiKatalogLokal, 8);
       },
     );
 
     test('produk baru & produk dihapus di server', () async {
       await buat().sinkron('o1');
-      versiServer.remove('p0');
-      versiServer['baru'] = 'v1';
+      ubahServer(() {
+        versiServer.remove('p0');
+        versiServer['baru'] = 'v1';
+      });
       log.clear();
 
       final hasil = await buat().sinkron('o1');
-      expect(log, ['versi', 'ambil 1']);
+      expect(log, ['versi sejak 7', 'banding', 'ambil 1']);
       expect(lokal.containsKey('p0'), isFalse);
       expect(lokal['baru'], 'v1');
       expect(hasil.dihapus, 1);
@@ -417,10 +476,23 @@ void main() {
       expect(hasil.daftarBerubah, isTrue);
     });
 
+    test(
+      'server tanpa versi katalog: selalu membandingkan, tapi tetap hanya mengambil yang berubah',
+      () async {
+        serverKenalVersiKatalog = false;
+        await buat().sinkron('o1');
+        expect(versiKatalogLokal, 0);
+        log.clear();
+
+        await buat().sinkron('o1');
+        expect(log, ['versi sejak 0', 'banding']);
+      },
+    );
+
     test('server lama tanpa endpoint versi: ambil semua per halaman', () async {
       punyaEndpointVersi = false;
       final hasil = await buat().sinkron('o1');
-      expect(log, ['versi', 'halaman 1', 'halaman 2', 'halaman 3']);
+      expect(log, ['versi sejak 0', 'halaman 1', 'halaman 2', 'halaman 3']);
       expect(hasil.lengkap, isTrue);
       expect(lokal.length, 250);
     });

@@ -21,7 +21,7 @@ class OfflineDb {
     final path = p.join(dir.path, 'nara_offline.db');
     final db = await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute(_createPendingSales);
         await db.execute(_createCachedProducts);
@@ -69,6 +69,13 @@ class OfflineDb {
         }
         if (oldVersion < 6) {
           await db.execute(_createCatalogState);
+        }
+        // v6 → v7: versi katalog server per outlet. Tabel v6 di atas sudah
+        // memakai DDL baru, jadi ALTER hanya untuk yang dibuat di v6.
+        if (oldVersion == 6) {
+          await db.execute(
+            'ALTER TABLE catalog_state ADD COLUMN versi_katalog INTEGER NOT NULL DEFAULT 0',
+          );
         }
       },
     );
@@ -120,12 +127,15 @@ class OfflineDb {
   //
   // Status katalog per outlet. lengkap_pada terisi setelah katalog pertama
   // kali tersimpan utuh — sejak itu halaman kasir membaca dari perangkat,
-  // bukan dari API.
+  // bukan dari API. versi_katalog = versi katalog server saat katalog lokal
+  // terakhir disamakan; dikirim saat memeriksa supaya server cukup menjawab
+  // "tidak berubah" tanpa menyusun katalog. 0 = belum tahu.
   static const _createCatalogState = '''
     CREATE TABLE IF NOT EXISTS catalog_state (
-      outlet_id    TEXT PRIMARY KEY,
-      lengkap_pada TEXT,
-      dicek_pada   TEXT
+      outlet_id     TEXT PRIMARY KEY,
+      lengkap_pada  TEXT,
+      dicek_pada    TEXT,
+      versi_katalog INTEGER NOT NULL DEFAULT 0
     )
   ''';
 

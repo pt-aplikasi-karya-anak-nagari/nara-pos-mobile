@@ -209,25 +209,25 @@ class OutletService extends BaseApiService {
     );
   }
 
-  /// Versi seluruh produk aktif outlet: `{id: version}`. Respons kecil —
-  /// tanpa data produk — untuk memeriksa produk mana yang berubah.
+  /// Periksa katalog outlet: kirim [sejak] (versi katalog terakhir yang
+  /// diketahui, 0 = belum tahu). Bila katalog server belum berubah, server
+  /// menjawab `tidakBerubah` tanpa menyusun katalog sama sekali. Bila berubah,
+  /// [VersiKatalogServer.items] berisi `{id: version}` seluruh produk.
   ///
   /// Null bila server belum punya endpoint ini (versi lama). Dipanggil dari
   /// sinkron latar, jadi senyap: galat tidak memunculkan toast ke kasir.
-  Future<Map<String, String>?> getProductVersions(String outletId) async {
+  Future<VersiKatalogServer?> getProductVersions(
+    String outletId, {
+    int sejak = 0,
+  }) async {
     try {
       final res = await dio.get<dynamic>(
         ApiEndpoint.outletProductVersions(outletId),
+        queryParameters: {'since': sejak},
         options: Options(extra: {'senyap': true}),
       );
       final body = res.data;
-      final list = body is Map ? body['data'] : null;
-      return {
-        if (list is List)
-          for (final e in list)
-            if (e is Map && e['id'] != null)
-              e['id'].toString(): (e['version'] ?? '').toString(),
-      };
+      return VersiKatalogServer.dari(body is Map ? body['data'] : null);
     } on DioException catch (e) {
       final kode = e.response?.statusCode;
       if (kode == 404 || kode == 405) return null;
@@ -618,6 +618,45 @@ class OutletService extends BaseApiService {
       return list.map((e) => e.toString()).toList();
     }
     return const [];
+  }
+}
+
+/// Jawaban pemeriksaan katalog dari server.
+class VersiKatalogServer {
+  const VersiKatalogServer({
+    required this.versiKatalog,
+    required this.tidakBerubah,
+    required this.items,
+  });
+
+  /// Versi katalog outlet di server. 0 = server tak mengenal versi katalog
+  /// (versi lama yang hanya mengirim daftar).
+  final int versiKatalog;
+  final bool tidakBerubah;
+
+  /// id produk → versi produk. Kosong bila [tidakBerubah].
+  final Map<String, String> items;
+
+  factory VersiKatalogServer.dari(Object? data) {
+    Map<String, String> peta(Object? list) => {
+      if (list is List)
+        for (final e in list)
+          if (e is Map && e['id'] != null)
+            e['id'].toString(): (e['version'] ?? '').toString(),
+    };
+    if (data is Map) {
+      return VersiKatalogServer(
+        versiKatalog: (data['catalog_version'] as num?)?.toInt() ?? 0,
+        tidakBerubah: data['unchanged'] == true,
+        items: peta(data['items']),
+      );
+    }
+    // Server yang belum mengenal ?since mengirim daftar polos.
+    return VersiKatalogServer(
+      versiKatalog: 0,
+      tidakBerubah: false,
+      items: peta(data),
+    );
   }
 }
 

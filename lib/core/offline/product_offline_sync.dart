@@ -56,7 +56,11 @@ class HasilSinkronProduk {
 ///
 /// # ALURNYA
 ///
-///   1. Ambil daftar versi semua produk outlet (`/products/versions`) — hanya
+///   0. Kirim versi katalog lokal (`/products/versions?since=N`). Bila katalog
+///      outlet belum berubah sejak N, server menjawab "tidak berubah" dari satu
+///      baris tabel — tanpa menyusun katalog — dan sinkron selesai di sini.
+///      Ini kasus yang paling sering terjadi.
+///   1. Bila berubah: server mengirim daftar versi semua produk — hanya
 ///      `{id, version}`, jauh lebih kecil dari data produknya.
 ///   2. Bandingkan dengan versi lokal tiap produk:
 ///        - sama          → flag tetap "tersimpan", produk TIDAK diambil.
@@ -70,6 +74,7 @@ class HasilSinkronProduk {
 class ProductOfflineSync {
   ProductOfflineSync({
     required this.ambilVersi,
+    required this.versiKatalogLokal,
     required this.ambilPerId,
     required this.ambilHalaman,
     required this.versiLokal,
@@ -87,8 +92,13 @@ class ProductOfflineSync {
   /// Batas pengaman cara lama: 100 halaman × 100 = 10.000 produk.
   static const maksHalaman = 100;
 
-  /// Null = server belum punya endpoint versi.
-  final Future<Map<String, String>?> Function(String outletId) ambilVersi;
+  /// [sejak] = versi katalog lokal (0 = belum tahu). Null = server belum
+  /// punya endpoint versi.
+  final Future<VersiKatalogServer?> Function(String outletId, int sejak)
+  ambilVersi;
+
+  /// Versi katalog server yang terakhir disamakan dengan katalog lokal.
+  final Future<int> Function(String outletId) versiKatalogLokal;
   final Future<List<Product>> Function(String outletId, List<String> ids)
   ambilPerId;
   final Future<List<Product>> Function(String outletId, int page, int limit)
@@ -97,7 +107,7 @@ class ProductOfflineSync {
   final Future<void> Function(String outletId, Iterable<String> ids) tandaiBasi;
   final Future<void> Function(String outletId, List<Product> products) simpan;
   final Future<void> Function(String outletId, Set<String> idTetap) pangkas;
-  final Future<void> Function(String outletId) tandaiLengkap;
+  final Future<void> Function(String outletId, int versiKatalog) tandaiLengkap;
   final Duration jedaMinimum;
   final DateTime Function() _jam;
 
@@ -122,13 +132,19 @@ class ProductOfflineSync {
 
     _berjalan.add(outletId);
     try {
-      final Map<String, String>? server;
+      final VersiKatalogServer? server;
       try {
-        server = await ambilVersi(outletId);
+        server = await ambilVersi(outletId, await versiKatalogLokal(outletId));
       } catch (e) {
         return HasilSinkronProduk(galat: e);
       }
       if (server == null) return await _sinkronPenuh(outletId);
+      if (server.tidakBerubah) {
+        // Kasus paling sering: server menjawab dari satu baris tabel, tanpa
+        // menyusun katalog, dan tidak ada yang perlu diambil.
+        _terakhirDicek[outletId] = _jam();
+        return const HasilSinkronProduk(lengkap: true);
+      }
       return await _sinkronVersi(outletId, server);
     } finally {
       _berjalan.remove(outletId);
@@ -137,8 +153,9 @@ class ProductOfflineSync {
 
   Future<HasilSinkronProduk> _sinkronVersi(
     String outletId,
-    Map<String, String> server,
+    VersiKatalogServer katalog,
   ) async {
+    final server = katalog.items;
     final lokal = await versiLokal(outletId);
 
     // Produk yang perlu diambil: belum ada di lokal, atau versinya berbeda.
@@ -178,7 +195,9 @@ class ProductOfflineSync {
       );
     }
 
-    await tandaiLengkap(outletId);
+    // Versi katalog disimpan HANYA setelah semua produk berhasil diambil;
+    // bila terputus di tengah, pemeriksaan berikutnya menyusun ulang.
+    await tandaiLengkap(outletId, katalog.versiKatalog);
     _terakhirDicek[outletId] = _jam();
     return HasilSinkronProduk(
       jumlah: jumlah,
@@ -206,7 +225,7 @@ class ProductOfflineSync {
         }
         if (produk.length < ukuranHalaman) {
           await pangkas(outletId, ids);
-          await tandaiLengkap(outletId);
+          await tandaiLengkap(outletId, 0);
           _terakhirDicek[outletId] = _jam();
           return HasilSinkronProduk(
             jumlah: jumlah,
@@ -226,7 +245,9 @@ final productOfflineSyncProvider = Provider<ProductOfflineSync>((ref) {
   final cache = ref.watch(productCacheProvider);
   OutletService api() => ref.read(outletServiceProvider);
   return ProductOfflineSync(
-    ambilVersi: (outletId) => api().getProductVersions(outletId),
+    ambilVersi: (outletId, sejak) =>
+        api().getProductVersions(outletId, sejak: sejak),
+    versiKatalogLokal: cache.versiKatalog,
     ambilPerId: (outletId, ids) => api().getProductsByIds(outletId, ids),
     ambilHalaman: (outletId, page, limit) =>
         api().getProducts(outletId, page: page, limit: limit),
@@ -234,7 +255,8 @@ final productOfflineSyncProvider = Provider<ProductOfflineSync>((ref) {
     tandaiBasi: cache.tandaiBasi,
     simpan: cache.simpanBanyak,
     pangkas: cache.pangkas,
-    tandaiLengkap: cache.tandaiKatalogLengkap,
+    tandaiLengkap: (outletId, versi) =>
+        cache.tandaiKatalogLengkap(outletId, versiKatalog: versi),
   );
 });
 
