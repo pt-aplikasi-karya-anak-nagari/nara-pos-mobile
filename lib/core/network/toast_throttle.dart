@@ -59,7 +59,12 @@ class ToastThrottle {
 
   /// Lupakan seluruh catatan — dipakai saat ganti sesi/pengguna supaya kondisi
   /// milik sesi sebelumnya tidak membungkam toast sesi baru.
-  void reset() => _terakhir.clear();
+  ///
+  /// Pesan di [simpan] tetap diingat. Contohnya "Sesi berakhir": beberapa
+  /// request yang gagal 401 bersamaan masing-masing me-reset peredam, dan
+  /// tanpa pengecualian ini tiap request memunculkan toast yang sama lagi.
+  void reset({Set<String> simpan = const {}}) =>
+      _terakhir.removeWhere((pesan, _) => !simpan.contains(pesan));
 }
 
 /// Kode error backend untuk kondisi yang tidak berubah dengan menunggu.

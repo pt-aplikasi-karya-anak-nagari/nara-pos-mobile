@@ -97,13 +97,13 @@ final dioProvider = Provider<Dio>((ref) {
               e = retryError;
               if (retryError.response?.statusCode == 401) {
                 await _clearAuth(ref, authStorage);
-                _showErrorToast('Sesi berakhir, silakan login ulang.');
+                _showErrorToast(_pesanSesiBerakhir);
                 authToastShown = true;
               }
             }
           } else {
             await _clearAuth(ref, authStorage);
-            _showErrorToast('Sesi berakhir, silakan login ulang.');
+            _showErrorToast(_pesanSesiBerakhir);
             authToastShown = true;
           }
         } else if (_shouldClearAuth(e)) {
@@ -342,7 +342,9 @@ Future<void> _clearAuth(Ref ref, AuthStorage authStorage) async {
     // Sesi berganti (mis. kasir lain mulai bertugas di perangkat yang sama):
     // lupakan catatan peredam, supaya kondisi milik sesi sebelumnya tidak
     // membungkam toast yang relevan untuk pengguna baru.
-    _peredamToast.reset();
+    // Pesan "Sesi berakhir" tetap diingat supaya request lain yang gagal
+    // bersamaan tidak memunculkan toast yang sama berulang kali.
+    _peredamToast.reset(simpan: {_pesanSesiBerakhir});
   } catch (_) {
     // ignore
   }
@@ -371,6 +373,8 @@ String _errorMessage(DioException e) {
 /// yang menggagalkan beberapa endpoint sekaligus (mis. langganan outlet habis)
 /// menumpuk toast identik tiap putaran polling halaman kasir.
 final _peredamToast = ToastThrottle();
+
+const _pesanSesiBerakhir = 'Sesi berakhir, silakan login ulang.';
 
 void _showErrorToast(String message, {bool kondisiMenetap = false}) {
   if (!_peredamToast.boleh(message, kondisiMenetap: kondisiMenetap)) return;

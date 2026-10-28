@@ -153,4 +153,21 @@ void main() {
       expect(kondisiMenetapDariRespons(402, 'Payment Required'), isTrue);
     });
   });
+
+  group('reset dengan pengecualian', () {
+    test('pesan yang disimpan tetap diredam, lainnya dilupakan', () {
+      final t = ToastThrottle();
+      final kini = DateTime(2026, 10, 28, 23, 12);
+      const sesi = 'Sesi berakhir, silakan login ulang.';
+
+      expect(t.boleh(sesi, sekarang: kini), isTrue);
+      expect(t.boleh('Server error', sekarang: kini), isTrue);
+
+      // Request kedua yang gagal 401 bersamaan ikut me-reset peredam.
+      t.reset(simpan: {sesi});
+
+      expect(t.boleh(sesi, sekarang: kini), isFalse);
+      expect(t.boleh('Server error', sekarang: kini), isTrue);
+    });
+  });
 }
