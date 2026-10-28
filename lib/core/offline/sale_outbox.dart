@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'offline_db.dart';
+import 'transaksi_folder.dart';
 
 /// Satu transaksi yang menunggu dikirim ke backend (dibuat saat offline).
 class PendingSale {
@@ -41,6 +42,10 @@ class PendingSale {
 
 /// Repository antrian (outbox) transaksi offline berbasis SQLite.
 class SaleOutbox {
+  /// Dipanggil setiap isi antrian berubah — dipakai untuk mencerminkan
+  /// antrian ke folder cadangan (lihat transaksi_folder.dart).
+  void Function()? onBerubah;
+
   /// Batas percobaan sync. Sale yang ditolak server (4xx/5xx — mis. produk
   /// dihapus) takkan pernah sukses; setelah batas ini ia jadi "dead-letter":
   /// tetap tersimpan di DB (bisa dipulihkan), tapi DIKELUARKAN dari antrian
@@ -57,6 +62,7 @@ class SaleOutbox {
       'created_at': DateTime.now().toIso8601String(),
       'attempts': 0,
     });
+    onBerubah?.call();
     return localId;
   }
 
@@ -117,6 +123,7 @@ class SaleOutbox {
       where: 'local_id = ?',
       whereArgs: [localId],
     );
+    onBerubah?.call();
   }
 
   Future<void> remove(String localId) async {
@@ -126,6 +133,7 @@ class SaleOutbox {
       where: 'local_id = ?',
       whereArgs: [localId],
     );
+    onBerubah?.call();
   }
 
   Future<void> markError(String localId, String error) async {
@@ -135,10 +143,16 @@ class SaleOutbox {
       'WHERE local_id = ?',
       [error, localId],
     );
+    onBerubah?.call();
   }
 }
 
-final saleOutboxProvider = Provider<SaleOutbox>((ref) => SaleOutbox());
+final saleOutboxProvider = Provider<SaleOutbox>((ref) {
+  // Setiap perubahan antrian langsung dicerminkan ke folder cadangan, supaya
+  // transaksi offline tetap ada walau aplikasi dihapus.
+  return SaleOutbox()
+    ..onBerubah = () => ref.read(cerminTransaksiProvider).jadwalkan();
+});
 
 /// Jumlah transaksi yang menunggu sinkron. Tidak reaktif otomatis (SQLite),
 /// jadi panggil `refresh()` setelah enqueue / drain antrian.

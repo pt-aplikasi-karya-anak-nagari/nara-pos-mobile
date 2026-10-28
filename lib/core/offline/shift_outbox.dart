@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'offline_db.dart';
+import 'transaksi_folder.dart';
 
 /// Tipe operasi yang di-antrikan di pending_ops.
 const String opShiftOpen = 'shift_open';
@@ -66,6 +67,10 @@ class PendingOp {
 /// Outbox operasi shift (buka/tutup) berbasis SQLite (tabel pending_ops).
 /// Mirror konvensi [SaleOutbox]: maxSyncAttempts + dead-letter, FIFO drain.
 class ShiftOutbox {
+  /// Dipanggil setiap isi antrian berubah — dipakai untuk mencerminkan
+  /// antrian ke folder cadangan (lihat transaksi_folder.dart).
+  void Function()? onBerubah;
+
   static const int maxSyncAttempts = 5;
 
   Future<String> enqueueOpen({
@@ -91,6 +96,7 @@ class ShiftOutbox {
       'occurred_at': occurredAt.toUtc().toIso8601String(),
       'attempts': 0,
     });
+    onBerubah?.call();
     return localId;
   }
 
@@ -119,6 +125,7 @@ class ShiftOutbox {
       'occurred_at': occurredAt.toUtc().toIso8601String(),
       'attempts': 0,
     });
+    onBerubah?.call();
     return localId;
   }
 
@@ -160,6 +167,7 @@ class ShiftOutbox {
       where: 'local_shift_id = ?',
       whereArgs: [localShiftId],
     );
+    onBerubah?.call();
   }
 
   /// Cascade dead-letter: saat open ditolak permanen, tandai open + close
@@ -172,11 +180,13 @@ class ShiftOutbox {
       where: "local_shift_id = ? AND status != 'done'",
       whereArgs: [localShiftId],
     );
+    onBerubah?.call();
   }
 
   Future<void> remove(String localId) async {
     final db = await OfflineDb.instance.database;
     await db.delete('pending_ops', where: 'local_id = ?', whereArgs: [localId]);
+    onBerubah?.call();
   }
 
   Future<void> markError(String localId, String error) async {
@@ -186,6 +196,7 @@ class ShiftOutbox {
       'WHERE local_id = ?',
       [error, localId],
     );
+    onBerubah?.call();
   }
 
   Future<void> retry(String localId) async {
@@ -196,6 +207,7 @@ class ShiftOutbox {
       where: 'local_id = ?',
       whereArgs: [localId],
     );
+    onBerubah?.call();
   }
 
   /// Pulihkan SELURUH operasi satu shift sekaligus.
@@ -230,6 +242,7 @@ class ShiftOutbox {
       where: "local_shift_id = ? AND status != 'done'",
       whereArgs: [localShiftId],
     );
+    onBerubah?.call();
   }
 
   /// Buang SELURUH operasi satu shift. Pasangan dari retryShift, dan alasannya
@@ -242,6 +255,7 @@ class ShiftOutbox {
       where: "local_shift_id = ? AND status != 'done'",
       whereArgs: [localShiftId],
     );
+    onBerubah?.call();
   }
 
   /// Hitungan antrian aktif (untuk banner). Dead-letter dikecualikan.
@@ -275,7 +289,12 @@ class ShiftOutbox {
   }
 }
 
-final shiftOutboxProvider = Provider<ShiftOutbox>((ref) => ShiftOutbox());
+final shiftOutboxProvider = Provider<ShiftOutbox>((ref) {
+  // Dicerminkan ke folder cadangan bersama penjualan: penjualan offline
+  // terikat ke shift yang dibuka offline, jadi keduanya harus selamat.
+  return ShiftOutbox()
+    ..onBerubah = () => ref.read(cerminTransaksiProvider).jadwalkan();
+});
 
 /// Jumlah operasi shift menunggu sinkron (buka/tutup). Tidak reaktif —
 /// panggil refresh() setelah enqueue / drain.

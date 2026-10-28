@@ -103,6 +103,19 @@ class ProductFolderStore {
     _perubahan.add('*');
   }
 
+  /// Nama folder milik satu outlet di folder pilihan — dipakai juga oleh
+  /// cadangan transaksi offline, supaya semua data satu outlet berkumpul.
+  static String folderOutlet(String outletId) => 'outlet-${_aman(outletId)}';
+
+  /// ID aman untuk dipakai sebagai nama file/folder.
+  static String namaAman(String v) => _aman(v);
+
+  /// Backend file yang dipakai — dibagi dengan cadangan transaksi offline.
+  FolderBackend get backend => _backend;
+
+  /// URI folder bila sudah dipilih DAN izinnya masih ada; null bila tidak.
+  Future<String?> uriAktif() => _uriAktif();
+
   static List<String> dirProduk(String outletId) => [
     'outlet-${_aman(outletId)}',
     'produk',

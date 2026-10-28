@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/connectivity_service.dart';
 import '../../core/format.dart';
+import '../../core/offline/cadangan_transaksi.dart';
 import '../../core/offline/offline_sync_service.dart';
 import '../../core/offline/sale_outbox.dart';
 import '../../core/offline/shift_outbox.dart';
@@ -413,6 +414,8 @@ class _Panel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final antrian = ref.watch(antrianOfflineProvider).value;
+    final adaCadangan = ref.watch(folderCadanganAktifProvider).value;
+    final adaAntrian = menunggu + shiftMenunggu + gagal + shiftGagal > 0;
     final bisaKirim =
         !offline && !progres.berjalan && menunggu + shiftMenunggu > 0;
 
@@ -468,6 +471,19 @@ class _Panel extends ConsumerWidget {
                 style: TextStyle(fontSize: 12, color: kTextMid, height: 1.4),
               ),
             ),
+            // Apakah antrian ini selamat bila aplikasi terhapus.
+            if (adaAntrian && adaCadangan != null)
+              _BarisInfo(
+                ikon: adaCadangan
+                    ? Icons.folder_outlined
+                    : Icons.warning_amber_rounded,
+                warna: adaCadangan ? kSuccess : kWarning,
+                teks: adaCadangan
+                    ? 'Tersalin juga ke folder cadangan — aman walau aplikasi '
+                          'terhapus.'
+                    : 'Belum ada folder cadangan: transaksi ini hilang bila '
+                          'aplikasi terhapus. Atur di Profil › Data Offline.',
+              ),
             Flexible(
               child: ListView(
                 shrinkWrap: true,
