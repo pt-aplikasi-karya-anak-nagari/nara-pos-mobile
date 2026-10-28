@@ -3,10 +3,28 @@
 //  - MANAJEMEN (read-write): CRUD grup per-outlet + attach ke produk.
 // Di-cache per-produk / per-outlet lewat FutureProvider.family.
 
+import 'dart:async';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../outlet/data/outlet_service.dart';
 import '../domain/modifier_group.dart';
+
+/// Salinan JSON mentah grup modifier per produk, untuk kasir offline. Disimpan
+/// apa adanya dari server (bukan lewat ModifierGroup.toJson, yang merupakan
+/// payload simpan dan tidak memuat id), jadi dibaca kembali tanpa kehilangan
+/// apa pun. Kunci baris: `outletId/productId`.
+final _cacheGrupProduk = EntityCache<Map<String, dynamic>>(
+  'modifier_groups_produk',
+  toJson: (j) => j,
+  fromJson: (j) => j,
+);
+
+/// Batas tunggu mengambil grup modifier saat MENAMBAH ITEM. Lebih lama dari
+/// ini, kasir menunggu di depan pelanggan — lebih baik pakai salinan lokal.
+const _batasTungguModifier = Duration(seconds: 4);
 
 class ModifierRepository {
   final Ref _ref;
@@ -16,16 +34,71 @@ class ModifierRepository {
 
   // ── Kasir (read) ──────────────────────────────────────────────────
 
+  /// Grup modifier sebuah produk untuk KASIR.
+  ///
+  /// # SAAT OFFLINE
+  ///
+  /// Tidak menyentuh jaringan sama sekali: langsung salinan lokal. Dulu
+  /// permintaan ini tetap dikirim dan baru menyerah setelah jaringan gagal —
+  /// di Wi-Fi tanpa internet itu bisa 10 detik, ditambah percobaan ulang
+  /// otomatis Riverpod. Selama itu tombol "+" tampak mati, jadi kasir tak bisa
+  /// menambah item sama sekali.
+  ///
+  /// Saat online, hasil yang berhasil diambil disimpan untuk dipakai offline.
+  /// Produk yang belum pernah dibuka saat online tak punya salinan → offline
+  /// ia ditambahkan tanpa add-on (bukan diblokir).
   Future<List<ModifierGroup>> groupsForProduct(
     String outletId,
-    String productId,
-  ) async {
-    final list = await _svc.getProductModifierGroups(outletId, productId);
-    return list
+    String productId, {
+    bool offline = false,
+  }) async =>
+      (await ambilGrupKasir(outletId, productId, offline: offline)).grup;
+
+  /// Seperti [groupsForProduct], plus apakah hasilnya dari salinan lokal
+  /// (offline / server tak menjawab tepat waktu) — hasil semacam itu jangan
+  /// disimpan lama di memori, supaya ketukan berikutnya mencoba server lagi.
+  Future<({List<ModifierGroup> grup, bool dariSalinan})> ambilGrupKasir(
+    String outletId,
+    String productId, {
+    bool offline = false,
+  }) async {
+    final kunci = '$outletId/$productId';
+    List<Map<String, dynamic>> mentah;
+    var dariSalinan = false;
+    if (offline) {
+      mentah = await _bacaSalinan(kunci);
+      dariSalinan = true;
+    } else {
+      try {
+        mentah =
+            (await _svc
+                    .getProductModifierGroups(outletId, productId)
+                    .timeout(_batasTungguModifier))
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+        unawaited(
+          _cacheGrupProduk.replaceAll(kunci, mentah).catchError((_) {}),
+        );
+      } catch (e) {
+        if (e is! TimeoutException && !isOfflineError(e)) rethrow;
+        mentah = await _bacaSalinan(kunci);
+        dariSalinan = true;
+      }
+    }
+    final grup = mentah
         .map(ModifierGroup.fromJson)
         // Hanya grup yang punya opsi (aktif) relevan ditampilkan di kasir.
         .where((g) => g.options.isNotEmpty)
         .toList();
+    return (grup: grup, dariSalinan: dariSalinan);
+  }
+
+  Future<List<Map<String, dynamic>>> _bacaSalinan(String kunci) async {
+    try {
+      return await _cacheGrupProduk.getAll(kunci);
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// ID grup yang saat ini melekat pada produk (tanpa filter opsi) — dipakai
@@ -69,15 +142,29 @@ final modifierRepositoryProvider = Provider<ModifierRepository>((ref) {
   return ModifierRepository(ref);
 });
 
-/// Grup modifier untuk (outletId, productId). Kosong bila produk tak punya
-/// modifier atau saat offline/gagal (kasir tetap bisa menambah item langsung).
-final productModifierGroupsProvider = FutureProvider.family<
-    List<ModifierGroup>, ({String outletId, String productId})>((ref, arg) async {
-  if (arg.outletId.isEmpty || arg.productId.isEmpty) return const [];
-  return ref
-      .read(modifierRepositoryProvider)
-      .groupsForProduct(arg.outletId, arg.productId);
-});
+/// Grup modifier untuk (outletId, productId), dari server; disimpan di memori
+/// per produk supaya ketukan berikutnya instan.
+///
+/// - Tanpa retry otomatis: percobaan ulang Riverpod hanya memperpanjang waktu
+///   tunggu kasir di depan pelanggan.
+/// - Hasil dari salinan lokal (server tak menjawab tepat waktu) dibuang dari
+///   memori setelah dipakai, supaya ketukan berikutnya mencoba server lagi.
+///
+/// Saat OFFLINE jangan lewat provider ini — panggil
+/// [ModifierRepository.groupsForProduct] dengan `offline: true`, yang tak
+/// menyentuh jaringan (lihat ProductCard).
+final productModifierGroupsProvider =
+    FutureProvider.family<
+      List<ModifierGroup>,
+      ({String outletId, String productId})
+    >((ref, arg) async {
+      if (arg.outletId.isEmpty || arg.productId.isEmpty) return const [];
+      final hasil = await ref
+          .read(modifierRepositoryProvider)
+          .ambilGrupKasir(arg.outletId, arg.productId);
+      if (hasil.dariSalinan) Future.microtask(ref.invalidateSelf);
+      return hasil.grup;
+    }, retry: (_, _) => null);
 
 /// Semua grup modifier milik outlet — halaman manajemen & dialog attach.
 final modifierGroupsProvider =

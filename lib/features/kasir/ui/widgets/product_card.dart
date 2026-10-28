@@ -16,6 +16,7 @@ import '../../providers.dart';
 import 'size_picker_sheet.dart';
 import 'modifier_sheet.dart';
 import 'qty_button.dart';
+import '../../../../core/connectivity_service.dart';
 import '../../../../core/offline/product_cache.dart';
 import '../../../../core/outlet_scope.dart';
 import '../../../outlet/data/outlet_service.dart';
@@ -145,12 +146,21 @@ class ProductCard extends HookConsumerWidget {
       }
       List<ModifierGroup> groups;
       try {
-        groups = await ref.read(
-          productModifierGroupsProvider((
-            outletId: outletId,
-            productId: pid,
-          )).future,
-        );
+        // Offline: salinan lokal saja, tanpa menyentuh jaringan — supaya tombol
+        // "+" langsung bereaksi. Online: lewat provider (tersimpan di memori).
+        // Batas waktu tetap dipasang: apa pun yang terjadi, kasir tidak boleh
+        // tertahan lama hanya untuk menampilkan pilihan add-on.
+        final grup = ref.read(isOfflineProvider)
+            ? ref
+                  .read(modifierRepositoryProvider)
+                  .groupsForProduct(outletId, pid, offline: true)
+            : ref.read(
+                productModifierGroupsProvider((
+                  outletId: outletId,
+                  productId: pid,
+                )).future,
+              );
+        groups = await grup.timeout(const Duration(seconds: 5));
       } catch (_) {
         return const <CartModifier>[];
       }
