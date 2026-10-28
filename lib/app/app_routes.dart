@@ -58,6 +58,9 @@ class AppRoutes {
   // PIN otorisasi manajer (self-service set/ubah/hapus PIN sendiri).
   static const String pinSettings = '/profil/pin';
   static const String pinSettingsName = 'pin-settings';
+  // Folder penyimpanan produk untuk offline (tahan uninstall).
+  static const String offlineData = '/profil/offline-data';
+  static const String offlineDataName = 'offline-data';
   static const String loyalty = '/profil/loyalty-settings';
   static const String loyaltyName = 'loyalty';
   static const String billing = '/profil/billing';

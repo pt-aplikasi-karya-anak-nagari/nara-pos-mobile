@@ -62,6 +62,11 @@ class ApiEndpoint {
       '/outlets/$outletId/products';
   static String outletBestSellers(String outletId) =>
       '/outlets/$outletId/products/best-sellers';
+  // Katalog di perangkat: daftar versi ringan + ambil produk yang berubah.
+  static String outletProductVersions(String outletId) =>
+      '/outlets/$outletId/products/versions';
+  static String outletProductsByIds(String outletId) =>
+      '/outlets/$outletId/products/by-ids';
   static String outletCustomers(String outletId) =>
       '/outlets/$outletId/customers';
   static String outletOrderTypes(String outletId) =>

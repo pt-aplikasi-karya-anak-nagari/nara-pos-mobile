@@ -54,6 +54,11 @@ class Product {
   double discountValue;
   String discountName;
   String? outletRemoteId;
+
+  /// Versi isi produk dari server (sidik data produk). Dibandingkan dengan
+  /// daftar versi terbaru untuk tahu apakah salinan lokal masih sama dengan
+  /// server. Kosong untuk data lama / produk custom.
+  String version;
   List<ProductVariant> variants;
 
   /// Stok yang BENAR-BENAR bisa dijual.
@@ -98,6 +103,7 @@ class Product {
     this.discountName = '',
     this.outletRemoteId,
     this.variants = const [],
+    this.version = '',
   });
 
   bool get hasDiscount => discountType != 'none' && discountValue > 0;
@@ -131,6 +137,7 @@ class Product {
     String? discountName,
     String? outletRemoteId,
     List<ProductVariant>? variants,
+    String? version,
   }) {
     return Product(
       remoteId: remoteId ?? this.remoteId,
@@ -160,6 +167,7 @@ class Product {
       discountName: discountName ?? this.discountName,
       outletRemoteId: outletRemoteId ?? this.outletRemoteId,
       variants: variants ?? this.variants,
+      version: version ?? this.version,
     );
   }
 
@@ -213,6 +221,7 @@ class Product {
       variants: (json['variants'] as List? ?? [])
           .map((v) => ProductVariant.fromJson(v))
           .toList(),
+      version: json['version'] as String? ?? '',
     );
   }
 
@@ -247,6 +256,7 @@ class Product {
         'discount_name': discountName,
         'outlet_id': outletRemoteId,
         'variants': variants.map((v) => v.toJson()).toList(),
+        'version': version,
       };
 
   double get discountedPrice {

@@ -275,11 +275,9 @@ final productsStreamProvider = FutureProvider<List<Product>>((ref) async {
     final products = await ref
         .watch(outletServiceProvider)
         .getProducts(outletId, categoryId: categoryId);
-    // Cache hanya saat fetch "semua kategori" supaya cache selalu lengkap
-    // untuk dipakai offline (filter kategori dilakukan lokal saat offline).
-    if (categoryId == null) {
-      await cache.replaceAll(outletId, products);
-    }
+    // Simpan per produk (tanpa membuang yang lain): respons ini hanya satu
+    // halaman, katalog lengkap diisi oleh ProductOfflineSync.
+    await cache.simpanBanyak(outletId, products);
     return products;
   } catch (e) {
     // Offline → layani dari cache. Filter kategori secara lokal supaya

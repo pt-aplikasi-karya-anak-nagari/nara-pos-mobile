@@ -32,6 +32,8 @@ class AppIcons {
   static const IconAsset payment = HugeIcons.strokeRoundedPayment01;
   static const IconAsset event = HugeIcons.strokeRoundedCalendar03;
   static const IconAsset download = HugeIcons.strokeRoundedDownload01;
+  static const IconAsset folder = HugeIcons.strokeRoundedFolder01;
+  static const IconAsset folderCheck = HugeIcons.strokeRoundedFolderCheck;
   static const IconAsset pdf = HugeIcons.strokeRoundedPdf01;
   static const IconAsset excel = HugeIcons.strokeRoundedXls01;
   static const IconAsset share = HugeIcons.strokeRoundedShare08;

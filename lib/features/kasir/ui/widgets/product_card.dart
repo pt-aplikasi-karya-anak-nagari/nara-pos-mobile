@@ -16,6 +16,7 @@ import '../../providers.dart';
 import 'size_picker_sheet.dart';
 import 'modifier_sheet.dart';
 import 'qty_button.dart';
+import '../../../../core/offline/product_cache.dart';
 import '../../../../core/outlet_scope.dart';
 import '../../../outlet/data/outlet_service.dart';
 import '../../../access_rights/domain/permission.dart';
@@ -43,6 +44,13 @@ class ProductCard extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Data terbaru dari katalog di perangkat (mis. stok/harga yang baru saja
+    // disinkron) menggantikan data yang dibawa grid, tanpa grid dimuat ulang.
+    final product =
+        ref.watch(
+          produkLokalProvider.select((m) => m[this.product.remoteId]),
+        ) ??
+        this.product;
     final qty = ref.watch(qtyProvider(product.remoteId));
     final mainCategory = ref.watch(selectedMainCategoryProvider);
     final density = ref.watch(gridDensityProvider);
@@ -78,6 +86,11 @@ class ProductCard extends HookConsumerWidget {
     // belum habis. Angka "N" diambil dari availablePortions (null → "sisa").
     final portions = effPortions;
     final lowPortions = effLowStock && !outOfStock;
+    // Sudah tersimpan untuk offline (folder pilihan, atau cache aplikasi bila
+    // folder belum dipilih) → ikon folder di pojok kanan-atas foto.
+    final tersimpanOffline = ref.watch(
+      produkTersimpanProvider.select((s) => s.contains(product.remoteId)),
+    );
     // Batas kuantitas juga dari stok yang bisa dijual. Memakai stok induk di
     // sini membuat produk bervarian mentok di 0 walau variannya penuh.
     final canAddMore = !outOfStock && (!tracksStock || qty < product.stokJual);
@@ -545,6 +558,30 @@ class ProductCard extends HookConsumerWidget {
                                     color: Colors.white,
                                     fontSize: 8,
                                     fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (tersimpanOffline)
+                            Positioned(
+                              right: 6,
+                              top: 6,
+                              child: Tooltip(
+                                message: 'Tersimpan untuk offline',
+                                child: Container(
+                                  padding: EdgeInsets.all(isCompact ? 3 : 4),
+                                  decoration: BoxDecoration(
+                                    color: kSuccess,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: HugeIcon(
+                                    icon: AppIcons.folderCheck,
+                                    color: Colors.white,
+                                    size: isCompact ? 10 : 12,
                                   ),
                                 ),
                               ),

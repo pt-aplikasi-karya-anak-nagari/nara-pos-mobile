@@ -209,6 +209,47 @@ class OutletService extends BaseApiService {
     );
   }
 
+  /// Versi seluruh produk aktif outlet: `{id: version}`. Respons kecil —
+  /// tanpa data produk — untuk memeriksa produk mana yang berubah.
+  ///
+  /// Null bila server belum punya endpoint ini (versi lama). Dipanggil dari
+  /// sinkron latar, jadi senyap: galat tidak memunculkan toast ke kasir.
+  Future<Map<String, String>?> getProductVersions(String outletId) async {
+    try {
+      final res = await dio.get<dynamic>(
+        ApiEndpoint.outletProductVersions(outletId),
+        options: Options(extra: {'senyap': true}),
+      );
+      final body = res.data;
+      final list = body is Map ? body['data'] : null;
+      return {
+        if (list is List)
+          for (final e in list)
+            if (e is Map && e['id'] != null)
+              e['id'].toString(): (e['version'] ?? '').toString(),
+      };
+    } on DioException catch (e) {
+      final kode = e.response?.statusCode;
+      if (kode == 404 || kode == 405) return null;
+      rethrow;
+    }
+  }
+
+  /// Produk lengkap untuk [ids] (maksimal 100 per panggilan). Senyap, sama
+  /// seperti [getProductVersions].
+  Future<List<Product>> getProductsByIds(
+    String outletId,
+    List<String> ids,
+  ) async {
+    final res = await dio.get<dynamic>(
+      ApiEndpoint.outletProductsByIds(outletId),
+      queryParameters: {'ids': ids.join(',')},
+      options: Options(extra: {'senyap': true}),
+    );
+    final body = res.data;
+    return _productListConverter(body is Map ? body['data'] ?? [] : []);
+  }
+
   static List<Product> _productListConverter(dynamic data) {
     // Toleran terhadap dua bentuk response: list polos atau envelope { items: [...] }.
     final List<dynamic> list = data is Map ? (data['items'] ?? []) : data;

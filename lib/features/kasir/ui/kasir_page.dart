@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,7 @@ import '../../../core/beep_service.dart';
 import '../../../core/format.dart';
 import '../../../core/i18n.dart';
 import '../../../core/offline/product_cache.dart';
+import '../../../core/offline/product_offline_sync.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../../core/outlet_scope.dart';
 import '../../../core/realtime/realtime_service.dart';
@@ -79,6 +81,31 @@ class KasirPage extends HookConsumerWidget {
     // ketersediaan produk (isInStock / availablePortions / oosReason) di
     // override provider, keyed by product_id. Kartu yang menampilkan produk
     // ini akan grey-out / pulih seketika di semua device yang mendengarkan.
+    // Katalog di perangkat: event yang bisa mengubah data produk (stok,
+    // ketersediaan, import massal) → periksa versi beberapa detik kemudian.
+    // Ditunda & digabung supaya deretan transaksi beruntun cukup memicu satu
+    // pemeriksaan.
+    final jadwalSinkron = useRef<Timer?>(null);
+    useEffect(
+      () =>
+          () => jadwalSinkron.value?.cancel(),
+      const [],
+    );
+    ref.listen(realtimeEventsProvider, (prev, next) {
+      final ev = next.asData?.value;
+      if (ev == null) return;
+      if (ev.type.startsWith('product.') ||
+          ev.type.startsWith('transaction.') ||
+          ev.type == 'order.paid' ||
+          ev.type == 'order.completed') {
+        jadwalSinkron.value?.cancel();
+        final sinkron = ref.read(sinkronProdukProvider);
+        jadwalSinkron.value = Timer(const Duration(seconds: 5), () {
+          unawaited(sinkron.jalankan(paksa: true));
+        });
+      }
+    });
+
     ref.listen(realtimeEventsProvider, (prev, next) {
       final ev = next.asData?.value;
       if (ev == null || ev.type != 'product.availability_changed') return;
@@ -173,6 +200,9 @@ class KasirPage extends HookConsumerWidget {
               final all = await ref
                   .read(outletServiceProvider)
                   .getBestSellerProducts(outletId);
+              unawaited(
+                ref.read(productCacheProvider).simpanBanyak(outletId, all),
+              );
               if (query.isEmpty) return all;
               final q = query.toLowerCase();
               return all
@@ -199,6 +229,25 @@ class KasirPage extends HookConsumerWidget {
           final catId = currentCategory == 'Semua'
               ? null
               : ref.read(selectedCategoryIdProvider);
+
+          // Katalog outlet sudah tersimpan utuh di perangkat → baca dari sini,
+          // TIDAK dari API. Perubahan di server dideteksi sinkron latar
+          // (daftar versi) dan hanya produk yang berubah yang diambil ulang.
+          final cache = ref.read(productCacheProvider);
+          if (await cache.katalogLengkap(outletId)) {
+            final q = query.toLowerCase();
+            final cocok = (await cache.getAll(outletId)).where((p) {
+              if (catId != null && p.categoryId != catId) return false;
+              if (q.isNotEmpty && !p.name.toLowerCase().contains(q)) {
+                return false;
+              }
+              return true;
+            }).toList();
+            final mulai = (pageKey - 1) * 10;
+            if (mulai >= cocok.length) return <Product>[];
+            return cocok.sublist(mulai, (mulai + 10).clamp(0, cocok.length));
+          }
+
           try {
             final products = await ref
                 .read(outletServiceProvider)
@@ -209,6 +258,11 @@ class KasirPage extends HookConsumerWidget {
                   page: pageKey,
                   limit: 10,
                 );
+            // Setiap produk yang berhasil diambil langsung disimpan untuk
+            // offline (SQLite + folder pilihan), tanpa menahan tampilan.
+            unawaited(
+              ref.read(productCacheProvider).simpanBanyak(outletId, products),
+            );
             return products;
           } catch (e) {
             // Offline: layani halaman pertama dari cache lokal dengan filter
@@ -240,6 +294,13 @@ class KasirPage extends HookConsumerWidget {
         },
       ),
     );
+
+    // Daftar produk lokal berubah (produk baru / dihapus) → muat ulang grid.
+    // Perubahan isi produk tampil langsung di kartunya tanpa memuat ulang,
+    // supaya posisi scroll kasir tidak meloncat setiap stok berubah.
+    ref.listen<int>(katalogLokalBerubahProvider, (_, _) {
+      pagingController.refresh();
+    });
 
     // Refresh pagination when filters change
     useEffect(
@@ -695,6 +756,9 @@ class KasirPage extends HookConsumerWidget {
         // Data segar dari server otoritatif → buang override auto-86 lama
         // supaya tak lagi menaungi status ketersediaan yang baru di-fetch.
         ref.read(productAvailabilityOverridesProvider.notifier).clear();
+        // Periksa versi katalog sekarang juga (tanpa menunggu jeda), supaya
+        // tarik-untuk-muat-ulang benar-benar membawa data terbaru.
+        await ref.read(sinkronProdukProvider).jalankan(paksa: true);
         // Refresh grid pagination — fetch ulang halaman pertama produk.
         pagingController.refresh();
         // Tahan indikator refresh sampai data kategori baru tiba supaya

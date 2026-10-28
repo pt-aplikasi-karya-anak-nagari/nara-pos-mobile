@@ -119,7 +119,10 @@ final dioProvider = Provider<Dio>((ref) {
             e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.sendTimeout ||
             e.type == DioExceptionType.receiveTimeout;
-        if (!authToastShown && !isConnError) {
+        // Permintaan latar (mis. sinkron katalog) menandai dirinya 'senyap':
+        // kegagalannya bukan sesuatu yang bisa ditindaklanjuti kasir.
+        final senyap = e.requestOptions.extra['senyap'] == true;
+        if (!authToastShown && !isConnError && !senyap) {
           _showErrorToast(
             _errorMessage(e),
             kondisiMenetap: kondisiMenetapDariRespons(

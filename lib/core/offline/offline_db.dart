@@ -21,12 +21,14 @@ class OfflineDb {
     final path = p.join(dir.path, 'nara_offline.db');
     final db = await openDatabase(
       path,
-      version: 4,
+      version: 6,
       onCreate: (db, version) async {
         await db.execute(_createPendingSales);
         await db.execute(_createCachedProducts);
         await db.execute(_createCachedEntities);
         await db.execute(_createPendingOps);
+        await db.execute(_createCachedProductItems);
+        await db.execute(_createCatalogState);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         // v1 → v2: tambah cache katalog produk untuk cold-start offline.
@@ -47,6 +49,26 @@ class OfflineDb {
         // tak tersentuh.
         if (oldVersion < 4) {
           await db.execute(_createPendingOps);
+        }
+        // v4 → v5: cache produk per baris (satu produk = satu baris), supaya
+        // halaman kasir yang memuat produk per halaman ikut mengisi cache.
+        // cached_products lama tetap dibaca sebagai cadangan.
+        if (oldVersion < 5) {
+          await db.execute(_createCachedProductItems);
+        }
+        // v5 → v6: flag per produk (versi + tersimpan) dan status katalog per
+        // outlet. Tabel v5 di atas sudah memakai DDL baru, jadi ALTER hanya
+        // untuk tabel yang benar-benar dibuat di v5.
+        if (oldVersion == 5) {
+          await db.execute(
+            "ALTER TABLE cached_product_items ADD COLUMN versi TEXT NOT NULL DEFAULT ''",
+          );
+          await db.execute(
+            'ALTER TABLE cached_product_items ADD COLUMN tersimpan INTEGER NOT NULL DEFAULT 1',
+          );
+        }
+        if (oldVersion < 6) {
+          await db.execute(_createCatalogState);
         }
       },
     );
@@ -72,6 +94,38 @@ class OfflineDb {
       outlet_id  TEXT PRIMARY KEY,
       payload    TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+  ''';
+
+  // Satu baris per produk per outlet. Menggantikan cached_products, yang
+  // menyimpan seluruh katalog dalam satu baris lewat satu kali fetch — dan
+  // karena API membatasi 10 produk per halaman, hanya berisi 10 produk.
+  static const _createCachedProductItems = '''
+    CREATE TABLE IF NOT EXISTS cached_product_items (
+      outlet_id  TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      payload    TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      versi      TEXT NOT NULL DEFAULT '',
+      tersimpan  INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (outlet_id, product_id)
+    )
+  ''';
+
+  // Flag tiap produk di cached_product_items:
+  //   versi     = versi server saat data produk ini disimpan
+  //   tersimpan = 1 → salinan lokal sama dengan server (tak perlu diambil)
+  //               0 → server punya versi lebih baru; diambil di sinkron
+  //                   berikutnya. Datanya tetap dipakai selama offline.
+  //
+  // Status katalog per outlet. lengkap_pada terisi setelah katalog pertama
+  // kali tersimpan utuh — sejak itu halaman kasir membaca dari perangkat,
+  // bukan dari API.
+  static const _createCatalogState = '''
+    CREATE TABLE IF NOT EXISTS catalog_state (
+      outlet_id    TEXT PRIMARY KEY,
+      lengkap_pada TEXT,
+      dicek_pada   TEXT
     )
   ''';
 

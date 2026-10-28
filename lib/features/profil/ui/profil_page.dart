@@ -26,6 +26,8 @@ import '../../printer/ui/printer_settings_page.dart';
 import '../../products/ui/category_list_page.dart';
 import '../../products/ui/product_list_page.dart';
 import '../../settings/ui/display_settings_page.dart';
+import '../../settings/ui/offline_data_page.dart';
+import '../../../core/offline/product_folder_store.dart';
 import '../../settings/ui/pin_settings_page.dart';
 import '../../settings/ui/tax_settings_page.dart';
 import '../../order_types/ui/order_type_list_page.dart';
@@ -436,6 +438,19 @@ class ProfilPage extends HookConsumerWidget {
                   ),
                   selected: selectedMenu == 'pin_settings',
                 ),
+                // Data offline — semua role: kasir yang paling butuh katalog
+                // produk saat internet putus. Android saja (folder pilihan).
+                if (ref.read(productFolderStoreProvider).didukung)
+                  _Tile(
+                    spec: _TileSpec(
+                      id: 'offline_data',
+                      icon: AppIcons.folder,
+                      label: 'Data Offline',
+                      onTap: () =>
+                          handleTap('offline_data', AppRoutes.offlineData),
+                    ),
+                    selected: selectedMenu == 'offline_data',
+                  ),
                 _LanguageTile(
                   isEn: isEn,
                   label: ref.t('profile.language'),
@@ -515,6 +530,8 @@ class ProfilPage extends HookConsumerWidget {
           return const DisplaySettingsPage();
         case 'pin_settings':
           return const PinSettingsPage();
+        case 'offline_data':
+          return const OfflineDataPage();
         case 'order_types':
           return const OrderTypeListPage();
         case 'tables':
