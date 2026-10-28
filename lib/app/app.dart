@@ -8,6 +8,7 @@ import 'package:sizer/sizer.dart';
 import 'package:toastification/toastification.dart';
 import '../shared/widgets/connectivity_banner.dart';
 import '../shared/widgets/pending_sync_banner.dart';
+import '../shared/widgets/antrian_offline_floating.dart';
 import '../core/format.dart';
 import '../core/i18n.dart';
 import '../core/realtime/realtime_service.dart';
@@ -83,11 +84,25 @@ class NaraApp extends ConsumerWidget {
                   child: _OrderRefreshListener(
                     child: _AutoPrintListener(
                       child: SubscriptionExpiryDialogListener(
-                        child: Column(
+                        child: Stack(
                           children: [
-                            const ConnectivityBanner(),
-                            const PendingSyncBanner(),
-                            Expanded(child: child!),
+                            Column(
+                              children: [
+                                const ConnectivityBanner(),
+                                // Hanya baris merah (gagal permanen); antrian
+                                // yang menunggu tampil di floating di bawah.
+                                const PendingSyncBanner(),
+                                Expanded(child: child!),
+                              ],
+                            ),
+                            // Status antrian transaksi offline & progres
+                            // pengirimannya, melayang di atas semua halaman.
+                            Positioned.fill(
+                              child: AntrianOfflineFloating(
+                                bukaSheetPulihkan: (ref) =>
+                                    bukaPemulihanLewat(rootNavigatorKey, ref),
+                              ),
+                            ),
                           ],
                         ),
                       ),

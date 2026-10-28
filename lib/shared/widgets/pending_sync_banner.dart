@@ -3,25 +3,23 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../app/theme.dart';
-import '../../core/connectivity_service.dart';
-import '../../core/offline/offline_sync_service.dart';
 import '../../core/offline/sale_outbox.dart';
 import '../../core/offline/shift_outbox.dart';
 import 'dead_letter_recovery_sheet.dart';
 
-/// Banner status sinkron offline. Dua baris terpisah:
-///  - KUNING: transaksi menunggu sinkron (akan terkirim otomatis saat online).
-///  - MERAH: transaksi GAGAL permanen (dead-letter) — perlu aksi owner
-///    (pulihkan/buang) supaya tidak hilang diam-diam.
-/// Sinkron otomatis tetap berjalan via [offlineAutoSyncProvider].
+/// Banner MERAH untuk data offline yang GAGAL permanen (dead-letter): transaksi
+/// dan catatan buka/tutup shift yang ditolak server — perlu aksi owner
+/// (pulihkan/buang) supaya tidak hilang diam-diam.
+///
+/// Antrian yang masih MENUNGGU dikirim (dan progres pengirimannya) tampil di
+/// [AntrianOfflineFloating]. Kegagalan permanen sengaja tetap di sini: banner
+/// tak bisa digeser menjauh atau ditutup, jadi tak bisa terlewat.
 class PendingSyncBanner extends ConsumerWidget {
   const PendingSyncBanner({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pending = ref.watch(pendingSyncCountProvider);
     final dead = ref.watch(deadLetterCountProvider);
-    final shiftPending = ref.watch(pendingShiftSyncCountProvider);
     // Dead-letter SHIFT dihitung sejak lama tapi tak pernah ditampilkan di
     // permukaan mana pun — satu-satunya yang membacanya adalah penyinkron, untuk
     // menyegarkan angkanya sendiri. Akibatnya catatan tutup shift yang ditolak
@@ -29,49 +27,15 @@ class PendingSyncBanner extends ConsumerWidget {
     // server, dan tak bisa dipulihkan dari aplikasi. Z-Report untuk shift itu
     // tak pernah terbit, dan rekonsiliasi kas hari itu tak bisa diselesaikan.
     final shiftDead = ref.watch(shiftDeadLetterCountProvider);
-    if (pending <= 0 && dead <= 0 && shiftPending <= 0 && shiftDead <= 0) {
+    if (dead <= 0 && shiftDead <= 0) {
       return const SizedBox.shrink();
     }
-
-    final online =
-        (ref.watch(connectivityProvider).value ?? ConnectionStatus.online) ==
-            ConnectionStatus.online;
 
     return SafeArea(
       bottom: false,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (shiftPending > 0)
-            _BannerRow(
-              color: kPrimary,
-              icon: Icons.point_of_sale_outlined,
-              text: '$shiftPending operasi shift menunggu sync'
-                  '${online ? '' : ' • menunggu koneksi'}',
-            ),
-          if (pending > 0)
-            _BannerRow(
-              color: kWarning,
-              icon: Icons.cloud_upload_outlined,
-              text: '$pending transaksi menunggu sinkron'
-                  '${online ? '' : ' • menunggu koneksi'}',
-              actionLabel: online ? 'Sinkronkan' : null,
-              onAction: online
-                  ? () async {
-                      final r =
-                          await ref.read(offlineSyncServiceProvider).sync();
-                      if (!context.mounted) return;
-                      final msg = r.synced > 0
-                          ? '${r.synced} transaksi tersinkron'
-                              '${r.failed > 0 ? ', ${r.failed} gagal' : ''}'
-                          : r.failed > 0
-                              ? '${r.failed} transaksi gagal — cek "Pulihkan"'
-                              : 'Belum ada yang bisa disinkronkan';
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text(msg)));
-                    }
-                  : null,
-            ),
           if (dead > 0)
             _BannerRow(
               color: kDanger,

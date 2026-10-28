@@ -43,6 +43,11 @@ import 'app_routes.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Navigator akar aplikasi. Untuk widget yang hidup DI LUAR navigator (mis.
+/// floating antrian offline di MaterialApp.builder) tapi perlu membuka
+/// dialog/sheet.
+GlobalKey<NavigatorState> get rootNavigatorKey => _rootNavigatorKey;
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,

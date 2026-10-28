@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../connectivity_service.dart';
@@ -32,11 +34,20 @@ class OfflineSyncService {
     _syncing = true;
     int synced = 0;
     int failed = 0;
+    int shiftTerkirim = 0;
     bool stoppedOffline = false;
     bool shiftChanged = false;
+    final progres = _ref.read(progresSinkronProvider.notifier);
     try {
       final shiftOutbox = _ref.read(shiftOutboxProvider);
       final shiftApi = _ref.read(shiftApiServiceProvider);
+
+      // Progres untuk tampilan floating: berapa yang akan dikirim di
+      // panggilan ini. Antrian kosong → tak ada progres yang ditampilkan.
+      final total =
+          await _ref.read(saleOutboxProvider).count() +
+          await shiftOutbox.count();
+      if (total > 0) progres.mulai(total);
 
       // Op yang SUDAH ditolak di panggilan sync ini. Putaran berikutnya
       // melewatinya: tanpa ini, satu op yang memang rusak akan menaikkan
@@ -114,6 +125,8 @@ class OfflineSyncService {
             await shiftOutbox.remove(op.localId);
             shiftChanged = true;
             adaKemajuan = true;
+            shiftTerkirim++;
+            progres.maju();
           } catch (e) {
             if (isOfflineError(e)) {
               stoppedOffline = true;
@@ -137,6 +150,7 @@ class OfflineSyncService {
             }
             ditolakDiPanggilanIni.add('shift:${op.localId}');
             await shiftOutbox.markError(op.localId, e.toString());
+            progres.maju(gagal: true);
             if (op.attempts + 1 >= ShiftOutbox.maxSyncAttempts &&
                 op.localShiftId != null) {
               await shiftOutbox.markDeadCascade(op.localShiftId!, e.toString());
@@ -159,10 +173,12 @@ class OfflineSyncService {
           for (final ps in await outbox.pending()) {
             if (ditolakDiPanggilanIni.contains('sale:${ps.localId}')) continue;
             try {
+              progres.sedangMengirim(ps.localId);
               await api.checkout(ps.outletId, ps.payload);
               await outbox.remove(ps.localId);
               synced++;
               adaKemajuan = true;
+              progres.maju();
             } catch (e) {
               if (isOfflineError(e)) {
                 stoppedOffline = true;
@@ -185,6 +201,7 @@ class OfflineSyncService {
               ditolakDiPanggilanIni.add('sale:${ps.localId}');
               await outbox.markError(ps.localId, e.toString());
               failed++;
+              progres.maju(gagal: true);
             }
           }
         }
@@ -251,6 +268,7 @@ class OfflineSyncService {
                   'Shift tujuan tidak ditemukan di server. Tutup shift ini '
                   'perlu dipulihkan manual.',
                 );
+                progres.maju(gagal: true);
                 continue;
               }
 
@@ -272,6 +290,8 @@ class OfflineSyncService {
               await shiftOutbox.remove(op.localId);
               shiftChanged = true;
               adaKemajuan = true;
+              shiftTerkirim++;
+              progres.maju();
             } catch (e) {
               if (isOfflineError(e)) {
                 stoppedOffline = true;
@@ -279,6 +299,7 @@ class OfflineSyncService {
               }
               ditolakDiPanggilanIni.add('shift:${op.localId}');
               await shiftOutbox.markError(op.localId, e.toString());
+              progres.maju(gagal: true);
             }
           }
         }
@@ -289,6 +310,11 @@ class OfflineSyncService {
       }
     } finally {
       _syncing = false;
+      progres.selesai(
+        terkirim: synced + shiftTerkirim,
+        gagal: failed,
+        terhentiOffline: stoppedOffline,
+      );
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
       // Transaksi yang menembus batas attempts jadi dead-letter → refresh
       // indikator merah supaya owner sadar ada yang gagal permanen.
@@ -337,6 +363,101 @@ class OfflineSyncService {
   }
 }
 
+/// Progres pengiriman antrian offline, untuk tampilan floating.
+class ProgresSinkron {
+  const ProgresSinkron({
+    this.berjalan = false,
+    this.total = 0,
+    this.terkirim = 0,
+    this.gagal = 0,
+    this.sedangDikirim,
+    this.selesaiPada,
+    this.terkirimTerakhir = 0,
+    this.gagalTerakhir = 0,
+    this.terhentiOffline = false,
+  });
+
+  /// Sedang mengirim antrian sekarang.
+  final bool berjalan;
+
+  /// Jumlah transaksi + operasi shift di antrian saat pengiriman dimulai.
+  final int total;
+  final int terkirim;
+  final int gagal;
+
+  /// local_id transaksi yang sedang dikirim (untuk menandainya di daftar).
+  final String? sedangDikirim;
+
+  /// Hasil pengiriman terakhir yang sudah selesai.
+  final DateTime? selesaiPada;
+  final int terkirimTerakhir;
+  final int gagalTerakhir;
+  final bool terhentiOffline;
+
+  int get diproses => terkirim + gagal;
+  double get rasio => total <= 0 ? 0 : (diproses / total).clamp(0, 1);
+}
+
+class ProgresSinkronNotifier extends Notifier<ProgresSinkron> {
+  @override
+  ProgresSinkron build() => const ProgresSinkron();
+
+  void mulai(int total) {
+    state = ProgresSinkron(
+      berjalan: true,
+      total: total,
+      selesaiPada: state.selesaiPada,
+      terkirimTerakhir: state.terkirimTerakhir,
+      gagalTerakhir: state.gagalTerakhir,
+    );
+  }
+
+  void sedangMengirim(String localId) {
+    if (!state.berjalan) return;
+    state = _salin(sedangDikirim: localId);
+  }
+
+  void maju({bool gagal = false}) {
+    if (!state.berjalan) return;
+    state = _salin(
+      terkirim: state.terkirim + (gagal ? 0 : 1),
+      gagal: state.gagal + (gagal ? 1 : 0),
+    );
+  }
+
+  void selesai({
+    required int terkirim,
+    required int gagal,
+    required bool terhentiOffline,
+  }) {
+    final adaHasil = terkirim > 0 || gagal > 0;
+    state = ProgresSinkron(
+      selesaiPada: adaHasil ? DateTime.now() : state.selesaiPada,
+      terkirimTerakhir: adaHasil ? terkirim : state.terkirimTerakhir,
+      gagalTerakhir: adaHasil ? gagal : state.gagalTerakhir,
+      terhentiOffline: terhentiOffline,
+    );
+  }
+
+  ProgresSinkron _salin({int? terkirim, int? gagal, String? sedangDikirim}) {
+    return ProgresSinkron(
+      berjalan: state.berjalan,
+      total: state.total,
+      terkirim: terkirim ?? state.terkirim,
+      gagal: gagal ?? state.gagal,
+      sedangDikirim: sedangDikirim ?? state.sedangDikirim,
+      selesaiPada: state.selesaiPada,
+      terkirimTerakhir: state.terkirimTerakhir,
+      gagalTerakhir: state.gagalTerakhir,
+    );
+  }
+}
+
+final progresSinkronProvider =
+    NotifierProvider<ProgresSinkronNotifier, ProgresSinkron>(
+      ProgresSinkronNotifier.new,
+    );
+
 final offlineSyncServiceProvider = Provider<OfflineSyncService>(
   (ref) => OfflineSyncService(ref),
 );
@@ -354,4 +475,33 @@ final offlineAutoSyncProvider = Provider<void>((ref) {
       ref.read(offlineSyncServiceProvider).sync();
     }
   });
+
+  // Coba ulang berkala selama antrian belum kosong.
+  //
+  // # KENAPA PERLU
+  //
+  // Pemicu di atas hanya jalan saat status jaringan BERUBAH menjadi online.
+  // Bila Wi-Fi tetap tersambung tapi server tak terjangkau (internet router
+  // putus, server sedang restart), statusnya tak pernah berubah — transaksi
+  // yang diantrekan selama itu tertahan sampai jaringan kebetulan putus lalu
+  // tersambung lagi, bisa berjam-jam.
+  //
+  // Bila percobaan terakhir DITOLAK server (bukan gagal koneksi), jedanya
+  // dipanjangkan: setiap penolakan menaikkan hitungan percobaan transaksi itu,
+  // dan dengan jeda pendek lima percobaannya habis dalam beberapa menit
+  // karena gangguan server yang sebentar saja.
+  var jedaSampai = DateTime.fromMillisecondsSinceEpoch(0);
+  final timer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    if (ref.read(isOfflineProvider)) return;
+    if (DateTime.now().isBefore(jedaSampai)) return;
+    final ada =
+        ref.read(pendingSyncCountProvider) > 0 ||
+        ref.read(pendingShiftSyncCountProvider) > 0;
+    if (!ada) return;
+    final hasil = await ref.read(offlineSyncServiceProvider).sync();
+    jedaSampai = hasil.failed > 0 && hasil.synced == 0
+        ? DateTime.now().add(const Duration(minutes: 5))
+        : DateTime.fromMillisecondsSinceEpoch(0);
+  });
+  ref.onDispose(timer.cancel);
 });
