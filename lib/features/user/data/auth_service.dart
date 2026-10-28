@@ -66,18 +66,13 @@ class AuthNotifier extends Notifier<AuthState> {
 
   /// Langkah 1 registrasi: minta backend mengirim OTP ke email + WhatsApp.
   /// Return `null` bila sukses, atau pesan error dari backend (mis. email/
-  /// username/phone sudah dipakai) untuk ditampilkan di form.
+  /// phone sudah dipakai) untuk ditampilkan di form.
   Future<String?> requestRegistrationOtp({
     required String email,
     required String phone,
-    required String username,
   }) async {
     try {
-      await _authApi.requestRegistrationOtp(
-        email: email,
-        phone: phone,
-        username: username,
-      );
+      await _authApi.requestRegistrationOtp(email: email, phone: phone);
       return null;
     } catch (e) {
       return e.toString();
@@ -85,7 +80,6 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<String?> register({
-    required String username,
     required String fullName,
     required String email,
     required String phone,
@@ -99,7 +93,6 @@ class AuthNotifier extends Notifier<AuthState> {
   }) async {
     try {
       final data = await _authApi.register(
-        username: username,
         fullName: fullName,
         email: email,
         phone: phone,

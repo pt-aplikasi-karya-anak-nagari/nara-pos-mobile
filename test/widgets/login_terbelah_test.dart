@@ -58,7 +58,6 @@ class _AuthPalsu extends AuthNotifier {
       StaffCandidate(
         id: 'staf-1',
         fullName: 'putra',
-        username: 'putra',
         role: 'Kasir',
         hasPin: true,
       ),

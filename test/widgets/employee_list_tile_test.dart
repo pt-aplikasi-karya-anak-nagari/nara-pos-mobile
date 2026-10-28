@@ -21,9 +21,8 @@ import 'package:nara_pos_mobile/features/user/ui/widgets/employee_list_tile.dart
 // dimulai dari widget yang tak butuh provider maupun plugin, supaya polanya
 // bisa diikuti tanpa memasang perancah apa pun.
 
-User _karyawan({required String username, String nama = 'putra'}) => User(
+User _karyawan({String nama = 'putra'}) => User(
   name: nama,
-  username: username,
   passwordHash: '',
   roleIndex: UserRole.cashier.index,
 );
@@ -32,11 +31,11 @@ Widget _bungkus(Widget anak) =>
     MaterialApp(home: Scaffold(body: ListView(children: [anak])));
 
 void main() {
-  testWidgets('username kosong → hanya nama outlet, tanpa "@"', (tester) async {
+  testWidgets('baris kedua hanya nama outlet, tanpa "@"', (tester) async {
     await tester.pumpWidget(
       _bungkus(
         EmployeeListTile(
-          employee: _karyawan(username: ''),
+          employee: _karyawan(),
           outletName: 'Cabang Utama',
         ),
       ),
@@ -50,27 +49,11 @@ void main() {
     expect(find.textContaining('•'), findsNothing);
   });
 
-  testWidgets('username ada → "@nama • outlet" tetap utuh', (tester) async {
-    // Sisi sebaliknya. Perbaikan yang menyembunyikan SEMUA username sama
-    // merusaknya dengan bug aslinya — owner masih punya username, dan bagi
-    // mereka baris itu memang informasi.
+  testWidgets('nama tetap tampil', (tester) async {
     await tester.pumpWidget(
       _bungkus(
         EmployeeListTile(
-          employee: _karyawan(username: 'budi', nama: 'Budi'),
-          outletName: 'Cabang Utama',
-        ),
-      ),
-    );
-
-    expect(find.text('@budi • Cabang Utama'), findsOneWidget);
-  });
-
-  testWidgets('nama tetap tampil apa pun keadaan username-nya', (tester) async {
-    await tester.pumpWidget(
-      _bungkus(
-        EmployeeListTile(
-          employee: _karyawan(username: ''),
+          employee: _karyawan(),
           outletName: 'Cabang Utama',
         ),
       ),
@@ -89,7 +72,7 @@ void main() {
     await tester.pumpWidget(
       _bungkus(
         EmployeeListTile(
-          employee: _karyawan(username: '', nama: ''),
+          employee: _karyawan(nama: ''),
           outletName: 'Cabang Utama',
         ),
       ),

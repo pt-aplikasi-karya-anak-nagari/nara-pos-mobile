@@ -90,7 +90,6 @@ class _AuthPalsu extends AuthNotifier {
           id: 'E1',
           fullName: 'putra',
           role: 'Cashier',
-          username: '',
           hasPin: stafPunyaPin,
         ),
       ],

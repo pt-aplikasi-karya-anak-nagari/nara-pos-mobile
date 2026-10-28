@@ -66,7 +66,7 @@ class EmployeeFormPage extends HookConsumerWidget {
         return;
       }
 
-      // Tanpa username & password.
+      // Tanpa email & password.
       //
       // Karyawan tak punya keduanya sejak dipisah ke tabel `employees`
       // (Fase 5): mereka masuk lewat sesi kasir atas persetujuan Pemilik,
@@ -183,7 +183,7 @@ class EmployeeFormPage extends HookConsumerWidget {
             decoration: InputDecoration(labelText: ref.t('employee.name')),
           ),
           const Gap(12),
-          // Pengganti kolom username & password: keduanya dibuang karena
+          // Pengganti kolom email & password: keduanya dibuang karena
           // karyawan memang tak punya keduanya. Diberi tahu terang-terangan,
           // bukan dibiarkan jadi pertanyaan "kok tidak ada isian login-nya".
           Container(
@@ -193,7 +193,7 @@ class EmployeeFormPage extends HookConsumerWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              'Karyawan tidak punya username maupun password. '
+              'Karyawan tidak punya email maupun password. '
               'Kehadirannya di kasir disahkan Pemilik lewat kode OTP '
               'tiap kali mulai bertugas.',
               style: TextStyle(fontSize: 12, color: kTextMid),

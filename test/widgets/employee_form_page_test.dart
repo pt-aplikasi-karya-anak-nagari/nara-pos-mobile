@@ -118,9 +118,9 @@ void main() {
     await _buka(tester);
 
     // Menghapus kolomnya saja tak cukup. Pemilik yang terbiasa mengisi
-    // username akan mengira formnya rusak atau belum selesai dimuat.
+    // kredensial akan mengira formnya rusak atau belum selesai dimuat.
     expect(
-      find.textContaining('tidak punya username maupun password'),
+      find.textContaining('tidak punya email maupun password'),
       findsOneWidget,
     );
   });

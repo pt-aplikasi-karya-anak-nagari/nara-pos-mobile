@@ -40,23 +40,21 @@ class AuthApiService extends BaseApiService {
 
   /// Minta OTP registrasi dikirim ke [email] (via email) DAN [phone] (via
   /// WhatsApp). Dipakai pada langkah 1 form daftar sebelum submit akun.
-  /// Backend menolak (409) bila email/username/phone sudah dipakai, atau
+  /// Backend menolak (409) bila email/phone sudah dipakai, atau
   /// (400) bila validasi gagal — pesannya di-surface lewat [post] yang
   /// melempar String message pada respons non-sukses.
   Future<void> requestRegistrationOtp({
     required String email,
     required String phone,
-    required String username,
   }) async {
     await post<dynamic>(
       ApiEndpoint.registerRequestOtp,
-      data: {'email': email, 'phone': phone, 'username': username},
+      data: {'email': email, 'phone': phone},
       converter: (res) => res,
     );
   }
 
   Future<Map<String, dynamic>> register({
-    required String username,
     required String fullName,
     required String email,
     required String phone,
@@ -71,7 +69,6 @@ class AuthApiService extends BaseApiService {
     return post<Map<String, dynamic>>(
       ApiEndpoint.register,
       data: {
-        'username': username,
         'email': email,
         'full_name': fullName,
         'phone': phone,
@@ -312,21 +309,18 @@ class StaffCandidate {
   const StaffCandidate({
     required this.id,
     required this.fullName,
-    required this.username,
     required this.role,
     required this.hasPin,
   });
 
   final String id;
   final String fullName;
-  final String username;
   final String role;
   final bool hasPin;
 
   factory StaffCandidate.fromJson(Map<String, dynamic> j) => StaffCandidate(
     id: j['id']?.toString() ?? '',
     fullName: j['full_name']?.toString() ?? '',
-    username: j['username']?.toString() ?? '',
     role: j['role']?.toString() ?? '',
     hasPin: j['has_pin'] == true,
   );

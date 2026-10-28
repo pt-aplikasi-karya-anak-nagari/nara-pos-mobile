@@ -15,34 +15,14 @@ import 'package:nara_pos_mobile/features/user/domain/user_role.dart';
 // cuma jadi null atau string kosong, dan baru kelihatan di layar.
 
 void main() {
-  group('username & email sesudah staf dipisah ke tabel employees', () {
-    test('username yang tak dikirim server jadi string KOSONG, bukan null', () {
-      final u = User.fromJson({'id': 'E1', 'full_name': 'putra'});
-
-      // Inilah akar bug "@" menggantung (commit 3fbeb7e). Karyawan tak lagi
-      // punya username sejak Fase 5, jadi field-nya absen. Nilainya "" —
-      // artinya penjaga gaya `username ?? '-'` TIDAK PERNAH menyala, karena
-      // "" bukan null. Yang benar adalah memeriksa isEmpty.
-      expect(u.username, '');
-      expect(u.username, isNotNull);
-    });
-
-    test('username string kosong dari server tetap string kosong', () {
-      final u = User.fromJson({'id': 'E1', 'full_name': 'putra', 'username': ''});
-      expect(u.username, '');
-    });
-
-    test('username yang MEMANG ada tetap terbawa utuh', () {
-      // Sisi sebaliknya. Owner masih punya username; perbaikan yang
-      // mengosongkan semua username sama merusaknya dengan bug aslinya.
+  group('username sudah dihapus', () {
+    test('kunci username dari server lama diabaikan, tak ikut tersimpan', () {
       final u = User.fromJson({'id': 'U1', 'username': 'budi', 'name': 'Budi'});
-      expect(u.username, 'budi');
+      expect(u.name, 'Budi');
+      expect(u.toJson().containsKey('username'), isFalse);
     });
 
-    test('email tetap null bila absen — beda dari username', () {
-      // Sengaja tak seragam: email bertipe String? dan memang null, sedangkan
-      // username String non-null. Kode UI harus memakai penjaga yang berbeda
-      // untuk keduanya, jadi bedanya dikunci di sini.
+    test('email tetap null bila absen', () {
       final u = User.fromJson({'id': 'E1', 'full_name': 'putra'});
       expect(u.email, isNull);
     });
@@ -170,7 +150,6 @@ void main() {
       for (final peran in UserRole.values) {
         final asli = User(
           name: 'Uji',
-          username: 'uji',
           passwordHash: '',
           roleIndex: peran.index,
         );
@@ -190,7 +169,6 @@ void main() {
       // kasir — tanpa error apa pun.
       final json = User(
         name: 'Uji',
-        username: 'uji',
         passwordHash: '',
         roleIndex: UserRole.owner.index,
       ).toJson();
@@ -202,18 +180,11 @@ void main() {
     test('daftar outlet bertahan melewati penyimpanan', () {
       final asli = User(
         name: 'Uji',
-        username: 'uji',
         passwordHash: '',
         roleIndex: UserRole.cashier.index,
         outletRemoteIds: const ['OUT1', 'OUT2'],
       );
       expect(User.fromJson(asli.toJson()).outletRemoteIds, ['OUT1', 'OUT2']);
-    });
-
-    test('username kosong bertahan kosong, tidak berubah jadi null', () {
-      final asli = User(name: 'putra', username: '', passwordHash: '');
-      final pulih = User.fromJson(asli.toJson());
-      expect(pulih.username, '');
     });
 
     test('roleName bertahan lewat penyimpanan — dan lewat kunci role_name', () {
@@ -223,7 +194,6 @@ void main() {
       // perangkap yang dijaga tes di atas.
       final asli = User(
         name: 'putra',
-        username: '',
         passwordHash: '',
         roleName: 'Barista',
         roleIndex: UserRole.cashier.index,

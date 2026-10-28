@@ -135,7 +135,7 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
         return;
       }
 
-      // Tanpa username & password — karyawan tak punya keduanya sejak
+      // Tanpa email & password — karyawan tak punya keduanya sejak
       // dipisah ke tabel `employees` (Fase 5), dan server MEMBUANG kedua field
       // itu diam-diam. Lihat employee_form_page.dart untuk alasan lengkapnya.
       //
@@ -263,7 +263,7 @@ class _EmployeeDetailPanel extends HookConsumerWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          'Karyawan tidak punya username maupun password. '
+                          'Karyawan tidak punya email maupun password. '
                           'Kehadirannya di kasir disahkan Pemilik lewat kode '
                           'OTP tiap kali mulai bertugas.',
                           style: TextStyle(fontSize: 12, color: kTextMid),

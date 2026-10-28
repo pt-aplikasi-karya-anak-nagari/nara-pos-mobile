@@ -3,7 +3,6 @@ import 'user_role.dart';
 class User {
   String? remoteId;
   String name;
-  String username;
   String? email;
   String? phone;
   String passwordHash;
@@ -28,7 +27,6 @@ class User {
   User({
     this.remoteId,
     required this.name,
-    required this.username,
     this.email,
     this.phone,
     required this.passwordHash,
@@ -80,7 +78,6 @@ class User {
     return User(
       remoteId: json['id']?.toString(),
       name: json['full_name'] as String? ?? json['name'] as String? ?? '',
-      username: json['username'] as String? ?? '',
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       passwordHash: '',
@@ -114,7 +111,6 @@ class User {
     return {
       'id': remoteId,
       'full_name': name,
-      'username': username,
       'role_name': roleName,
       'email': email,
       'phone': phone,
