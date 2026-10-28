@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../network/dio_client.dart';
 import '../outlet_scope.dart';
+import '../../features/user/data/auth_service.dart';
 
 /// Event realtime dari backend — disiarkan lewat NATS, didorong ke klien via
 /// gateway Server-Sent Events. Payload spesifik domain ada di [data].
@@ -92,6 +93,18 @@ class RealtimeService {
           }
           // baris "event:" diabaikan — type sudah ada di dalam data JSON
         }
+      } on DioException catch (e) {
+        // 401/403 = sesi tak berlaku lagi (interceptor dio SUDAH mencoba
+        // refresh token sekali). Mengulang dengan token yang sama hanya
+        // menghasilkan penolakan yang sama tiap 30 detik — log penuh
+        // "token tidak valid" dan toast berulang. Berhenti; provider
+        // menyambung lagi sendiri begitu ada login baru.
+        final kode = e.response?.statusCode;
+        if (kode == 401 || kode == 403) {
+          onStatus?.call(false);
+          return;
+        }
+        /* koneksi gagal/putus → reconnect setelah jeda */
       } catch (_) {
         /* koneksi gagal/putus → reconnect setelah jeda */
       }
@@ -125,7 +138,17 @@ final realtimeConnectedProvider = NotifierProvider<RealtimeConnected, bool>(
 /// otomatis untuk menghemat koneksi.
 final realtimeEventsProvider = StreamProvider.autoDispose<RealtimeEvent>((ref) {
   final outletId = ref.watch(activeOutletIdProvider);
-  if (outletId == null || outletId.isEmpty) {
+  // Tanpa sesi login tak ada yang perlu disambungkan. Mengamati user juga
+  // membuat stream dibangun ulang setelah login baru — termasuk setelah
+  // stream sebelumnya berhenti karena 401.
+  // Identitas sesi, BUKAN token: token berganti tiap refresh (15 menit) dan
+  // akan memutus-sambung stream tanpa perlu.
+  final userId = ref.watch(
+    authProvider.select(
+      (s) => s.isAuthenticated ? (s.user?.remoteId ?? s.user?.email) : null,
+    ),
+  );
+  if (outletId == null || outletId.isEmpty || userId == null) {
     return const Stream<RealtimeEvent>.empty();
   }
   // Saat provider ini di-dispose (tak ada listener), tandai offline. Callback
