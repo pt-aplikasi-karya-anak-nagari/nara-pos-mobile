@@ -44,6 +44,29 @@ class EntityCache<T> {
     );
   }
 
+  /// Tulis banyak baris sekaligus dalam satu batch: kunci → isi. Dipakai
+  /// saat menyimpan data untuk ratusan kunci (mis. add-on per produk) —
+  /// [replaceAll] satu per satu akan membuka ratusan transaksi SQLite.
+  Future<void> replaceMany(Map<String, List<T>> perKunci) async {
+    if (perKunci.isEmpty) return;
+    final db = await OfflineDb.instance.database;
+    final kini = DateTime.now().toIso8601String();
+    final batch = db.batch();
+    perKunci.forEach((kunci, items) {
+      batch.insert(
+        'cached_entities',
+        {
+          'entity': entityKey,
+          'outlet_id': kunci,
+          'payload': jsonEncode(items.map(toJson).toList()),
+          'updated_at': kini,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+    await batch.commit(noResult: true);
+  }
+
   Future<List<T>> getAll(String outletId) async {
     final db = await OfflineDb.instance.database;
     final rows = await db.query(

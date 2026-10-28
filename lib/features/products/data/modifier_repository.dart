@@ -93,6 +93,37 @@ class ModifierRepository {
     return (grup: grup, dariSalinan: dariSalinan);
   }
 
+  /// Unduh add-on SELURUH produk outlet dan simpan per produk, untuk kasir
+  /// offline — termasuk produk yang belum pernah dibuka sambil online.
+  ///
+  /// [idProdukLokal] = produk di katalog perangkat. Yang tak punya add-on lagi
+  /// di server disimpan sebagai daftar kosong, supaya add-on yang sudah dilepas
+  /// dari produk tidak terus muncul saat offline.
+  ///
+  /// Mengembalikan jumlah produk yang punya add-on.
+  Future<int> simpanSemuaUntukOffline(
+    String outletId, {
+    Iterable<String> idProdukLokal = const [],
+  }) async {
+    final semua = await _svc.getAllProductModifierGroups(outletId);
+    await _cacheGrupProduk.replaceMany(
+      susunSalinanAddOn(outletId, semua, idProdukLokal: idProdukLokal),
+    );
+    return semua.length;
+  }
+
+  /// Baris salinan add-on per produk dari jawaban server: kunci
+  /// `outletId/productId` — sama dengan yang dibaca [groupsForProduct] saat
+  /// offline. Produk lokal yang tak ada di [semua] mendapat daftar kosong.
+  static Map<String, List<Map<String, dynamic>>> susunSalinanAddOn(
+    String outletId,
+    Map<String, List<Map<String, dynamic>>> semua, {
+    Iterable<String> idProdukLokal = const [],
+  }) => {
+    for (final id in idProdukLokal) '$outletId/$id': const [],
+    for (final e in semua.entries) '$outletId/${e.key}': e.value,
+  };
+
   Future<List<Map<String, dynamic>>> _bacaSalinan(String kunci) async {
     try {
       return await _cacheGrupProduk.getAll(kunci);

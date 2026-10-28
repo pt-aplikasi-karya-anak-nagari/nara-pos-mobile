@@ -129,6 +129,9 @@ class ApiEndpoint {
   // PUT  → set/replace grup untuk produk (body {group_ids: [...]}).
   static String productModifierGroups(String outletId, String productId) =>
       '/outlets/$outletId/products/$productId/modifier-groups';
+  // Add-on SELURUH produk outlet sekaligus — disimpan untuk kasir offline.
+  static String outletProductModifierGroups(String outletId) =>
+      '/outlets/$outletId/product-modifier-groups';
 
   // C4 (manajemen): CRUD grup modifier per-outlet — padanan menu
   // "Modifier & Add-on" di dashboard web.

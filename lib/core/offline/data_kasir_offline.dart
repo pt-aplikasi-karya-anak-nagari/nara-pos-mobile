@@ -5,15 +5,18 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../features/order_types/data/order_type_repository.dart';
 import '../../features/order_types/domain/order_type.dart';
 import '../../features/payments/data/payment_method_repository.dart';
+import '../../features/products/data/modifier_repository.dart';
 import '../../features/payments/domain/payment_method.dart';
 import '../../features/tables/data/table_repository.dart';
 import '../../features/user/data/auth_service.dart';
 import '../connectivity_service.dart';
 import '../outlet_scope.dart';
+import 'product_cache.dart';
 
 // Data yang WAJIB ada supaya kasir bisa menyelesaikan transaksi saat offline:
 // metode bayar dan tipe pesanan (tombol "Konfirmasi Pembayaran" mensyaratkan
-// keduanya), plus meja untuk pesanan Dine In.
+// keduanya), meja untuk pesanan Dine In, dan add-on (ukuran, topping) seluruh
+// produk.
 //
 // # MASALAH YANG DISELESAIKAN
 //
@@ -110,6 +113,20 @@ final dataKasirOfflineProvider = Provider<void>((ref) {
         coba(() => ref.read(orderTypeRepositoryProvider).getAll(outletId)),
         coba(() => ref.read(tableRepositoryProvider).getTables(outletId)),
         coba(() => ref.read(tableRepositoryProvider).getGroups(outletId)),
+        // Add-on seluruh produk: tanpa ini, sheet pilihan add-on tak muncul
+        // saat offline untuk produk yang belum pernah dibuka sambil online.
+        coba(() async {
+          final produk = await ref.read(productCacheProvider).getAll(outletId);
+          return ref
+              .read(modifierRepositoryProvider)
+              .simpanSemuaUntukOffline(
+                outletId,
+                idProdukLokal: [
+                  for (final p in produk)
+                    if (p.remoteId != null) p.remoteId!,
+                ],
+              );
+        }),
       ]);
 
       // Layar yang sudah terlanjur memuat daftar kosong / galat (mis. dibuka

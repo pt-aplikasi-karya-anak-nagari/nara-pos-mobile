@@ -521,6 +521,32 @@ class OutletService extends BaseApiService {
     );
   }
 
+  /// Add-on SELURUH produk outlet sekaligus: productId → daftar grup (JSON
+  /// mentah, bentuk sama dengan [getProductModifierGroups]). Untuk disimpan
+  /// supaya pilihan add-on tetap muncul saat kasir offline. Senyap: dipanggil
+  /// di latar, galatnya tak perlu jadi toast.
+  Future<Map<String, List<Map<String, dynamic>>>>
+  getAllProductModifierGroups(String outletId) async {
+    final res = await dio.get<dynamic>(
+      ApiEndpoint.outletProductModifierGroups(outletId),
+      options: Options(extra: {'senyap': true}),
+    );
+    final body = res.data;
+    final data = body is Map ? body['data'] : null;
+    final hasil = <String, List<Map<String, dynamic>>>{};
+    if (data is Map) {
+      data.forEach((pid, grup) {
+        if (grup is List) {
+          hasil[pid.toString()] = [
+            for (final g in grup)
+              if (g is Map) Map<String, dynamic>.from(g),
+          ];
+        }
+      });
+    }
+    return hasil;
+  }
+
   // C4 (manajemen): daftar SEMUA grup modifier milik outlet — untuk halaman
   // "Modifier & Add-on" dan dialog attach-ke-produk.
   Future<List<Map<String, dynamic>>> listModifierGroups(String outletId) async {
