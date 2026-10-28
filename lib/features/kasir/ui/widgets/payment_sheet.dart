@@ -2,13 +2,13 @@ import 'dart:io';
 
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/offline/data_kasir_offline.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:gap/gap.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../order_types/data/order_type_repository.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/image_crop.dart';
 import '../../../../core/app_icons.dart';
@@ -128,12 +128,9 @@ class PaymentSheet extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final grossTotal = ref.watch(totalProvider);
-    final methodsAsync = ref.watch(paymentMethodsFutureProvider);
-    final methods = methodsAsync.when(
-      data: (list) => list.where((m) => m.isActive).toList(),
-      loading: () => <PaymentMethod>[],
-      error: (_, _) => <PaymentMethod>[],
-    );
+    // Metode bayar aktif; saat offline tanpa salinan → Tunai bawaan, supaya
+    // transaksi offline tetap bisa diselesaikan (lihat data_kasir_offline).
+    final methods = ref.watch(metodeBayarKasirProvider);
 
     // Add "Nanti" as a virtual payment method
     final allMethods = [
@@ -143,7 +140,7 @@ class PaymentSheet extends HookConsumerWidget {
 
     final selectedIndex = useState<int?>(null);
 
-    final orderTypes = ref.watch(orderTypesFutureProvider).value ?? [];
+    final orderTypes = ref.watch(tipePesananKasirProvider);
     final activeOrderType = ref.watch(activeOrderTypeProvider);
 
     final cashAmount = useState(0.0);

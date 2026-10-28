@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../products/domain/category.dart';
 import '../../core/outlet_scope.dart';
 import '../../core/offline/product_cache.dart';
+import '../../core/offline/data_kasir_offline.dart';
 import '../../core/offline/sale_outbox.dart';
 
 import '../products/domain/product.dart';
 import '../order_types/domain/order_type.dart';
-import '../order_types/data/order_type_repository.dart';
 import '../user/data/auth_service.dart';
 import '../customers/domain/customer.dart';
 import '../tables/domain/pos_table.dart';
@@ -376,17 +376,15 @@ final gridDensityProvider = NotifierProvider<GridDensityNotifier, int>(
 class ActiveOrderTypeNotifier extends Notifier<OrderType?> {
   @override
   OrderType? build() {
-    final orderTypesAsync = ref.watch(orderTypesFutureProvider);
-    return orderTypesAsync.whenOrNull(
-      data: (list) {
-        if (list.isEmpty) return null;
-        try {
-          return list.firstWhere((ot) => ot.isDefault);
-        } catch (_) {
-          return list.first;
-        }
-      },
-    );
+    // tipePesananKasirProvider: data outlet, atau tipe bawaan saat offline
+    // tanpa salinan — supaya tombol konfirmasi bayar tetap bisa aktif.
+    final list = ref.watch(tipePesananKasirProvider);
+    if (list.isEmpty) return null;
+    try {
+      return list.firstWhere((ot) => ot.isDefault);
+    } catch (_) {
+      return list.first;
+    }
   }
 
   void set(OrderType? ot) => state = ot;

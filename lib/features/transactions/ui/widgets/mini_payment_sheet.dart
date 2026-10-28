@@ -6,10 +6,10 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/offline/data_kasir_offline.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/image_crop.dart';
 import '../../../../core/format.dart';
-import '../../../payments/data/payment_method_repository.dart';
 import '../../../payments/domain/payment_method.dart';
 import '../../data/transaction_repository.dart';
 
@@ -46,12 +46,7 @@ class MiniPaymentSheet extends HookConsumerWidget {
     final proofUrl = useState<String?>(null);
     final uploading = useState(false);
 
-    final methodsAsync = ref.watch(paymentMethodsFutureProvider);
-    final methods = methodsAsync.when(
-      data: (list) => list.where((m) => m.isActive).toList(),
-      loading: () => <PaymentMethod>[],
-      error: (_, _) => <PaymentMethod>[],
-    );
+    final methods = ref.watch(metodeBayarKasirProvider);
 
     // Cek apakah metode terpilih memerlukan bukti pembayaran (non-cash).
     final selectedPM = methods.firstWhere(

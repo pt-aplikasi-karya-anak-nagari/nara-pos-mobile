@@ -14,6 +14,7 @@ import '../core/i18n.dart';
 import '../core/realtime/realtime_service.dart';
 import '../core/offline/offline_sync_service.dart';
 import '../core/offline/product_offline_sync.dart';
+import '../core/offline/data_kasir_offline.dart';
 import '../core/notifications.dart';
 import '../features/kasir/providers.dart';
 import '../features/notifications/data/notification_history.dart';
@@ -40,6 +41,9 @@ class NaraApp extends ConsumerWidget {
     ref.watch(offlineAutoSyncProvider);
     // Simpan seluruh katalog produk outlet aktif untuk dipakai offline.
     ref.watch(productOfflineAutoSyncProvider);
+    // Unduh metode bayar, tipe pesanan & meja ke cache offline begitu online,
+    // supaya transaksi offline bisa diselesaikan.
+    ref.watch(dataKasirOfflineProvider);
 
     // Sinkronkan global brightness notifier sebelum subtree dibangun
     // ulang dengan theme baru. Tanpa langkah ini, getter `kBg/kCard/...`
