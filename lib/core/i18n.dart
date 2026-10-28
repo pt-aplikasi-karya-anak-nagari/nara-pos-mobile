@@ -126,7 +126,7 @@ const Map<String, Map<String, String>> _strings = {
     'id': 'Masuk untuk mengelola outlet Anda',
     'en': 'Login to manage your outlet',
   },
-  'login.email': {'id': 'Email atau Username', 'en': 'Email or Username'},
+  'login.email': {'id': 'Email', 'en': 'Email'},
   'login.password': {'id': 'Password', 'en': 'Password'},
   'login.mode_password': {'id': 'Password', 'en': 'Password'},
   'login.mode_otp': {'id': 'Kode OTP', 'en': 'OTP Code'},
@@ -222,7 +222,6 @@ const Map<String, Map<String, String>> _strings = {
   'employee.add': {'id': 'Tambah Pengguna', 'en': 'Add User'},
   'employee.edit': {'id': 'Edit Pengguna', 'en': 'Edit User'},
   'employee.name': {'id': 'Nama Lengkap', 'en': 'Full Name'},
-  'employee.username': {'id': 'Username', 'en': 'Username'},
   'employee.role': {'id': 'Peran / Hak Akses', 'en': 'Role / Access Rights'},
   'employee.password_hint': {
     'id': 'Password baru (kosongkan jika tidak diubah)',
@@ -238,10 +237,6 @@ const Map<String, Map<String, String>> _strings = {
   'table.select_area': {
     'id': 'Pilih atau tambah area',
     'en': 'Select or add an area',
-  },
-  'employee.username_hint': {
-    'id': 'huruf kecil, tanpa spasi',
-    'en': 'lowercase, no spaces',
   },
   'employee.active_msg': {
     'id': 'Pengguna nonaktif tidak bisa login',

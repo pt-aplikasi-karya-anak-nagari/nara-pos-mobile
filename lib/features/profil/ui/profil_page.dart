@@ -118,7 +118,6 @@ class ProfilPage extends HookConsumerWidget {
                 _ProfileHeader(
                   initial: initial,
                   name: user?.name ?? '-',
-                  username: user?.username ?? '',
                   // Nama peran dari server bila ada — role (UserRole) cuma
                   // keranjang izin berisi empat nilai untuk sepuluh peran,
                   // jadi ia menulis "Kasir" untuk enam peran yang berbeda.
@@ -601,13 +600,11 @@ class _SectionHeader extends StatelessWidget {
 class _ProfileHeader extends StatelessWidget {
   final String initial;
   final String name;
-  final String username;
   final String roleLabel;
   final String outletName;
   const _ProfileHeader({
     required this.initial,
     required this.name,
-    required this.username,
     required this.roleLabel,
     required this.outletName,
   });
@@ -650,16 +647,7 @@ class _ProfileHeader extends StatelessWidget {
               color: kTextDark,
             ),
           ),
-          const Gap(2),
-          // Disembunyikan kalau kosong, bukan diganti '-'. Pemegang sesi
-          // kasir adalah karyawan, dan karyawan tak punya username: yang lama
-          // menampilkan "@" sendirian di bawah namanya.
-          if (username.isNotEmpty)
-            Text(
-              '@$username',
-              style: TextStyle(fontSize: 12, color: kTextMid),
-            ),
-          const Gap(8),
+          const Gap(10),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,

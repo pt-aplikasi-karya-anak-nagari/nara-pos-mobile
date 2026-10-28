@@ -13,7 +13,6 @@ class RegisterSheet extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userCtrl = useTextEditingController();
     final nameCtrl = useTextEditingController();
     final emailCtrl = useTextEditingController();
     final phoneCtrl = useTextEditingController();
@@ -48,8 +47,7 @@ class RegisterSheet extends HookConsumerWidget {
       error.value = null;
       info.value = null;
 
-      if (userCtrl.text.trim().isEmpty ||
-          nameCtrl.text.trim().isEmpty ||
+      if (nameCtrl.text.trim().isEmpty ||
           emailCtrl.text.trim().isEmpty ||
           phoneCtrl.text.trim().isEmpty ||
           passCtrl.text.isEmpty ||
@@ -67,7 +65,6 @@ class RegisterSheet extends HookConsumerWidget {
           .requestRegistrationOtp(
             email: emailCtrl.text.trim(),
             phone: phoneCtrl.text.trim(),
-            username: userCtrl.text.trim(),
           );
       loading.value = false;
 
@@ -92,7 +89,6 @@ class RegisterSheet extends HookConsumerWidget {
           .requestRegistrationOtp(
             email: emailCtrl.text.trim(),
             phone: phoneCtrl.text.trim(),
-            username: userCtrl.text.trim(),
           );
       resending.value = false;
 
@@ -119,7 +115,6 @@ class RegisterSheet extends HookConsumerWidget {
       final msg = await ref
           .read(authProvider.notifier)
           .register(
-            username: userCtrl.text.trim(),
             fullName: nameCtrl.text.trim(),
             email: emailCtrl.text.trim(),
             phone: phoneCtrl.text.trim(),
@@ -228,7 +223,6 @@ class RegisterSheet extends HookConsumerWidget {
               )
             else
               ..._buildFormStep(
-                userCtrl: userCtrl,
                 nameCtrl: nameCtrl,
                 emailCtrl: emailCtrl,
                 phoneCtrl: phoneCtrl,
@@ -352,7 +346,6 @@ class RegisterSheet extends HookConsumerWidget {
   }
 
   List<Widget> _buildFormStep({
-    required TextEditingController userCtrl,
     required TextEditingController nameCtrl,
     required TextEditingController emailCtrl,
     required TextEditingController phoneCtrl,
@@ -367,13 +360,6 @@ class RegisterSheet extends HookConsumerWidget {
     return [
       _SectionHeader(Icons.person_outline_rounded, 'Informasi Akun'),
       const Gap(16),
-      _InputLabel('Username'),
-      _CustomField(
-        controller: userCtrl,
-        hint: 'Contoh: udinx',
-        icon: Icons.alternate_email_rounded,
-      ),
-      const Gap(20),
       _InputLabel('Nama Lengkap'),
       _CustomField(
         controller: nameCtrl,
