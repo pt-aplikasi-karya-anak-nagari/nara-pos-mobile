@@ -115,9 +115,6 @@ class ApiEndpoint {
   // outlet belum pernah save). Dipakai mobile untuk flag require_pin_*.
   static String outletAppSettings(String outletId) =>
       '/outlets/$outletId/app-settings';
-  // E11: stasiun cetak per outlet (routing struk dapur/bar).
-  static String outletPrintStations(String outletId) =>
-      '/outlets/$outletId/print-stations';
   // Default printer per-role yang diatur owner. `/mine` = default efektif untuk
   // role user yang sedang login (role diambil dari JWT sisi server).
   static String outletRolePrinterConfigMine(String outletId) =>

@@ -453,20 +453,6 @@ class OutletService extends BaseApiService {
     );
   }
 
-  // E11: daftar stasiun cetak outlet. Backend membungkus rows di SuccessResponse
-  // (data = list), tapi kita juga toleran bila berbentuk {items: [...]}.
-  Future<List<Map<String, dynamic>>> getPrintStations(String outletId) async {
-    return get<List<Map<String, dynamic>>>(
-      ApiEndpoint.outletPrintStations(outletId),
-      converter: (data) {
-        final List<dynamic> list = data is List
-            ? data
-            : (data is Map ? (data['items'] ?? []) : <dynamic>[]);
-        return list.map((json) => Map<String, dynamic>.from(json)).toList();
-      },
-    );
-  }
-
   // Default printer per-role (owner-set) untuk role user yang login. Backend
   // membungkus objek di SuccessResponse (data = objek). Selalu return value —
   // kalau owner belum atur, backend kirim default in-memory.

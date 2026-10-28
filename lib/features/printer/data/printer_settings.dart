@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -42,11 +41,6 @@ class PrinterSettings {
   /// role hardcoded `false`.
   final bool? autoPrintKitchenOverride;
 
-  /// E11: pemetaan stasiun cetak → MAC printer Bluetooth. Kosong / tak ada
-  /// entry = stasiun memakai printer BT default (deviceMac). Disimpan sebagai
-  /// JSON di SharedPreferences.
-  final Map<String, String> stationPrinters;
-
   const PrinterSettings({
     this.deviceMac = '',
     this.deviceName = '',
@@ -57,7 +51,6 @@ class PrinterSettings {
     this.autoPrintOverride,
     this.copiesOverride,
     this.autoPrintKitchenOverride,
-    this.stationPrinters = const {},
   });
 
   bool get hasDevice => deviceMac.isNotEmpty;
@@ -79,10 +72,6 @@ class PrinterSettings {
 
   /// Auto-print tiket dapur pilihan user, atau `false` bila belum diatur.
   bool get autoPrintKitchen => autoPrintKitchenOverride ?? false;
-
-  /// MAC printer terikat untuk [stationId], atau '' bila belum diatur (konsumen
-  /// harus fallback ke printer default).
-  String macForStation(String stationId) => stationPrinters[stationId] ?? '';
 }
 
 class PrinterSettingsNotifier extends Notifier<PrinterSettings> {
@@ -96,7 +85,6 @@ class PrinterSettingsNotifier extends Notifier<PrinterSettings> {
   static const _kAutoPrint = 'auto_print';
   static const _kCopies = 'copies';
   static const _kAutoPrintKitchen = 'auto_print_kitchen';
-  static const _kStationPrinters = 'station_printers';
 
   static const _all = <String>[
     _kMac,
@@ -108,7 +96,6 @@ class PrinterSettingsNotifier extends Notifier<PrinterSettings> {
     _kAutoPrint,
     _kCopies,
     _kAutoPrintKitchen,
-    _kStationPrinters,
   ];
 
   late SharedPreferences _prefs;
@@ -177,23 +164,7 @@ class PrinterSettingsNotifier extends Notifier<PrinterSettings> {
       autoPrintKitchenOverride: _prefs.containsKey(_key(_kAutoPrintKitchen))
           ? _prefs.getBool(_key(_kAutoPrintKitchen))
           : null,
-      stationPrinters: _decodeStationPrinters(
-        _prefs.getString(_key(_kStationPrinters)),
-      ),
     );
-  }
-
-  /// Decode JSON map {stationId: mac} yang tersimpan. Toleran terhadap data
-  /// rusak / format lama — kembalikan map kosong bila gagal parse.
-  Map<String, String> _decodeStationPrinters(String? raw) {
-    if (raw == null || raw.isEmpty) return const {};
-    try {
-      final decoded = json.decode(raw);
-      if (decoded is Map) {
-        return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
-      }
-    } catch (_) {}
-    return const {};
   }
 
   PaperSize _paperFromValue(int v) {
@@ -269,19 +240,6 @@ class PrinterSettingsNotifier extends Notifier<PrinterSettings> {
   /// Hapus override auto-print tiket dapur → kembali mengikuti default role.
   Future<void> clearAutoPrintKitchen() async {
     await _prefs.remove(_key(_kAutoPrintKitchen));
-    state = _load();
-  }
-
-  /// Ikat [stationId] ke [mac]. [mac] kosong = lepas ikatan (kembali ke printer
-  /// default). Persist sebagai JSON map.
-  Future<void> setStationPrinter(String stationId, String mac) async {
-    final next = Map<String, String>.from(state.stationPrinters);
-    if (mac.isEmpty) {
-      next.remove(stationId);
-    } else {
-      next[stationId] = mac;
-    }
-    await _prefs.setString(_key(_kStationPrinters), json.encode(next));
     state = _load();
   }
 }

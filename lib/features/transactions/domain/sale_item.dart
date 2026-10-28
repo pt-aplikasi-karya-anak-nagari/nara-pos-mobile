@@ -1,10 +1,9 @@
-
 import 'sale.dart';
 
 class SaleItem {
-    String id;
+  String id;
 
-    String productRemoteId;
+  String productRemoteId;
 
   String productName;
   String productEmoji;
@@ -16,18 +15,13 @@ class SaleItem {
   final String discountLabel;
   final String discountName;
   final int qty;
+
   /// Jumlah qty item ini yang SUDAH diretur (akumulasi refund parsial).
   /// Backend field: `refunded_qty`. 0 = belum ada retur untuk item ini.
   final int refundedQty;
   final String note;
   // C4: label add-on/topping ("Boba, Less Sugar") untuk struk & riwayat.
   final String modifiersLabel;
-
-  /// E11: stasiun cetak (dapur/bar) tempat item ini dirutekan, distempel oleh
-  /// backend. Nullable — reprint/pesanan QR (tanpa cart) memakai ini untuk
-  /// merutekan tiket dapur tanpa perlu kategori produk di sisi klien.
-  /// Sekarang hanya di-round-trip (backend yang mengisi).
-  final String? printStationId;
 
   Sale? sale;
 
@@ -47,7 +41,6 @@ class SaleItem {
     this.refundedQty = 0,
     this.note = '',
     this.modifiersLabel = '',
-    this.printStationId,
   });
 
   /// Sisa qty yang masih bisa diretur (quantity - refunded_qty). Clamp ke 0
@@ -104,7 +97,6 @@ class SaleItem {
           : int.tryParse(json['refunded_qty']?.toString() ?? '0') ?? 0,
       note: json['note']?.toString() ?? '',
       modifiersLabel: modifiersLabelFrom(json['modifiers']),
-      printStationId: json['print_station_id']?.toString(),
     )..id = json['id']?.toString() ?? '';
   }
 
@@ -113,8 +105,6 @@ class SaleItem {
       'product_id': productRemoteId,
       'quantity': qty,
       if (note.isNotEmpty) 'note': note,
-      if (printStationId != null && printStationId!.isNotEmpty)
-        'print_station_id': printStationId,
     };
   }
 }

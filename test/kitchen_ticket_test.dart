@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:nara_pos_mobile/features/printer/data/printer_service.dart';
-import 'package:nara_pos_mobile/features/printer/domain/print_station.dart';
 
 // Cari [needle] sebagai sub-urutan kontigu dalam [hay] (pencocokan byte-level).
 bool _contains(List<int> hay, List<int> needle) {
@@ -22,13 +21,6 @@ bool _contains(List<int> hay, List<int> needle) {
 }
 
 List<int> _ascii(String s) => s.codeUnits;
-
-// Item uji ringkas untuk routing (nama + kategori).
-class _RtItem {
-  final String name;
-  final String? category;
-  const _RtItem(this.name, this.category);
-}
 
 void main() {
   // Diperlukan agar rootBundle bisa memuat capabilities.json milik
@@ -50,18 +42,17 @@ void main() {
     await initializeDateFormatting('id_ID', null);
     final profile = await CapabilityProfile.load();
     gen = Generator(PaperSize.mm58, profile);
-    // PrinterService butuh Ref, tapi buildStationTicket murni (tak baca provider).
+    // PrinterService butuh Ref, tapi buildKitchenTicket murni (tak baca provider).
     final container = ProviderContainer();
     addTearDown(container.dispose);
     service = container.read(printerServiceProvider);
   });
 
-  group('buildStationTicket (golden byte-level)', () {
-    test('memuat init/reset, nama stasiun, item, dan cut — TANPA harga/total',
-        () {
-      final bytes = service.buildStationTicket(
+  group('buildKitchenTicket (golden byte-level)', () {
+    test('memuat init/reset, judul, item, dan cut — TANPA harga/total', () {
+      final bytes = service.buildKitchenTicket(
         gen,
-        stationName: 'BAR',
+        title: kKitchenTicketTitle,
         orderMeta: meta,
         items: const [
           KitchenTicketItem(
@@ -83,7 +74,11 @@ void main() {
       expect(_contains(bytes, [0x1D, 0x56]), isTrue, reason: 'cut GS V');
 
       // Konten kitchen.
-      expect(_contains(bytes, _ascii('BAR')), isTrue, reason: 'nama stasiun');
+      expect(
+        _contains(bytes, _ascii(kKitchenTicketTitle)),
+        isTrue,
+        reason: 'judul tiket',
+      );
       expect(_contains(bytes, _ascii('2 x Kopi Susu (Large)')), isTrue);
       expect(_contains(bytes, _ascii('1 x Teh')), isTrue);
       expect(_contains(bytes, _ascii('+ Boba')), isTrue, reason: 'modifier');
@@ -101,9 +96,9 @@ void main() {
     });
 
     test('baris meja disembunyikan bila tableLabel null', () {
-      final bytes = service.buildStationTicket(
+      final bytes = service.buildKitchenTicket(
         gen,
-        stationName: 'DAPUR',
+        title: kKitchenTicketTitle,
         orderMeta: KitchenOrderMeta(
           orderNo: 'INV-002',
           tableLabel: null,
@@ -115,83 +110,6 @@ void main() {
       expect(_contains(bytes, _ascii('Take Away')), isTrue);
       // Label kolom "Meja" tidak muncul saat tak ada meja.
       expect(_contains(bytes, _ascii('Meja')), isFalse);
-    });
-  });
-
-  group('routing → satu tiket per StationGroup', () {
-    test('groupItemsByStation menghasilkan satu tiket per grup', () {
-      const kopi = _RtItem('Kopi', 'MINUM');
-      const teh = _RtItem('Teh', 'MINUM');
-      const nasi = _RtItem('Nasi', 'MAKAN');
-      final items = [kopi, teh, nasi];
-
-      final bar = PrintStation(
-        id: 'bar',
-        outletId: 'o',
-        name: 'BAR',
-        categoryIds: const ['MINUM'],
-      );
-      final dapur = PrintStation(
-        id: 'dapur',
-        outletId: 'o',
-        name: 'DAPUR',
-        categoryIds: const ['MAKAN'],
-      );
-
-      final groups = groupItemsByStation<_RtItem>(
-        items: items,
-        stations: [bar, dapur],
-        categoryOf: (i) => i.category,
-      );
-      expect(groups.length, 2);
-
-      final tickets = groups
-          .map(
-            (g) => service.buildStationTicket(
-              gen,
-              stationName: g.label,
-              orderMeta: meta,
-              items: g.items
-                  .map((i) => KitchenTicketItem(qty: 1, name: i.name))
-                  .toList(),
-            ),
-          )
-          .toList();
-
-      // Satu tiket per grup.
-      expect(tickets.length, groups.length);
-
-      // Tiket BAR berisi minuman, bukan makanan.
-      expect(_contains(tickets[0], _ascii('BAR')), isTrue);
-      expect(_contains(tickets[0], _ascii('Kopi')), isTrue);
-      expect(_contains(tickets[0], _ascii('Teh')), isTrue);
-      expect(_contains(tickets[0], _ascii('Nasi')), isFalse);
-
-      // Tiket DAPUR berisi makanan.
-      expect(_contains(tickets[1], _ascii('DAPUR')), isTrue);
-      expect(_contains(tickets[1], _ascii('Nasi')), isTrue);
-      expect(_contains(tickets[1], _ascii('Kopi')), isFalse);
-    });
-
-    test('tanpa stasiun → satu grup catch-all "Lainnya" → satu tiket', () {
-      const rokok = _RtItem('Rokok', 'LAIN');
-      final groups = groupItemsByStation<_RtItem>(
-        items: const [rokok],
-        stations: const [],
-        categoryOf: (i) => i.category,
-      );
-      expect(groups.length, 1);
-      expect(groups.single.station, isNull);
-      expect(groups.single.label, 'Lainnya');
-
-      final bytes = service.buildStationTicket(
-        gen,
-        stationName: groups.single.label,
-        orderMeta: meta,
-        items: const [KitchenTicketItem(qty: 1, name: 'Rokok')],
-      );
-      expect(_contains(bytes, _ascii('Lainnya')), isTrue);
-      expect(_contains(bytes, _ascii('Rokok')), isTrue);
     });
   });
 }
