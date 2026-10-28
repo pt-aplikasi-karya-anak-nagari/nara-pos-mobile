@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'core/auth_storage.dart';
+import 'core/device_identity.dart';
 import 'core/config/app_config.dart';
 import 'core/format.dart';
 import 'core/notifications.dart';
@@ -135,6 +136,14 @@ Future<void> _bootstrap() async {
     // setelah restore backup ke device baru, upgrade OS, atau key ter-invalidasi).
     // Gagal → lanjut sebagai logged-out (token in-memory null → diarahkan ke
     // login), BUKAN blank. Detail resilience baca-key ada di AuthStorage.init().
+    // Identitas perangkat untuk aturan "satu staf = satu perangkat". Best-effort:
+    // gagal di sini hanya berarti tablet dianggap perangkat baru, bukan crash.
+    try {
+      await DeviceIdentity.load(prefs);
+    } catch (e) {
+      debugPrint('[NARA] DeviceIdentity.load gagal: $e');
+    }
+
     final authStorage = AuthStorage(prefs);
     try {
       await authStorage.init();

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart' show Alignment, Text, TextDirection;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../auth_storage.dart';
+import '../device_identity.dart';
 import '../config/app_config.dart';
 import '../../features/user/data/auth_service.dart';
 import 'api_endpoint.dart';
@@ -55,6 +56,17 @@ final dioProvider = Provider<Dio>((ref) {
         // header ini untuk memblokir login role Owner/Manager di mobile
         // (mereka hanya boleh login lewat Dashboard Web).
         options.headers['X-Client-Platform'] = 'mobile';
+
+        // Identitas perangkat: server memakainya untuk menegakkan "satu staf
+        // = satu perangkat" sambil tetap mengizinkan tablet yang sama masuk
+        // ulang setelah aplikasinya ditutup paksa.
+        final perangkat = DeviceIdentity.current;
+        if (perangkat.id.isNotEmpty) {
+          options.headers['X-Device-ID'] = perangkat.id;
+        }
+        if (perangkat.label.isNotEmpty) {
+          options.headers['X-Device-Label'] = perangkat.label;
+        }
 
         _applySecurityHeaders(options, apiSecret, apiBasePath);
 
