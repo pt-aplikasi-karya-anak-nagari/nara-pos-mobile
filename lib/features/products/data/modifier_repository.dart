@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/product_folder_store.dart';
 import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../outlet/data/outlet_service.dart';
 import '../domain/modifier_group.dart';
@@ -109,6 +110,9 @@ class ModifierRepository {
     await _cacheGrupProduk.replaceMany(
       susunSalinanAddOn(outletId, semua, idProdukLokal: idProdukLokal),
     );
+    // Juga ke penyimpanan cadangan, supaya add-on tetap ada setelah aplikasi
+    // di-install ulang walau belum sempat online.
+    await _ref.read(productFolderStoreProvider).simpanAddOn(outletId, semua);
     return semua.length;
   }
 
@@ -126,11 +130,30 @@ class ModifierRepository {
 
   Future<List<Map<String, dynamic>>> _bacaSalinan(String kunci) async {
     try {
-      return await _cacheGrupProduk.getAll(kunci);
+      final ada = await _cacheGrupProduk.getAll(kunci);
+      if (ada.isNotEmpty) return ada;
+      // Salinan di aplikasi kosong — mis. tepat setelah install ulang. Isi
+      // dari penyimpanan cadangan, sekali per outlet per sesi.
+      final outletId = kunci.split('/').first;
+      if (_sudahDariCadangan.add(outletId)) {
+        final semua = await _ref
+            .read(productFolderStoreProvider)
+            .muatAddOn(outletId);
+        if (semua.isNotEmpty) {
+          await _cacheGrupProduk.replaceMany(
+            susunSalinanAddOn(outletId, semua),
+          );
+          return await _cacheGrupProduk.getAll(kunci);
+        }
+      }
+      return const [];
     } catch (_) {
       return const [];
     }
   }
+
+  /// Outlet yang add-on-nya sudah dicoba dipulihkan dari cadangan di sesi ini.
+  static final Set<String> _sudahDariCadangan = {};
 
   /// ID grup yang saat ini melekat pada produk (tanpa filter opsi) — dipakai
   /// untuk inisialisasi dialog attach di form produk.

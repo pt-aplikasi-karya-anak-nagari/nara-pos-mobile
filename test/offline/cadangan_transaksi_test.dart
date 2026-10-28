@@ -16,11 +16,7 @@ class _Folder implements FolderBackend {
   @override
   bool get didukung => true;
   @override
-  Future<String?> pilihFolder() async => 'content://tree/narapos';
-  @override
   Future<bool> punyaAkses(String uri) async => true;
-  @override
-  Future<String?> namaFolder(String uri) async => 'NaraPOS';
   @override
   Future<void> tulis(
     String uri,
@@ -107,12 +103,8 @@ void main() {
   late _Antrian antrian;
   late CerminTransaksiOffline cermin;
 
-  Future<CerminTransaksiOffline> cerminBaru(_Antrian a) async {
-    final prefs = await SharedPreferences.getInstance();
-    final store = ProductFolderStore(prefs, folder);
-    await store.pilihFolder();
-    return CerminTransaksiOffline(store, a);
-  }
+  Future<CerminTransaksiOffline> cerminBaru(_Antrian a) async =>
+      CerminTransaksiOffline(ProductFolderStore(folder), a);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

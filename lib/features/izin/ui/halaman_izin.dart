@@ -273,6 +273,7 @@ class _BarisIzin extends StatelessWidget {
     IzinAplikasi.perangkatSekitar => AppIcons.bluetooth,
     IzinAplikasi.kamera => AppIcons.scan,
     IzinAplikasi.notifikasi => AppIcons.notification,
+    IzinAplikasi.penyimpanan => AppIcons.folder,
   };
 
   @override

@@ -16,13 +16,15 @@ import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/product_folder_store.dart';
 import '../../../core/offline/product_offline_sync.dart';
 import '../../../core/outlet_scope.dart';
+import '../../../core/permission_service.dart';
 import '../../../shared/widgets/tablet_components.dart';
 
-/// Pengaturan folder tempat produk disimpan untuk dipakai offline.
+/// Status data offline: cadangan produk, add-on, dan transaksi.
 ///
-/// Produk outlet yang sedang login disimpan satu file per produk di folder
-/// pilihan pengguna, sehingga tetap ada walau aplikasi di-uninstall. Setelah
-/// install ulang, pengguna cukup memilih folder yang sama di halaman ini.
+/// Cadangan disimpan OTOMATIS di penyimpanan tersembunyi & terenkripsi yang
+/// tetap ada walau aplikasi di-uninstall (lihat FolderOfflineChannel.kt).
+/// Lokasinya sengaja tidak ditampilkan di mana pun — pengguna tak memilih
+/// folder, dan kasir tak tahu di mana datanya untuk diubah atau dihapus.
 class OfflineDataPage extends HookConsumerWidget {
   const OfflineDataPage({super.key});
 
@@ -37,7 +39,6 @@ class OfflineDataPage extends HookConsumerWidget {
 
     final memuat = useState(true);
     final aktif = useState(false);
-    final namaFolder = useState<String?>(null);
     final jumlah = useState(0);
     final cadanganTransaksi = useState<({int penjualan, int shift})>(
       (penjualan: 0, shift: 0),
@@ -49,7 +50,6 @@ class OfflineDataPage extends HookConsumerWidget {
 
     Future<void> muatStatus() async {
       final ok = await store.aktif();
-      final nama = ok ? await store.namaFolder() : null;
       final n = ok && outletId != null ? await store.jumlah(outletId) : 0;
       final cermin = ref.read(cerminTransaksiProvider);
       final t = ok && outletId != null
@@ -57,7 +57,6 @@ class OfflineDataPage extends HookConsumerWidget {
           : (penjualan: 0, shift: 0);
       if (!context.mounted) return;
       aktif.value = ok;
-      namaFolder.value = nama;
       jumlah.value = n;
       cadanganTransaksi.value = t;
       galat.value = store.galatTerakhir ?? cermin.galatTerakhir;
@@ -85,105 +84,55 @@ class OfflineDataPage extends HookConsumerWidget {
       // 1. Samakan katalog di perangkat dengan server (hanya produk yang
       //    berubah yang diambil).
       final hasil = await ref.read(sinkronProdukProvider).jalankan(paksa: true);
-      // 2. Tulis SEMUA produk lokal ke folder — termasuk yang tidak berubah,
-      //    yang belum pernah ditulis ke folder ini. File yang isinya sama
-      //    dilewati.
+      // 2. Tulis SEMUA produk lokal ke cadangan — termasuk yang tidak berubah.
+      //    File yang isinya sama dilewati.
       await ref.read(productCacheProvider).salinKeFolder(outletId);
       sibuk.value = null;
       await muatStatus();
       if (hasil?.galat != null) {
         kabar(
           'Sebagian produk gagal diambil dari server. '
-          '${jumlah.value} produk tersimpan di folder.',
+          '${jumlah.value} produk tercadangkan.',
           sukses: false,
         );
       } else if (store.galatTerakhir != null) {
-        kabar('Gagal menulis ke folder: ${store.galatTerakhir}', sukses: false);
+        kabar('Gagal menyimpan cadangan: ${store.galatTerakhir}', sukses: false);
       } else {
-        kabar('${jumlah.value} produk tersimpan di folder.');
+        kabar('${jumlah.value} produk tercadangkan.');
       }
     }
 
-    Future<void> pilihFolder() async {
+    // Menyalakan izin penyimpanan cadangan (biasanya sudah diberikan di
+    // gerbang izin saat aplikasi pertama dibuka).
+    Future<void> aktifkanCadangan() async {
       if (sibuk.value != null) return;
-      sibuk.value = 'Membuka pemilih folder…';
-      bool dipilih;
-      try {
-        dipilih = await store.pilihFolder();
-      } catch (e) {
+      sibuk.value = 'Meminta izin…';
+      final status = await ref
+          .read(systemPermissionServiceProvider)
+          .minta(IzinAplikasi.penyimpanan);
+      if (status == StatusIzin.ditolakPermanen) {
+        await ref.read(systemPermissionServiceProvider).bukaPengaturan();
+      }
+      final ok = await ref.read(izinCadanganProvider.notifier).periksa();
+      if (!ok) {
         sibuk.value = null;
-        kabar('Folder tidak bisa dipakai: $e', sukses: false);
-        return;
-      }
-      sibuk.value = null;
-      if (!dipilih) {
         await muatStatus();
+        kabar('Izin penyimpanan cadangan belum diberikan.', sukses: false);
         return;
       }
-
-      // Transaksi offline lebih dulu dari produk: setelah install ulang,
-      // folder ini mungkin berisi penjualan yang belum sampai ke server.
-      final cermin = ref.read(cerminTransaksiProvider)..lupakan();
-      ref.invalidate(folderCadanganAktifProvider);
-      sibuk.value = 'Memulihkan transaksi offline…';
-      final pulih = await pulihkanTransaksiOffline(ref.read);
-      // Antrian yang sudah ada di perangkat ikut ditulis ke folder baru.
-      await cermin.jadwalkan();
+      store.aksesBerubah();
+      ref.read(cerminTransaksiProvider).lupakan();
+      sibuk.value = 'Menyiapkan cadangan…';
+      final pulih = await siapkanCadanganOffline(ref.read);
+      await ref.read(cerminTransaksiProvider).jadwalkan();
       sibuk.value = null;
       await muatStatus();
-      if (pulih.total > 0) {
-        kabar(
-          '${pulih.penjualan} transaksi offline dipulihkan dari folder'
-          '${pulih.shift > 0 ? ' (+${pulih.shift} catatan shift)' : ''}'
-          ' — akan dikirim saat online.',
-        );
-      }
-
-      if (offline || outletId == null) {
-        // Tanpa internet: salin katalog yang sudah ada di perangkat ke folder.
-        // Pada tablet yang baru di-install ulang, arahnya terbalik — produk
-        // dibaca DARI folder ini saat halaman kasir dibuka.
-        if (outletId != null) {
-          await ref.read(productCacheProvider).salinKeFolder(outletId);
-          await muatStatus();
-        }
-        kabar(
-          jumlah.value > 0
-              ? 'Folder dipilih. ${jumlah.value} produk siap dipakai offline.'
-              : 'Folder dipilih. Produk akan disimpan saat online.',
-        );
-        return;
-      }
-      await simpanSemua();
-    }
-
-    Future<void> lepasFolder() async {
-      final ya = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Berhenti menyimpan ke folder?'),
-          content: const Text(
-            'File yang sudah ada di folder tidak dihapus. Produk dan '
-            'transaksi offline tetap tersimpan di aplikasi, tapi akan hilang '
-            'bila aplikasi di-uninstall sebelum transaksinya terkirim.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('Berhenti', style: TextStyle(color: kDanger)),
-            ),
-          ],
-        ),
+      kabar(
+        pulih.total > 0
+            ? '${pulih.penjualan} transaksi offline dipulihkan — akan dikirim '
+                  'saat online.'
+            : 'Penyimpanan cadangan aktif.',
       );
-      if (ya != true) return;
-      await store.lepasFolder();
-      ref.read(cerminTransaksiProvider).lupakan();
-      ref.invalidate(folderCadanganAktifProvider);
-      await muatStatus();
     }
 
     final waktu = syncedAt == null ? 'Belum pernah' : formatDateTime(syncedAt);
@@ -204,52 +153,48 @@ class OfflineDataPage extends HookConsumerWidget {
                 color: kPrimary,
                 title: 'Data Offline',
                 subtitle:
-                    'Simpan produk ${outlet?.name ?? 'outlet ini'} ke folder di '
-                    'tablet, supaya kasir tetap bisa berjualan tanpa internet '
-                    'walau aplikasi di-install ulang.',
+                    'Produk & transaksi ${outlet?.name ?? 'outlet ini'} '
+                    'tersimpan di tablet, supaya kasir tetap bisa berjualan '
+                    'tanpa internet walau aplikasi di-install ulang.',
               ),
-              const _Judul('Folder penyimpanan'),
+              const _Judul('Penyimpanan cadangan'),
               _Kartu(
                 children: [
                   _Baris(
-                    label: 'Folder',
+                    label: 'Status',
                     nilai: memuat.value
                         ? 'Memeriksa…'
                         : aktif.value
-                        ? (namaFolder.value ?? 'Terpilih')
-                        : 'Belum dipilih',
-                    tebal: aktif.value,
+                        ? 'Aktif'
+                        : 'Belum aktif',
+                    tebal: true,
                   ),
-                  const Gap(14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: sibuk.value == null ? pilihFolder : null,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: kPrimary,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: Text(
-                            aktif.value ? 'Ganti folder' : 'Pilih folder',
-                          ),
-                        ),
+                  const Gap(10),
+                  Text(
+                    aktif.value
+                        ? 'Produk, add-on, dan transaksi offline dicadangkan '
+                              'otomatis & terenkripsi di perangkat ini. Bila '
+                              'aplikasi terhapus lalu di-install ulang, datanya '
+                              'dipulihkan sendiri.'
+                        : 'Tanpa izin ini, transaksi offline yang belum '
+                              'terkirim HILANG bila aplikasi terhapus.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: aktif.value ? kTextMid : kWarning,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (!memuat.value && !aktif.value) ...[
+                    const Gap(14),
+                    FilledButton(
+                      onPressed: sibuk.value == null ? aktifkanCadangan : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      if (aktif.value) ...[
-                        const Gap(10),
-                        OutlinedButton(
-                          onPressed: sibuk.value == null ? lepasFolder : null,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 14,
-                              horizontal: 18,
-                            ),
-                          ),
-                          child: const Text('Berhenti'),
-                        ),
-                      ],
-                    ],
-                  ),
+                      child: Text(sibuk.value ?? 'Aktifkan penyimpanan cadangan'),
+                    ),
+                  ],
                 ],
               ),
               const Gap(20),
@@ -257,7 +202,7 @@ class OfflineDataPage extends HookConsumerWidget {
               _Kartu(
                 children: [
                   _Baris(
-                    label: 'Tersimpan di folder',
+                    label: 'Tercadangkan',
                     nilai: aktif.value ? '${jumlah.value} produk' : '—',
                     tebal: true,
                   ),
@@ -294,7 +239,7 @@ class OfflineDataPage extends HookConsumerWidget {
                   if (galat.value != null) ...[
                     const Gap(8),
                     Text(
-                      'Gagal mengakses folder: ${galat.value}',
+                      'Gagal mengakses cadangan: ${galat.value}',
                       style: TextStyle(fontSize: 12, color: kDanger),
                     ),
                   ],
@@ -312,7 +257,7 @@ class OfflineDataPage extends HookConsumerWidget {
                   ),
                   const Gap(8),
                   _Baris(
-                    label: 'Cadangan di folder',
+                    label: 'Tercadangkan',
                     nilai: aktif.value
                         ? '${cadanganTransaksi.value.penjualan} transaksi'
                               '${cadanganTransaksi.value.shift > 0 ? ' · ${cadanganTransaksi.value.shift} catatan shift' : ''}'
@@ -321,14 +266,14 @@ class OfflineDataPage extends HookConsumerWidget {
                   const Gap(10),
                   Text(
                     aktif.value
-                        ? 'Setiap transaksi offline langsung disalin ke folder ini '
-                              'dan dihapus dari folder setelah diterima server. '
-                              'Bila aplikasi terhapus sebelum terkirim, install '
-                              'ulang lalu pilih folder yang sama — transaksinya '
-                              'dipulihkan dan dikirim otomatis.'
-                        : 'Pilih folder supaya transaksi offline tidak hilang '
-                              'bila aplikasi terhapus atau di-uninstall sebelum '
-                              'sempat terkirim.',
+                        ? 'Setiap transaksi offline langsung dicadangkan, dan '
+                              'cadangannya dihapus setelah diterima server. Bila '
+                              'aplikasi terhapus sebelum terkirim, install ulang '
+                              'lalu login — transaksinya dipulihkan dan dikirim '
+                              'otomatis.'
+                        : 'Aktifkan penyimpanan cadangan supaya transaksi '
+                              'offline tidak hilang bila aplikasi terhapus '
+                              'sebelum sempat terkirim.',
                     style: TextStyle(
                       fontSize: 12,
                       color: aktif.value ? kTextMid : kWarning,
@@ -356,13 +301,10 @@ class OfflineDataPage extends HookConsumerWidget {
                     const Gap(10),
                     Expanded(
                       child: Text(
-                        'Buat atau pilih folder khusus, misalnya Documents/NaraPOS. '
-                        'Setiap produk disimpan sebagai satu file, dikelompokkan '
-                        'per outlet, dan diperbarui otomatis setiap kali produk '
-                        'berhasil dimuat dari server.\n\n'
-                        'Setelah aplikasi di-install ulang, buka halaman ini dan '
-                        'pilih folder yang SAMA — produk langsung bisa dipakai '
-                        'walau belum ada internet.',
+                        'Semua berjalan otomatis: produk diperbarui setiap kali '
+                        'dimuat dari server, dan transaksi offline dikirim '
+                        'begitu internet kembali. Cadangan hanya bisa dibaca '
+                        'oleh aplikasi ini di perangkat ini.',
                         style: TextStyle(
                           fontSize: 12,
                           color: kTextMid,

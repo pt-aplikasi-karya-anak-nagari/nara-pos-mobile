@@ -1,33 +1,51 @@
 package com.example.nara_pos_mobile
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.provider.DocumentsContract
-import android.provider.DocumentsContract.Document
+import android.provider.Settings
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import java.io.FileNotFoundException
+import java.io.File
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.Executors
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
- * Akses ke folder yang dipilih pengguna (Storage Access Framework) untuk data
- * offline.
+ * Penyimpanan cadangan data offline (produk, add-on, transaksi) yang:
  *
- * KENAPA SAF, BUKAN FILE BIASA
+ *   - OTOMATIS: tanpa pengguna memilih folder;
+ *   - TERSEMBUNYI: lokasinya tak pernah ditampilkan aplikasi, nama foldernya
+ *     diawali titik dan berisi .nomedia;
+ *   - TERENKRIPSI: isi file AES-GCM dengan kunci yang terikat ke perangkat ini,
+ *     jadi tak bisa dibaca atau diubah dari luar aplikasi — file yang diubah
+ *     gagal didekripsi dan diabaikan;
+ *   - TETAP ADA setelah aplikasi di-uninstall, dan terbaca lagi setelah
+ *     install ulang.
  *
- * File di folder milik aplikasi ikut terhapus saat aplikasi di-uninstall.
- * File di folder bersama (mis. Documents) memang tetap ada, tapi sejak
- * Android 11 aplikasi yang di-install ulang tidak lagi boleh membacanya.
- * Folder yang dipilih pengguna lewat pemilih sistem bisa dibaca lagi setelah
- * install ulang: pengguna cukup memilih folder yang sama.
+ * # KENAPA BUTUH IZIN "AKSES SEMUA FILE"
  *
- * Semua operasi file jalan berurutan di SATU thread latar, supaya penulisan
- * produk demi produk tidak saling tindih dan cache ID dokumen di bawah tidak
- * perlu dikunci.
+ * Folder milik aplikasi ikut terhapus saat uninstall. Folder bersama tidak,
+ * tapi sejak Android 11 aplikasi yang di-install ulang tak lagi boleh membaca
+ * file lamanya sendiri di sana. Hanya dengan MANAGE_EXTERNAL_STORAGE (Android
+ * 11+) atau WRITE_EXTERNAL_STORAGE (Android 10 ke bawah) keduanya terpenuhi.
+ * Izin diminta di gerbang izin saat aplikasi pertama dibuka.
+ *
+ * # KUNCI ENKRIPSI
+ *
+ * SHA-256 dari rahasia aplikasi + ANDROID_ID. Sejak Android 8, ANDROID_ID
+ * tetap sama setelah install ulang selama aplikasinya ditandatangani kunci
+ * yang sama — jadi cadangan terbaca lagi setelah install ulang, tapi tidak di
+ * perangkat lain.
  */
 class FolderOfflineChannel(
     private val activity: Activity,
@@ -37,14 +55,8 @@ class FolderOfflineChannel(
     private val channel = MethodChannel(messenger, "nara/folder_offline")
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-    private var pendingPick: MethodChannel.Result? = null
-
-    // "<tree>|<idInduk>|<nama>" → ID dokumen folder.
-    private val dirCache = HashMap<String, String>()
-
-    // "<tree>|<idFolder>" → (nama file → ID dokumen). Daftar isi folder dibaca
-    // sekali; tanpa ini, setiap tulis harus men-query seluruh isi folder.
-    private val fileCache = HashMap<String, HashMap<String, String>>()
+    private val acak = SecureRandom()
+    private val kunci: SecretKeySpec by lazy { buatKunci() }
 
     init {
         channel.setMethodCallHandler(this)
@@ -57,241 +69,127 @@ class FolderOfflineChannel(
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "pickFolder" -> pickFolder(result)
-            "hasAccess" -> result.success(hasAccess(call.argument<String>("uri") ?: ""))
-            "folderName" -> background(result) { folderName(Uri.parse(call.arg("uri"))) }
+            "hasAccess" -> result.success(punyaAkses())
             "writeFile" -> background(result) {
-                writeFile(
-                    Uri.parse(call.arg("uri")),
-                    call.argument<List<String>>("dir") ?: emptyList(),
-                    call.arg("name"),
-                    call.arg("content"),
-                )
+                tulis(call.dir(), call.arg("name"), call.arg("content"))
                 null
             }
-            "readAll" -> background(result) {
-                readAll(
-                    Uri.parse(call.arg("uri")),
-                    call.argument<List<String>>("dir") ?: emptyList(),
-                )
-            }
-            "listNames" -> background(result) {
-                listNames(
-                    Uri.parse(call.arg("uri")),
-                    call.argument<List<String>>("dir") ?: emptyList(),
-                )
-            }
-            "deleteFile" -> background(result) {
-                deleteFile(
-                    Uri.parse(call.arg("uri")),
-                    call.argument<List<String>>("dir") ?: emptyList(),
-                    call.arg("name"),
-                )
-            }
+            "readAll" -> background(result) { bacaSemua(call.dir()) }
+            "listNames" -> background(result) { daftarNama(call.dir()) }
+            "deleteFile" -> background(result) { hapus(call.dir(), call.arg("name")) }
             else -> result.notImplemented()
         }
     }
 
-    // ── Pilih folder ──────────────────────────────────────────────────────────
+    // ── Akses ─────────────────────────────────────────────────────────────────
 
-    private fun pickFolder(result: MethodChannel.Result) {
-        if (pendingPick != null) {
-            result.error("BUSY", "Pemilih folder sedang terbuka.", null)
-            return
+    private fun punyaAkses(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
         }
-        pendingPick = result
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-            addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
-            )
+
+    private fun akar(): File {
+        if (!punyaAkses()) throw SecurityException("Izin penyimpanan cadangan belum diberikan")
+        @Suppress("DEPRECATION")
+        val akar = File(Environment.getExternalStorageDirectory(), NAMA_AKAR)
+        if (!akar.exists() && !akar.mkdirs()) {
+            throw IllegalStateException("Penyimpanan cadangan tidak bisa dibuat")
         }
-        try {
-            @Suppress("DEPRECATION")
-            activity.startActivityForResult(intent, REQUEST_PICK)
-        } catch (e: Exception) {
-            pendingPick = null
-            result.error("NO_PICKER", "Pemilih folder tidak tersedia di perangkat ini.", null)
-        }
+        // Jangan sampai isinya muncul di galeri / pemindai media.
+        File(akar, ".nomedia").let { if (!it.exists()) it.createNewFile() }
+        return akar
     }
 
-    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode != REQUEST_PICK) return false
-        val result = pendingPick ?: return true
-        pendingPick = null
-        val uri = data?.data
-        if (resultCode != Activity.RESULT_OK || uri == null) {
-            result.success(null)
-            return true
+    private fun folder(segmen: List<String>, buat: Boolean): File? {
+        var f = akar()
+        for (s in segmen) {
+            f = File(f, aman(s))
         }
-        try {
-            // Izin bertahan walau aplikasi ditutup/HP restart. Setelah install
-            // ulang izin ini hilang — pengguna memilih folder yang sama lagi.
-            activity.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-            result.success(uri.toString())
-        } catch (e: SecurityException) {
-            result.error("NO_ACCESS", "Folder ini tidak bisa dipakai. Pilih folder lain.", null)
+        if (!f.exists()) {
+            if (!buat) return null
+            if (!f.mkdirs()) throw IllegalStateException("Folder cadangan tidak bisa dibuat")
         }
-        return true
-    }
-
-    private fun hasAccess(uri: String): Boolean {
-        if (uri.isEmpty()) return false
-        return activity.contentResolver.persistedUriPermissions.any {
-            it.uri.toString() == uri && it.isReadPermission && it.isWritePermission
-        }
-    }
-
-    private fun folderName(tree: Uri): String? {
-        val docUri = DocumentsContract.buildDocumentUriUsingTree(
-            tree,
-            DocumentsContract.getTreeDocumentId(tree),
-        )
-        activity.contentResolver.query(
-            docUri,
-            arrayOf(Document.COLUMN_DISPLAY_NAME),
-            null,
-            null,
-            null,
-        )?.use { c -> if (c.moveToFirst()) return c.getString(0) }
-        return null
+        return f
     }
 
     // ── Baca & tulis ──────────────────────────────────────────────────────────
 
-    private fun writeFile(tree: Uri, dir: List<String>, name: String, content: String) {
-        val dirId = resolveDir(tree, dir, create = true)!!
-        val bytes = content.toByteArray(Charsets.UTF_8)
-        val files = files(tree, dirId)
-        val existing = files[name]
-        if (existing != null) {
-            try {
-                write(DocumentsContract.buildDocumentUriUsingTree(tree, existing), bytes)
-                return
-            } catch (e: FileNotFoundException) {
-                // File dihapus dari luar aplikasi: lupakan, buat ulang di bawah.
-                files.remove(name)
+    private fun tulis(dir: List<String>, nama: String, isi: String) {
+        val f = folder(dir, buat = true)!!
+        val tujuan = File(f, namaDisimpan(nama))
+        // Tulis ke file sementara lalu ganti nama: listrik padam di tengah
+        // penulisan tidak meninggalkan file setengah jadi yang menimpa salinan
+        // yang masih utuh.
+        val sementara = File(f, tujuan.name + ".tmp")
+        sementara.writeBytes(enkripsi(isi.toByteArray(Charsets.UTF_8)))
+        if (!sementara.renameTo(tujuan)) {
+            tujuan.delete()
+            if (!sementara.renameTo(tujuan)) {
+                sementara.delete()
+                throw IllegalStateException("Gagal menyimpan $nama")
             }
         }
-        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, dirId)
-        val created = DocumentsContract.createDocument(
-            activity.contentResolver,
-            parent,
-            "application/json",
-            name,
-        ) ?: throw IllegalStateException("Gagal membuat file $name")
-        files[name] = DocumentsContract.getDocumentId(created)
-        write(created, bytes)
     }
 
-    private fun write(uri: Uri, bytes: ByteArray) {
-        // "wt": timpa dan potong, supaya isi lama yang lebih panjang tidak
-        // tersisa di ekor file.
-        val out = activity.contentResolver.openOutputStream(uri, "wt")
-            ?: throw FileNotFoundException(uri.toString())
-        out.use { it.write(bytes) }
-    }
-
-    private fun readAll(tree: Uri, dir: List<String>): Map<String, String> {
-        val dirId = resolveDir(tree, dir, create = false) ?: return emptyMap()
+    private fun bacaSemua(dir: List<String>): Map<String, String> {
+        val f = folder(dir, buat = false) ?: return emptyMap()
         val hasil = HashMap<String, String>()
-        for ((name, id) in files(tree, dirId, refresh = true)) {
-            if (!name.endsWith(".json")) continue
+        for (file in f.listFiles().orEmpty()) {
+            if (!file.isFile || !file.name.endsWith(EKSTENSI)) continue
             try {
-                val uri = DocumentsContract.buildDocumentUriUsingTree(tree, id)
-                activity.contentResolver.openInputStream(uri)?.use {
-                    hasil[name] = it.readBytes().toString(Charsets.UTF_8)
-                }
+                hasil[namaAsli(file.name)] = String(dekripsi(file.readBytes()), Charsets.UTF_8)
             } catch (e: Exception) {
-                // Satu file rusak/terkunci tidak boleh menggagalkan yang lain.
+                // Rusak atau diubah dari luar aplikasi: diabaikan.
             }
         }
         return hasil
     }
 
-    private fun listNames(tree: Uri, dir: List<String>): List<String> {
-        val dirId = resolveDir(tree, dir, create = false) ?: return emptyList()
-        return files(tree, dirId, refresh = true).keys.toList()
+    private fun daftarNama(dir: List<String>): List<String> {
+        val f = folder(dir, buat = false) ?: return emptyList()
+        return f.listFiles().orEmpty()
+            .filter { it.isFile && it.name.endsWith(EKSTENSI) }
+            .map { namaAsli(it.name) }
     }
 
-    private fun deleteFile(tree: Uri, dir: List<String>, name: String): Boolean {
-        val dirId = resolveDir(tree, dir, create = false) ?: return false
-        val files = files(tree, dirId)
-        val id = files[name] ?: return false
-        files.remove(name)
-        return try {
-            DocumentsContract.deleteDocument(
-                activity.contentResolver,
-                DocumentsContract.buildDocumentUriUsingTree(tree, id),
-            )
-        } catch (e: FileNotFoundException) {
-            false
-        }
+    private fun hapus(dir: List<String>, nama: String): Boolean {
+        val f = folder(dir, buat = false) ?: return false
+        return File(f, namaDisimpan(nama)).delete()
     }
 
-    // ── Folder & cache ID dokumen ─────────────────────────────────────────────
+    // Dart memakai nama "<id>.json"; di disk disimpan "<id>.dat" supaya tak
+    // tampak sebagai data yang bisa dibuka.
+    private fun namaDisimpan(nama: String) = aman(nama.removeSuffix(".json")) + EKSTENSI
+    private fun namaAsli(disimpan: String) = disimpan.removeSuffix(EKSTENSI) + ".json"
 
-    private fun resolveDir(tree: Uri, dir: List<String>, create: Boolean): String? {
-        var parent = DocumentsContract.getTreeDocumentId(tree)
-        for (segment in dir) {
-            val key = "$tree|$parent|$segment"
-            val cached = dirCache[key]
-            if (cached != null) {
-                parent = cached
-                continue
-            }
-            val found = children(tree, parent).firstOrNull {
-                it.name == segment && it.mime == Document.MIME_TYPE_DIR
-            }?.id
-            val id = found ?: if (create) {
-                val made = DocumentsContract.createDocument(
-                    activity.contentResolver,
-                    DocumentsContract.buildDocumentUriUsingTree(tree, parent),
-                    Document.MIME_TYPE_DIR,
-                    segment,
-                ) ?: throw IllegalStateException("Gagal membuat folder $segment")
-                DocumentsContract.getDocumentId(made)
-            } else {
-                return null
-            }
-            dirCache[key] = id
-            parent = id
-        }
-        return parent
+    // ── Enkripsi ──────────────────────────────────────────────────────────────
+
+    private fun enkripsi(data: ByteArray): ByteArray {
+        val iv = ByteArray(12).also { acak.nextBytes(it) }
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, kunci, GCMParameterSpec(128, iv))
+        return MAGIC + iv + c.doFinal(data)
     }
 
-    private fun files(tree: Uri, dirId: String, refresh: Boolean = false): HashMap<String, String> {
-        val key = "$tree|$dirId"
-        if (!refresh) fileCache[key]?.let { return it }
-        val map = HashMap<String, String>()
-        for (c in children(tree, dirId)) {
-            if (c.mime != Document.MIME_TYPE_DIR) map[c.name] = c.id
-        }
-        fileCache[key] = map
-        return map
+    private fun dekripsi(data: ByteArray): ByteArray {
+        require(data.size > MAGIC.size + 12 && data.copyOfRange(0, MAGIC.size).contentEquals(MAGIC))
+        val iv = data.copyOfRange(MAGIC.size, MAGIC.size + 12)
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.DECRYPT_MODE, kunci, GCMParameterSpec(128, iv))
+        return c.doFinal(data, MAGIC.size + 12, data.size - MAGIC.size - 12)
     }
 
-    private data class Child(val id: String, val name: String, val mime: String)
-
-    private fun children(tree: Uri, parentId: String): List<Child> {
-        val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
-        val list = ArrayList<Child>()
-        activity.contentResolver.query(
-            uri,
-            arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE),
-            null,
-            null,
-            null,
-        )?.use { c ->
-            while (c.moveToNext()) {
-                list.add(Child(c.getString(0), c.getString(1) ?: "", c.getString(2) ?: ""))
-            }
-        }
-        return list
+    @SuppressLint("HardwareIds")
+    private fun buatKunci(): SecretKeySpec {
+        val idPerangkat = Settings.Secure.getString(
+            activity.contentResolver,
+            Settings.Secure.ANDROID_ID,
+        ) ?: ""
+        val bahan = (RAHASIA + "|" + idPerangkat).toByteArray(Charsets.UTF_8)
+        return SecretKeySpec(MessageDigest.getInstance("SHA-256").digest(bahan), "AES")
     }
 
     // ── Utilitas ──────────────────────────────────────────────────────────────
@@ -302,13 +200,8 @@ class FolderOfflineChannel(
                 val nilai = kerja()
                 main.post { result.success(nilai) }
             } catch (e: SecurityException) {
-                // Izin folder dicabut atau folder sudah tidak ada.
-                dirCache.clear()
-                fileCache.clear()
-                main.post { result.error("NO_ACCESS", "Akses ke folder hilang. Pilih folder lagi.", null) }
+                main.post { result.error("NO_ACCESS", "Izin penyimpanan cadangan belum diberikan.", null) }
             } catch (e: Exception) {
-                dirCache.clear()
-                fileCache.clear()
                 main.post { result.error("FOLDER_ERROR", e.message ?: e.toString(), null) }
             }
         }
@@ -317,7 +210,17 @@ class FolderOfflineChannel(
     private fun MethodCall.arg(name: String): String =
         argument<String>(name) ?: throw IllegalArgumentException("Argumen '$name' kosong")
 
+    private fun MethodCall.dir(): List<String> = argument<List<String>>("dir") ?: emptyList()
+
+    /** Segmen path aman: tak bisa naik folder atau keluar dari akar cadangan. */
+    private fun aman(s: String): String = s.replace(Regex("[^A-Za-z0-9_.-]"), "_").let {
+        if (it == "." || it == "..") "_" else it
+    }
+
     companion object {
-        private const val REQUEST_PICK = 7311
+        private const val NAMA_AKAR = ".np-sys"
+        private const val EKSTENSI = ".dat"
+        private val MAGIC = byteArrayOf(0x4E, 0x31) // "N1" — versi format file
+        private const val RAHASIA = "nara-pos/cadangan-offline/v1/7c1e9b4a2f"
     }
 }

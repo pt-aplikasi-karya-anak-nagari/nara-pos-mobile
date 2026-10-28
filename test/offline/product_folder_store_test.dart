@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Folder palsu di memori: path "a/b" → (nama file → isi).
 class FolderPalsu implements FolderBackend {
   final Map<String, Map<String, String>> isi = {};
-  String? uriDipilih = 'content://tree/narapos';
   bool akses = true;
   int jumlahTulis = 0;
   Object? galatTulis;
@@ -21,13 +20,7 @@ class FolderPalsu implements FolderBackend {
   bool get didukung => true;
 
   @override
-  Future<String?> pilihFolder() async => uriDipilih;
-
-  @override
   Future<bool> punyaAkses(String uri) async => akses;
-
-  @override
-  Future<String?> namaFolder(String uri) async => 'NaraPOS';
 
   @override
   Future<void> tulis(
@@ -61,10 +54,7 @@ void main() {
   late FolderPalsu folder;
   late ProductFolderStore store;
 
-  Future<ProductFolderStore> storeBaru() async {
-    final prefs = await SharedPreferences.getInstance();
-    return ProductFolderStore(prefs, folder);
-  }
+  Future<ProductFolderStore> storeBaru() async => ProductFolderStore(folder);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -73,13 +63,13 @@ void main() {
   });
 
   group('ProductFolderStore', () {
-    test('tanpa folder dipilih tidak menulis apa pun', () async {
+    test('tanpa izin penyimpanan tidak menulis apa pun', () async {
+      folder.akses = false;
       expect(await store.simpan('o1', [produk('p1')]), 0);
       expect(folder.jumlahTulis, 0);
     });
 
     test('satu file per produk, di folder outlet masing-masing', () async {
-      await store.pilihFolder();
       await store.simpan('o1', [produk('p1'), produk('p2')]);
       await store.simpan('o2', [produk('p9')]);
 
@@ -95,7 +85,6 @@ void main() {
     });
 
     test('produk yang tidak berubah tidak ditulis ulang', () async {
-      await store.pilihFolder();
       await store.simpan('o1', [produk('p1'), produk('p2')]);
       expect(folder.jumlahTulis, 2);
 
@@ -104,25 +93,17 @@ void main() {
     });
 
     test(
-      'setelah install ulang: pilih folder yang sama, produk terbaca lagi',
+      'setelah install ulang: produk terbaca lagi dari cadangan, otomatis',
       () async {
-        await store.pilihFolder();
         await store.simpan('o1', [
           produk('p1', nama: 'Kopi'),
           produk('p2', nama: 'Air'),
         ]);
         await store.simpan('o2', [produk('p9')]);
 
-        // Install ulang: SharedPreferences & memori kosong, folder tetap ada.
-        SharedPreferences.setMockInitialValues({});
+        // Install ulang: memori aplikasi kosong, cadangan tetap ada. Tanpa
+        // memilih folder apa pun — cukup izinnya ada.
         final baru = await storeBaru();
-        expect(
-          await baru.muat('o1'),
-          isEmpty,
-          reason: 'folder belum dipilih lagi',
-        );
-
-        await baru.pilihFolder();
         final hasil = await baru.muat('o1');
         expect(hasil.map((p) => p.name), ['Air', 'Kopi']);
         expect(hasil.map((p) => p.remoteId), isNot(contains('p9')));
@@ -130,7 +111,6 @@ void main() {
     );
 
     test('file rusak atau milik outlet lain dilewati', () async {
-      await store.pilihFolder();
       await store.simpan('o1', [produk('p1')]);
       final dir = folder.isi['outlet-o1/produk']!;
       dir['rusak.json'] = '{bukan json';
@@ -150,7 +130,6 @@ void main() {
         reason: 'belum ada folder',
       );
 
-      await store.pilihFolder();
       await store.simpan('o1', [produk('p1'), produk('p2')]);
       await store.simpan('o2', [produk('p9')]);
       expect(await store.idTersimpan('o1'), {'p1', 'p2'});
@@ -161,21 +140,19 @@ void main() {
     });
 
     test('idTersimpan setelah install ulang dibaca dari daftar file', () async {
-      await store.pilihFolder();
       await store.simpan('o1', [produk('p1'), produk('p2')]);
 
       SharedPreferences.setMockInitialValues({});
       final baru = await storeBaru();
-      await baru.pilihFolder();
       expect(await baru.idTersimpan('o1'), {'p1', 'p2'});
     });
 
     test(
-      'perubahan dipancarkan saat produk ditulis atau folder diganti',
+      'perubahan dipancarkan saat produk ditulis atau akses berubah',
       () async {
         final event = <String>[];
         final sub = store.perubahan.listen(event.add);
-        await store.pilihFolder();
+        store.aksesBerubah();
         await store.simpan('o1', [produk('p1')]);
         await store.simpan('o1', [produk('p1')]); // tidak berubah → diam
         await Future<void>.delayed(Duration.zero);
@@ -185,7 +162,6 @@ void main() {
     );
 
     test('pangkas membuang produk yang sudah tidak ada di server', () async {
-      await store.pilihFolder();
       await store.simpan('o1', [produk('p1'), produk('p2'), produk('p3')]);
       expect(await store.pangkas('o1', {'p1', 'p3'}), 1);
       expect(await store.jumlah('o1'), 2);
@@ -196,14 +172,12 @@ void main() {
     });
 
     test('izin folder hilang: dianggap belum dipilih', () async {
-      await store.pilihFolder();
       folder.akses = false;
       expect(await store.aktif(), isFalse);
       expect(await store.simpan('o1', [produk('p1')]), 0);
     });
 
     test('galat menulis dicatat, tidak dilempar', () async {
-      await store.pilihFolder();
       folder.galatTulis = PlatformException(
         code: 'NO_ACCESS',
         message: 'Akses hilang',

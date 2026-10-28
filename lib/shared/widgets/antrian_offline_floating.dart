@@ -414,7 +414,7 @@ class _Panel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final antrian = ref.watch(antrianOfflineProvider).value;
-    final adaCadangan = ref.watch(folderCadanganAktifProvider).value;
+    final adaCadangan = ref.watch(izinCadanganProvider);
     final adaAntrian = menunggu + shiftMenunggu + gagal + shiftGagal > 0;
     final bisaKirim =
         !offline && !progres.berjalan && menunggu + shiftMenunggu > 0;
@@ -475,14 +475,15 @@ class _Panel extends ConsumerWidget {
             if (adaAntrian && adaCadangan != null)
               _BarisInfo(
                 ikon: adaCadangan
-                    ? Icons.folder_outlined
+                    ? Icons.verified_user_outlined
                     : Icons.warning_amber_rounded,
                 warna: adaCadangan ? kSuccess : kWarning,
                 teks: adaCadangan
-                    ? 'Tersalin juga ke folder cadangan — aman walau aplikasi '
-                          'terhapus.'
-                    : 'Belum ada folder cadangan: transaksi ini hilang bila '
-                          'aplikasi terhapus. Atur di Profil › Data Offline.',
+                    ? 'Tercadangkan otomatis di perangkat — aman walau '
+                          'aplikasi terhapus.'
+                    : 'Penyimpanan cadangan belum aktif: transaksi ini hilang '
+                          'bila aplikasi terhapus. Aktifkan di Profil › Data '
+                          'Offline.',
               ),
             Flexible(
               child: ListView(

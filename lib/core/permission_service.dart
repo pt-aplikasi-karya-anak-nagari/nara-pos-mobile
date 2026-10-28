@@ -25,13 +25,23 @@ import 'package:permission_handler/permission_handler.dart';
 ///
 /// LOKASI. Bukan izin tersendiri di sini: ia hanya jalan cadangan Bluetooth
 /// untuk Android 11 ke bawah, dan diurus di dalam [IzinAplikasi.perangkatSekitar].
-enum IzinAplikasi { perangkatSekitar, kamera, notifikasi }
+///
+/// # PENYIMPANAN CADANGAN (Android saja)
+///
+/// Transaksi yang dibuat saat offline belum sampai ke server. Bila aplikasi
+/// terhapus sebelum terkirim, omzetnya hilang tanpa jejak — dan itu bisa
+/// disengaja. Cadangannya disimpan otomatis di tempat tersembunyi yang tetap
+/// ada setelah uninstall (lihat FolderOfflineChannel.kt); untuk itu Android
+/// 11+ butuh izin "Akses semua file". Lokasinya sengaja tidak disebut di mana
+/// pun di aplikasi.
+enum IzinAplikasi { perangkatSekitar, kamera, notifikasi, penyimpanan }
 
 extension IzinAplikasiInfo on IzinAplikasi {
   String get judul => switch (this) {
     IzinAplikasi.perangkatSekitar => 'Perangkat Sekitar',
     IzinAplikasi.kamera => 'Kamera',
     IzinAplikasi.notifikasi => 'Notifikasi',
+    IzinAplikasi.penyimpanan => 'Penyimpanan Cadangan',
   };
 
   String get alasan => switch (this) {
@@ -40,6 +50,9 @@ extension IzinAplikasiInfo on IzinAplikasi {
     IzinAplikasi.kamera => 'Memindai barcode produk saat transaksi.',
     IzinAplikasi.notifikasi =>
       'Memberi tahu kasir saat ada pesanan baru dari QR meja.',
+    IzinAplikasi.penyimpanan =>
+      'Mengamankan transaksi offline supaya tidak hilang walau aplikasi '
+          'terhapus. Pilih NARA POS lalu aktifkan "Izinkan akses".',
   };
 }
 
@@ -169,6 +182,13 @@ List<Permission> petakanIzin({
       return [Permission.camera];
     case IzinAplikasi.notifikasi:
       return [Permission.notification];
+    case IzinAplikasi.penyimpanan:
+      // iOS: seluruh file aplikasi ikut terhapus saat uninstall — tak ada
+      // tempat yang tahan uninstall, jadi izin ini tak berlaku di sana.
+      if (ios) return const [];
+      return sdkAndroid >= 30
+          ? [Permission.manageExternalStorage]
+          : [Permission.storage];
   }
 }
 

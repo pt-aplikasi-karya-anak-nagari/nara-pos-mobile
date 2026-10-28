@@ -119,6 +119,32 @@ void main() {
       );
     });
 
+    test('penyimpanan cadangan: Android 11+ "akses semua file"', () {
+      // Hanya izin ini yang membuat aplikasi yang di-install ulang bisa
+      // membaca cadangannya sendiri di penyimpanan bersama.
+      List<Permission> di(int sdk) => petakanIzin(
+        izin: IzinAplikasi.penyimpanan,
+        android: true,
+        ios: false,
+        sdkAndroid: sdk,
+      );
+      expect(di(29), [Permission.storage]);
+      expect(di(30), [Permission.manageExternalStorage]);
+      expect(di(35), [Permission.manageExternalStorage]);
+    });
+
+    test('penyimpanan cadangan tak berlaku di iOS', () {
+      expect(
+        petakanIzin(
+          izin: IzinAplikasi.penyimpanan,
+          android: false,
+          ios: true,
+          sdkAndroid: 0,
+        ),
+        isEmpty,
+      );
+    });
+
     test('platform tanpa izin runtime menghasilkan daftar kosong', () {
       // Bukan sekadar kerapian: daftar kosong dirangkum jadi "diberikan", dan
       // itulah yang membuat gerbang tidak menahan di lingkungan yang memang
@@ -137,12 +163,14 @@ void main() {
       // butuh izin apa pun, jadi Permission.photos di sana selalu ditolak.
       // Memasukkannya ke daftar wajib mengunci setiap perangkat Android modern
       // di gerbang ini, selamanya, tanpa cara keluar.
-      expect(IzinAplikasi.values, hasLength(3));
+      expect(IzinAplikasi.values, hasLength(4));
       expect(IzinAplikasi.values.map((e) => e.name), [
         'perangkatSekitar',
         'kamera',
         'notifikasi',
+        'penyimpanan',
       ]);
+      expect(IzinAplikasi.values.map((e) => e.name), isNot(contains('galeri')));
     });
   });
 
@@ -282,8 +310,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         palsu.diminta,
-        3,
-        reason: 'hanya ${palsu.diminta} dari 3 izin yang diminta',
+        IzinAplikasi.values.length,
+        reason:
+            'hanya ${palsu.diminta} dari ${IzinAplikasi.values.length} '
+            'izin yang diminta',
       );
     });
 

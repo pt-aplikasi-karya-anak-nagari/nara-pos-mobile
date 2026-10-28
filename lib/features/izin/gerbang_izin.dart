@@ -30,8 +30,13 @@ class GerbangIzin extends Notifier<bool?> {
   /// pengguna kembali dari halaman Pengaturan, dan sesudah tiap permintaan.
   Future<void> periksa() async {
     try {
-      state = await ref.read(systemPermissionServiceProvider).semuaDiberikan;
+      final semua = await ref.read(systemPermissionServiceProvider).semuaDiberikan;
+      // Pemeriksaan izin asinkron; provider bisa saja sudah dibuang saat
+      // hasilnya tiba (mis. aplikasi ditutup) — mengubah state-nya melempar.
+      if (!ref.mounted) return;
+      state = semua;
     } catch (_) {
+      if (!ref.mounted) return;
       // Kegagalan membaca izin BUKAN alasan mengunci kasir dari alat kerjanya.
       //
       // Yang dijaga gerbang ini adalah pengguna yang menolak izin, bukan

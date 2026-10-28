@@ -176,6 +176,10 @@ void main() {
   testWidgets('ketuk: rincian transaksi, tanpa crash di luar Navigator', (
     tester,
   ) async {
+    // Layar tablet melintang, seperti di kasir.
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       _app(
         menunggu: 2,

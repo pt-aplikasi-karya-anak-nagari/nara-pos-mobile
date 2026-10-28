@@ -3,10 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/products/domain/product.dart';
-import '../shared_prefs.dart';
 import 'folder_offline.dart';
 
 /// Salinan produk di folder pilihan pengguna: SATU file per produk, dikelompokkan
@@ -32,12 +30,14 @@ import 'folder_offline.dart';
 /// terputus di tengah tetap meninggalkan produk yang sudah sempat diterima.
 /// Mengubah satu produk juga hanya menulis ulang satu file kecil.
 class ProductFolderStore {
-  ProductFolderStore(this._prefs, this._backend);
+  ProductFolderStore(this._backend);
 
-  static const kunciUri = 'offline.folder_uri';
   static const _versi = 1;
 
-  final SharedPreferences _prefs;
+  /// Penanda penyimpanan cadangan. Lokasi sebenarnya ditentukan di sisi
+  /// native dan sengaja tidak pernah diketahui atau ditampilkan aplikasi.
+  static const lokasiCadangan = 'cadangan';
+
   final FolderBackend _backend;
 
   /// `outlet|produk` → JSON produk yang terakhir ditulis/dibaca. Sinkron
@@ -48,55 +48,28 @@ class ProductFolderStore {
   /// berikutnya.
   Future<void> _antrian = Future.value();
 
-  /// Pesan galat terakhir saat menulis/membaca folder, untuk halaman
+  /// Pesan galat terakhir saat menulis/membaca cadangan, untuk halaman
   /// pengaturan. Null bila operasi terakhir berhasil.
   String? galatTerakhir;
 
-  /// outletId → ID produk yang filenya ada di folder. Diisi dari daftar file
-  /// saat pertama diminta, lalu diperbarui setiap tulis/pangkas.
+  /// outletId → ID produk yang filenya ada di cadangan. Diisi dari daftar
+  /// file saat pertama diminta, lalu diperbarui setiap tulis/pangkas.
   final Map<String, Set<String>> _idDiketahui = {};
 
   final _perubahan = StreamController<String>.broadcast();
 
-  /// Memancarkan outletId setiap isi folder outlet itu berubah, atau `*` bila
-  /// folder diganti/dilepas.
+  /// Memancarkan outletId setiap isi cadangan outlet itu berubah, atau `*`
+  /// bila akses ke cadangan berubah.
   Stream<String> get perubahan => _perubahan.stream;
 
   bool get didukung => _backend.didukung;
 
-  String? get folderUri {
-    final uri = _prefs.getString(kunciUri);
-    return uri == null || uri.isEmpty ? null : uri;
-  }
-
-  /// Folder sudah dipilih DAN izinnya masih ada.
+  /// Izin penyimpanan cadangan sudah diberikan.
   Future<bool> aktif() async => await _uriAktif() != null;
 
-  Future<String?> namaFolder() async {
-    final uri = await _uriAktif();
-    if (uri == null) return null;
-    try {
-      return await _backend.namaFolder(uri);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Membuka pemilih folder. Mengembalikan true bila folder baru tersimpan.
-  Future<bool> pilihFolder() async {
-    final uri = await _backend.pilihFolder();
-    if (uri == null || uri.isEmpty) return false;
-    await _prefs.setString(kunciUri, uri);
-    // Folder baru: semua produk perlu ditulis lagi ke sana.
-    _terakhir.clear();
-    _idDiketahui.clear();
-    galatTerakhir = null;
-    _perubahan.add('*');
-    return true;
-  }
-
-  Future<void> lepasFolder() async {
-    await _prefs.remove(kunciUri);
+  /// Dipanggil saat izin baru saja diberikan: lupakan memori tulis supaya
+  /// semua data ditulis lagi ke cadangan.
+  void aksesBerubah() {
     _terakhir.clear();
     _idDiketahui.clear();
     galatTerakhir = null;
@@ -271,11 +244,61 @@ class ProductFolderStore {
     });
   }
 
+  /// Cadangan add-on seluruh produk outlet (productId → grup, JSON mentah dari
+  /// server) — satu file per outlet.
+  Future<void> simpanAddOn(
+    String outletId,
+    Map<String, List<Map<String, dynamic>>> semua,
+  ) {
+    return _jalankan(() async {
+      final uri = await _uriAktif();
+      if (uri == null || outletId.isEmpty) return;
+      try {
+        await _backend.tulis(
+          uri,
+          [folderOutlet(outletId), 'addon'],
+          'semua.json',
+          jsonEncode({'versi': _versi, 'outlet_id': outletId, 'addon': semua}),
+        );
+      } catch (e) {
+        galatTerakhir = _pesan(e);
+      }
+    });
+  }
+
+  /// Add-on seluruh produk outlet dari cadangan; kosong bila tak ada.
+  Future<Map<String, List<Map<String, dynamic>>>> muatAddOn(String outletId) {
+    return _jalankan(() async {
+      final uri = await _uriAktif();
+      if (uri == null || outletId.isEmpty) return const {};
+      try {
+        final files = await _backend.bacaSemua(uri, [
+          folderOutlet(outletId),
+          'addon',
+        ]);
+        final data = jsonDecode(files['semua.json'] ?? '{}');
+        if (data is! Map || data['outlet_id'] != outletId) return const {};
+        final addon = data['addon'];
+        if (addon is! Map) return const {};
+        return {
+          for (final e in addon.entries)
+            if (e.value is List)
+              e.key.toString(): [
+                for (final g in e.value as List)
+                  if (g is Map) Map<String, dynamic>.from(g),
+              ],
+        };
+      } catch (e) {
+        galatTerakhir = _pesan(e);
+        return const {};
+      }
+    });
+  }
+
   Future<String?> _uriAktif() async {
-    final uri = folderUri;
-    if (uri == null || !_backend.didukung) return null;
+    if (!_backend.didukung) return null;
     try {
-      return await _backend.punyaAkses(uri) ? uri : null;
+      return await _backend.punyaAkses(lokasiCadangan) ? lokasiCadangan : null;
     } catch (_) {
       return null;
     }
@@ -302,8 +325,5 @@ final folderBackendProvider = Provider<FolderBackend>(
 );
 
 final productFolderStoreProvider = Provider<ProductFolderStore>(
-  (ref) => ProductFolderStore(
-    ref.watch(sharedPreferencesProvider),
-    ref.watch(folderBackendProvider),
-  ),
+  (ref) => ProductFolderStore(ref.watch(folderBackendProvider)),
 );
