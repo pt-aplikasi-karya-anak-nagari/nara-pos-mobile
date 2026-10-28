@@ -36,14 +36,16 @@ import '../../../drafts/providers.dart';
 class HeaderAksiKasir extends ConsumerWidget {
   final VoidCallback onScan;
   final VoidCallback onCustomOrder;
-  final VoidCallback onMeja;
+  /// Null = tombol Meja tak ditampilkan (fitur Meja tak berlaku untuk tipe
+  /// outlet / paket ini).
+  final VoidCallback? onMeja;
   final VoidCallback onDraft;
 
   const HeaderAksiKasir({
     super.key,
     required this.onScan,
     required this.onCustomOrder,
-    required this.onMeja,
+    this.onMeja,
     required this.onDraft,
   });
 
@@ -63,11 +65,12 @@ class HeaderAksiKasir extends ConsumerWidget {
         labelPendek: 'Custom',
         onTap: onCustomOrder,
       ),
-      _Aksi(
-        icon: HugeIcons.strokeRoundedTable02,
-        label: 'Meja',
-        onTap: onMeja,
-      ),
+      if (onMeja != null)
+        _Aksi(
+          icon: HugeIcons.strokeRoundedTable02,
+          label: 'Meja',
+          onTap: onMeja!,
+        ),
       _Aksi(
         icon: AppIcons.task,
         label: 'Draft',

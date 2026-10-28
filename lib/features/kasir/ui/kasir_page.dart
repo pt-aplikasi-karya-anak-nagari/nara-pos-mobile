@@ -42,6 +42,7 @@ import 'widgets/cart_sheet.dart';
 import 'widgets/header_aksi_kasir.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
+import '../../subscription/data/subscription_repository.dart';
 
 class KasirPage extends HookConsumerWidget {
   const KasirPage({super.key});
@@ -1298,23 +1299,26 @@ class _Header extends HookConsumerWidget {
                   backgroundColor: Colors.transparent,
                   builder: (_) => const CustomOrderSheet(),
                 ),
-                onMeja: () => showDialog(
-                  context: context,
-                  builder: (ctx) => Dialog(
-                    insetPadding: const EdgeInsets.all(16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: context.isTablet ? 1100 : 500,
-                        maxHeight: MediaQuery.of(context).size.height * 0.85,
+                // Fitur Meja bisa dimatikan untuk tipe outlet (mis. Retail).
+                onMeja: !ref.hasFeature('table_management')
+                    ? null
+                    : () => showDialog(
+                        context: context,
+                        builder: (ctx) => Dialog(
+                          insetPadding: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: context.isTablet ? 1100 : 500,
+                              maxHeight: MediaQuery.of(context).size.height * 0.85,
+                            ),
+                            child: const TableManagementPage(isReadOnly: true),
+                          ),
+                        ),
                       ),
-                      child: const TableManagementPage(isReadOnly: true),
-                    ),
-                  ),
-                ),
                 onDraft: () => tampilkanSheetBawah(
                   context: context,
                   isScrollControlled: true,

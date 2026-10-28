@@ -20,6 +20,7 @@ import '../../features/profil/data/profil_state.dart';
 import '../../features/user/data/auth_service.dart';
 import '../../features/user/domain/user_role.dart';
 import 'sheet_bawah.dart';
+import '../../features/subscription/data/subscription_repository.dart';
 
 class NavItem {
   final IconAsset icon;
@@ -358,27 +359,29 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
         builder: (_) => const CustomOrderSheet(),
       ),
     ),
-    _TombolAksi(
-      icon: HugeIcons.strokeRoundedTable02,
-      label: 'Meja',
-      onTap: () => showDialog(
-        context: context,
-        builder: (_) => Dialog(
-          insetPadding: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: context.isTablet ? 1100 : 500,
-              maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+    // Fitur Meja bisa dimatikan untuk tipe outlet (mis. Retail).
+    if (ref.hasFeature('table_management'))
+      _TombolAksi(
+        icon: HugeIcons.strokeRoundedTable02,
+        label: 'Meja',
+        onTap: () => showDialog(
+          context: context,
+          builder: (_) => Dialog(
+            insetPadding: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
             ),
-            child: const TableManagementPage(isReadOnly: true),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: context.isTablet ? 1100 : 500,
+                maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+              ),
+              child: const TableManagementPage(isReadOnly: true),
+            ),
           ),
         ),
       ),
-    ),
     _TombolAksi(
       icon: AppIcons.task,
       label: 'Draft',

@@ -34,6 +34,7 @@ import '../../../tables/data/table_repository.dart';
 import '../../../tables/domain/pos_table.dart';
 import 'table_selector_sheet.dart';
 import '../../../../shared/widgets/sheet_bawah.dart';
+import '../../../subscription/data/subscription_repository.dart';
 
 // Payment methods are now loaded from the database via paymentMethodsFutureProvider
 
@@ -173,7 +174,12 @@ class PaymentSheet extends HookConsumerWidget {
     final activeCustomer = ref.watch(activeCustomerProvider);
     final activeTable = ref.watch(activeTableProvider);
     final loyaltySettings = ref.watch(loyaltySettingsProvider);
-    final isDineIn = activeOrderType?.name == 'Dine In';
+    // Meja hanya diwajibkan bila fitur Meja berlaku untuk outlet ini. Outlet
+    // yang fiturnya dimatikan (mis. Retail) tak punya daftar meja — memaksa
+    // memilih meja di sana membuat checkout Dine In buntu.
+    final isDineIn =
+        activeOrderType?.name == 'Dine In' &&
+        ref.hasFeature('table_management');
 
     // ── Hitung diskon promo + tukar poin, lalu total yang benar-benar dibayar.
     final cartItems = ref.watch(cartProvider);
@@ -518,7 +524,14 @@ class PaymentSheet extends HookConsumerWidget {
       // Cetak otomatis satu tiket dapur. `cart` di-snapshot di awal confirmPay
       // (sebelum keranjang di-clear di atas). Gated toggle terpisah; perilaku
       // lama tak berubah saat toggle mati.
-      if (effectivePrinter.autoPrintKitchen && printerSettings.hasDevice) {
+      // Tiket dapur ikut fitur Kitchen Display (bisa dimatikan untuk tipe
+      // outlet, mis. Retail). Daftar kosong = belum termuat → fail-open.
+      final fiturOutlet = ref.read(outletFeatureKeysProvider);
+      final dapurBerlaku =
+          fiturOutlet.isEmpty || fiturOutlet.contains('kitchen_display');
+      if (effectivePrinter.autoPrintKitchen &&
+          printerSettings.hasDevice &&
+          dapurBerlaku) {
         await ref.read(printerServiceProvider).printKitchenTickets(sale, cart);
       }
       // Buka laci kas otomatis bila ada porsi tunai. No-op aman bila

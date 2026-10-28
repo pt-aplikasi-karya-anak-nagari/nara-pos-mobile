@@ -67,6 +67,7 @@ const _kodeKondisiMenetap = {
   'subscription_expired',
   'subscription_grace_period',
   'feature_not_in_plan',
+  'feature_not_for_outlet_type',
   'outlet_suspended',
   'permission_denied',
 };
