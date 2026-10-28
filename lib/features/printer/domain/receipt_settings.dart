@@ -32,6 +32,13 @@ class OutletReceiptSettings {
   final String footerQrUrl;
   final String footerQrCaption;
 
+  // Sosmed & WiFi tamu (dikelola Owner di dashboard web).
+  final List<AkunSosmed> socialAccounts;
+  final bool showSocialAccounts;
+  final String wifiSsid;
+  final String wifiPassword;
+  final bool showWifi;
+
   // Display toggles
   final bool showCashierName;
   final bool showTableNumber;
@@ -63,6 +70,11 @@ class OutletReceiptSettings {
     this.footerShowQr = false,
     this.footerQrUrl = '',
     this.footerQrCaption = 'Scan untuk review',
+    this.socialAccounts = const [],
+    this.showSocialAccounts = true,
+    this.wifiSsid = '',
+    this.wifiPassword = '',
+    this.showWifi = false,
     this.showCashierName = true,
     this.showTableNumber = true,
     this.showCustomerName = true,
@@ -79,6 +91,7 @@ class OutletReceiptSettings {
 
   factory OutletReceiptSettings.fromJson(Map<String, dynamic> json) {
     final extra = json['header_extra_lines'];
+    final sosmed = json['social_accounts'];
     return OutletReceiptSettings(
       outletId: (json['outlet_id'] as String?) ?? '',
       paperSize: (json['paper_size'] as num?)?.toInt() ?? 58,
@@ -98,6 +111,16 @@ class OutletReceiptSettings {
       footerQrUrl: (json['footer_qr_url'] as String?) ?? '',
       footerQrCaption:
           (json['footer_qr_caption'] as String?) ?? 'Scan untuk review',
+      socialAccounts: sosmed is List
+          ? sosmed
+              .whereType<Map<String, dynamic>>()
+              .map(AkunSosmed.fromJson)
+              .toList()
+          : const <AkunSosmed>[],
+      showSocialAccounts: json['show_social_accounts'] as bool? ?? true,
+      wifiSsid: (json['wifi_ssid'] as String?) ?? '',
+      wifiPassword: (json['wifi_password'] as String?) ?? '',
+      showWifi: json['show_wifi'] as bool? ?? false,
       showCashierName: json['show_cashier_name'] as bool? ?? true,
       showTableNumber: json['show_table_number'] as bool? ?? true,
       showCustomerName: json['show_customer_name'] as bool? ?? true,
@@ -127,6 +150,11 @@ class OutletReceiptSettings {
         'footer_show_qr': footerShowQr,
         'footer_qr_url': footerQrUrl,
         'footer_qr_caption': footerQrCaption,
+        'social_accounts': socialAccounts.map((a) => a.toJson()).toList(),
+        'show_social_accounts': showSocialAccounts,
+        'wifi_ssid': wifiSsid,
+        'wifi_password': wifiPassword,
+        'show_wifi': showWifi,
         'show_cashier_name': showCashierName,
         'show_table_number': showTableNumber,
         'show_customer_name': showCustomerName,
@@ -141,8 +169,56 @@ class OutletReceiptSettings {
         'auto_print_after_paid': autoPrintAfterPaid,
       };
 
+  /// Baris akun sosmed untuk struk, mis. "IG @kopinara". Kosong bila dimatikan.
+  /// Label sama dengan pratinjau di dashboard web.
+  List<String> get barisSosmed {
+    if (!showSocialAccounts) return const [];
+    return [
+      for (final a in socialAccounts)
+        if (a.handle.trim().isNotEmpty) '${a.label} ${a.handle.trim()}',
+    ];
+  }
+
+  /// Baris WiFi tamu: nama, lalu sandi (bila ada). Kosong bila dimatikan
+  /// atau nama WiFi belum diisi. Sandi dicetak apa adanya.
+  List<String> get barisWifi {
+    if (!showWifi || wifiSsid.trim().isEmpty) return const [];
+    return [
+      'WiFi: ${wifiSsid.trim()}',
+      if (wifiPassword.isNotEmpty) 'Sandi: $wifiPassword',
+    ];
+  }
+
   // Default factory — match backend NewDefaultReceiptSettings().
   factory OutletReceiptSettings.defaults(String outletId) {
     return OutletReceiptSettings(outletId: outletId);
   }
+}
+
+/// Satu akun media sosial outlet.
+class AkunSosmed {
+  final String platform; // instagram | tiktok | facebook | x | youtube | whatsapp | website
+  final String handle;
+
+  const AkunSosmed({required this.platform, required this.handle});
+
+  factory AkunSosmed.fromJson(Map<String, dynamic> json) => AkunSosmed(
+        platform: (json['platform'] as String?) ?? '',
+        handle: (json['handle'] as String?) ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'platform': platform, 'handle': handle};
+
+  static const _label = {
+    'instagram': 'IG',
+    'tiktok': 'TikTok',
+    'facebook': 'FB',
+    'x': 'X',
+    'youtube': 'YouTube',
+    'whatsapp': 'WA',
+    'website': 'Web',
+  };
+
+  /// Label pendek di struk (sama dengan backend & web).
+  String get label => _label[platform] ?? platform;
 }

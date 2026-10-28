@@ -575,7 +575,7 @@ class PrinterService {
           styles: const PosStyles(align: PosAlign.right),
         ),
       ]),
-      ...gen.hr(ch: '-'),
+      ...gen.hr(),
       ...gen.row([
         PosColumn(
           text: 'Ekspektasi Kas',
@@ -642,7 +642,7 @@ class PrinterService {
           styles: const PosStyles(align: PosAlign.right),
         ),
       ]),
-      ...gen.hr(ch: '-'),
+      ...gen.hr(),
       ...gen.row([
         PosColumn(
           text: 'TOTAL PENJUALAN',
@@ -1056,6 +1056,32 @@ class PrinterService {
           styles: const PosStyles(align: PosAlign.center),
         ),
       );
+    }
+    // Akun sosmed & WiFi tamu outlet (diatur Owner di dashboard).
+    final sosmed = rs?.barisSosmed ?? const <String>[];
+    if (sosmed.isNotEmpty) {
+      bytes.addAll(gen.feed(1));
+      bytes.addAll(
+        gen.text(
+          'Ikuti kami',
+          styles: const PosStyles(align: PosAlign.center, bold: true),
+        ),
+      );
+      for (final b in sosmed) {
+        bytes.addAll(
+          gen.text(_safe(b), styles: const PosStyles(align: PosAlign.center)),
+        );
+      }
+    }
+    final wifi = rs?.barisWifi ?? const <String>[];
+    if (wifi.isNotEmpty) {
+      bytes.addAll(gen.hr());
+      for (final b in wifi) {
+        bytes.addAll(
+          gen.text(_safe(b), styles: const PosStyles(align: PosAlign.center)),
+        );
+      }
+      bytes.addAll(gen.hr());
     }
     if ((rs?.footerShowQr ?? false) && (rs?.footerQrUrl ?? '').isNotEmpty) {
       bytes.addAll(gen.feed(1));
