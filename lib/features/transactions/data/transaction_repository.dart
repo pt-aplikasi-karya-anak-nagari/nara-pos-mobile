@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -7,13 +8,17 @@ import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/connectivity_service.dart';
 import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../kasir/domain/cart_item.dart';
+import '../../kasir/domain/batas_diskon.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
 import '../../../core/outlet_scope.dart';
 import '../../shifts/data/shift_repository.dart';
+import '../../settings/data/app_settings.dart';
+import 'transaksi_offline.dart';
 import '../../user/data/auth_service.dart';
 
 /// Cache offline riwayat transaksi per outlet. Menyimpan RAW JSON dari API
@@ -444,6 +449,28 @@ class TransactionRepository {
     // dipakai supaya struk tetap bisa dicetak & cart bisa dikosongkan
     // walau belum ada respons backend.
     Future<Sale> queueOffline() async {
+      // DISKON DI ATAS BATAS KASIR. Online, server menolaknya lalu aplikasi
+      // meminta PIN manajer. Offline, PIN tak bisa diperiksa — menerimanya
+      // begitu saja berarti PIN apa pun lolos. Ditolak di sini, sebelum
+      // pelanggan menerima diskonnya; kalau tidak, server menolak transaksinya
+      // saat sinkron dan omzetnya tak pernah tercatat. PIN yang sudah
+      // dimasukkan (checkout online yang terputus di tengah) tetap dikirim dan
+      // diperiksa server saat sinkron.
+      if (overridePin == null || overridePin.isEmpty) {
+        final batas = (await bacaAppSettingsTersimpan(oId)).maxDiscountPercent;
+        final persen = persenDiskonKasir(
+          cart,
+          diskonOrder: diskonOrderDari(diskonTotal: discountTotal, keranjang: cart),
+        );
+        if (melebihiBatasDiskon(persen, batas)) {
+          throw TransaksiOfflineDitolak(
+            'Diskon ${persen.toStringAsFixed(1)}% di atas batas kasir '
+            '${batas.toStringAsFixed(0)}%. PIN manajer hanya bisa diperiksa '
+            'saat online — kurangi diskonnya, atau tunggu internet kembali.',
+          );
+        }
+      }
+
       // Penanda transaksi offline untuk server:
       //  - offline_ref: nomor struk yang dicetak (bukan lagi "OFFLINE");
       //  - cashier_id : kasir yang menjual — antrian bisa terkirim saat kasir
@@ -451,13 +478,55 @@ class TransactionRepository {
       //  - is_offline : server memakai harga & stok saat penjualan terjadi.
       final nomorStruk = await _ref.read(nomorStrukOfflineProvider).berikutnya();
       final kasirId = _ref.read(authProvider).user?.remoteId ?? '';
-      final localId = await _ref.read(saleOutboxProvider).enqueue(oId, {
-        ...checkoutData,
-        'is_offline': true,
-        'offline_ref': nomorStruk,
-        if (kasirId.isNotEmpty) 'cashier_id': kasirId,
-      });
+      final localId = await _ref.read(saleOutboxProvider).enqueue(
+        oId,
+        {
+          ...checkoutData,
+          'is_offline': true,
+          'offline_ref': nomorStruk,
+          if (kasirId.isNotEmpty) 'cashier_id': kasirId,
+          // Data struk yang tak dikirim ke server tapi dibutuhkan untuk
+          // menampilkan & mencetak ulang transaksi ini dari Riwayat selama
+          // belum terkirim (lihat transaksi_offline.dart). Server
+          // mengabaikan field yang tak dikenalnya.
+          'struk_lokal': {
+            'cashier_name': cashierName,
+            'outlet_name': outletName,
+            'original_subtotal': originalSubtotal,
+            'table_name': ?tableName,
+            'points_earned': displayPointsEarned ?? pointsEarned,
+            'items': [
+              for (final item in cart)
+                {
+                  'product_name': item.product.name,
+                  'emoji': item.product.emoji,
+                  'variant': item.variantName,
+                  'original_price': item.basePrice,
+                  'modifiers_label': item.modifiersLabel,
+                },
+            ],
+          },
+        },
+        localId: SaleOutbox.idLokalBaru(),
+      );
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
+
+      // Stok di katalog perangkat ikut berkurang, supaya kasir tak menjual
+      // melebihi stok selama offline.
+      unawaited(
+        _ref
+            .read(productCacheProvider)
+            .kurangiStokLokal(oId, [
+              for (final item in cart)
+                if ((item.product.remoteId ?? '').isNotEmpty)
+                  (
+                    productId: item.product.remoteId!,
+                    variantId: item.variantId,
+                    qty: item.qty,
+                  ),
+            ])
+            .catchError((_) {}),
+      );
       final sale = Sale(
         createdAt: DateTime.now(),
         subtotal: subtotal,
@@ -717,17 +786,34 @@ class TransactionRepository {
     String? dateFrom,
     String? dateTo,
   }) async {
-    final res = await apiService.getHistory(
-      outletId,
-      page: page,
-      limit: limit,
-      search: search,
-      status: status,
-      paymentMethod: paymentMethod,
-      dateFrom: dateFrom,
-      dateTo: dateTo,
-    );
-    return res.map((e) => Sale.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final res = await apiService.getHistory(
+        outletId,
+        page: page,
+        limit: limit,
+        search: search,
+        status: status,
+        paymentMethod: paymentMethod,
+        dateFrom: dateFrom,
+        dateTo: dateTo,
+      );
+      return res.map((e) => Sale.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      // Offline: tampilkan riwayat yang terakhir tersimpan di perangkat,
+      // disaring di sini (halaman pertama memuat semuanya).
+      if (!isOfflineError(e)) rethrow;
+      if (page > 1) return const [];
+      final tersimpan = (await _salesRawCache.getAll(
+        outletId,
+      )).map(Sale.fromJson).toList();
+      return saringRiwayatTersimpan(
+        tersimpan,
+        cari: search,
+        status: status,
+        dari: DateTime.tryParse(dateFrom ?? ''),
+        sampai: DateTime.tryParse(dateTo ?? ''),
+      );
+    }
   }
 
   /// Riwayat transaksi pelanggan tertentu (untuk halaman detail pelanggan).
@@ -775,6 +861,14 @@ final transactionDetailProvider = FutureProvider.family<Sale, String>((
   ref,
   id,
 ) async {
+  // Transaksi offline yang belum terkirim: belum ada di server, ambil dari
+  // antrian di perangkat.
+  if (SaleOutbox.idOffline(id)) {
+    final sale = await cariTransaksiOffline(ref.read(saleOutboxProvider), id);
+    if (sale != null) return sale;
+    throw 'Transaksi ini sudah terkirim ke server. Muat ulang Riwayat untuk '
+        'melihat versi terbarunya.';
+  }
   return ref.watch(transactionRepositoryProvider).getDetail(id);
 });
 
@@ -824,4 +918,54 @@ final activeTableTransactionsProvider =
 ///               ditangani tenggelam di antaranya.
 bool pesananMejaPerluDitangani(Sale s) {
   return s.fulfillmentStatus != 'completed' && !s.isRefunded && !s.isCancelled;
+}
+
+/// Transaksi offline yang tak bisa diselesaikan di perangkat (mis. diskon di
+/// atas batas kasir tanpa PIN yang bisa diperiksa). Pesannya untuk kasir.
+class TransaksiOfflineDitolak implements Exception {
+  TransaksiOfflineDitolak(this.pesan);
+  final String pesan;
+
+  @override
+  String toString() => pesan;
+}
+
+/// Saring riwayat yang tersimpan di perangkat — dipakai saat offline, ketika
+/// penyaringan oleh server tak tersedia. Aturannya mengikuti filter halaman
+/// Riwayat: cari (invoice / pelanggan), status, dan rentang tanggal inklusif.
+List<Sale> saringRiwayatTersimpan(
+  List<Sale> semua, {
+  String? cari,
+  String? status,
+  DateTime? dari,
+  DateTime? sampai,
+}) {
+  final q = (cari ?? '').trim().toLowerCase();
+  final akhir = sampai == null
+      ? null
+      : DateTime(sampai.year, sampai.month, sampai.day).add(
+          const Duration(days: 1),
+        );
+  final hasil = semua.where((s) {
+    if (q.isNotEmpty &&
+        !s.invoiceId.toLowerCase().contains(q) &&
+        !s.customerName.toLowerCase().contains(q)) {
+      return false;
+    }
+    switch (status ?? '') {
+      case 'paid':
+        if (!s.isPaid || s.isRefunded) return false;
+      case 'unpaid':
+        if (!s.isUnpaid) return false;
+      case 'refunded':
+        if (!s.isRefunded && !s.isPartiallyRefunded) return false;
+    }
+    final t = s.createdAt.toLocal();
+    if (dari != null && t.isBefore(DateTime(dari.year, dari.month, dari.day))) {
+      return false;
+    }
+    if (akhir != null && !t.isBefore(akhir)) return false;
+    return true;
+  }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return hasil;
 }

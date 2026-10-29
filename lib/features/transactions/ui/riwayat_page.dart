@@ -13,9 +13,11 @@ import '../../../core/responsive.dart';
 import '../../access_rights/data/access_rights_repository.dart';
 import '../../access_rights/domain/permission.dart';
 import '../data/transaction_repository.dart';
+import '../data/transaksi_offline.dart';
 import '../domain/sale.dart';
 import 'transaction_detail_page.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
+import '../../../core/offline/sale_outbox.dart';
 import '../../../core/outlet_scope.dart';
 
 class RiwayatPage extends HookConsumerWidget {
@@ -105,6 +107,13 @@ class RiwayatPage extends HookConsumerWidget {
       pagingController.refresh();
       return null;
     }, [query.value, statusFilter.value, dateFrom.value, dateTo.value]);
+
+    // Antrian offline berkurang = ada transaksi yang baru diterima server →
+    // muat ulang riwayat supaya ia muncul di sini (dan hilang dari "Belum
+    // terkirim") tanpa kasir harus menarik layar.
+    ref.listen<int>(pendingSyncCountProvider, (prev, next) {
+      if (prev != null && next < prev) pagingController.refresh();
+    });
 
     final list = _TransactionList(
       pagingController: pagingController,
@@ -373,34 +382,113 @@ class _TransactionList extends ConsumerWidget {
           child: RefreshIndicator(
             color: kPrimary,
             onRefresh: onRefresh,
-            child: PagingListener<int, Sale>(
-              controller: pagingController,
-              builder: (context, state, fetchNextPage) =>
-                  PagedListView<int, Sale>.separated(
-                    state: state,
-                    fetchNextPage: fetchNextPage,
+            // Satu gulungan: transaksi offline yang belum terkirim di atas,
+            // riwayat dari server di bawahnya.
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: _BagianBelumTerkirim(
+                      selectedId: selectedId,
+                      onTap: onTap,
+                    ),
+                  ),
+                ),
+                PagingListener<int, Sale>(
+                  controller: pagingController,
+                  builder: (context, state, fetchNextPage) => SliverPadding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                    separatorBuilder: (_, i) => const Gap(10),
-                    builderDelegate: PagedChildBuilderDelegate<Sale>(
-                      itemBuilder: (context, sale, index) {
-                        return _SaleTile(
-                          sale: sale,
-                          selected: sale.id == selectedId,
-                          onTap: () => onTap(sale),
-                        );
-                      },
-                      noItemsFoundIndicatorBuilder: (_) => Center(
-                        child: Text(
-                          ref.t('history.empty'),
-                          style: TextStyle(color: kTextMid),
+                    sliver: PagedSliverList<int, Sale>.separated(
+                      state: state,
+                      fetchNextPage: fetchNextPage,
+                      separatorBuilder: (_, i) => const Gap(10),
+                      builderDelegate: PagedChildBuilderDelegate<Sale>(
+                        itemBuilder: (context, sale, index) {
+                          return _SaleTile(
+                            sale: sale,
+                            selected: sale.id == selectedId,
+                            onTap: () => onTap(sale),
+                          );
+                        },
+                        noItemsFoundIndicatorBuilder: (_) => Center(
+                          child: Text(
+                            ref.t('history.empty'),
+                            style: TextStyle(color: kTextMid),
+                          ),
                         ),
                       ),
                     ),
                   ),
+                ),
+              ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Transaksi offline yang belum sampai ke server. Selalu di atas riwayat,
+/// supaya kasir bisa menemukan dan mencetak ulang struknya walau internet
+/// putus — riwayat dari server baru memuatnya setelah terkirim.
+class _BagianBelumTerkirim extends ConsumerWidget {
+  const _BagianBelumTerkirim({required this.selectedId, required this.onTap});
+
+  final String? selectedId;
+  final ValueChanged<Sale> onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final daftar = ref.watch(transaksiBelumTerkirimProvider).value ?? const [];
+    if (daftar.isEmpty) return const SizedBox.shrink();
+    final gagal = daftar.where((s) => s.gagalTerkirim).length;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.cloud_upload_outlined,
+                size: 16,
+                color: gagal > 0 ? kDanger : kWarning,
+              ),
+              const Gap(6),
+              Expanded(
+                child: Text(
+                  'Belum terkirim ke server (${daftar.length})',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kTextDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Gap(4),
+          Text(
+            'Tersimpan aman di perangkat dan dikirim otomatis saat online.'
+            '${gagal > 0 ? ' $gagal ditolak server — buka untuk melihat alasannya.' : ''}',
+            style: TextStyle(fontSize: 11, color: kTextMid, height: 1.3),
+          ),
+          const Gap(8),
+          for (final sale in daftar) ...[
+            _SaleTile(
+              sale: sale,
+              selected: sale.id == selectedId,
+              onTap: () => onTap(sale),
+            ),
+            const Gap(10),
+          ],
+          Divider(height: 8, color: kDivider),
+        ],
+      ),
     );
   }
 }
@@ -474,11 +562,32 @@ class _SaleTile extends StatelessWidget {
               builder: (_) {
                 // Warna leading: penuh = danger, sebagian = warning,
                 // selainnya = success.
-                final Color c = sale.isRefunded
+                final Color c = sale.gagalTerkirim
+                    ? kDanger
+                    : sale.pendingSync
+                    ? kWarning
+                    : sale.isRefunded
                     ? kDanger
                     : sale.isPartiallyRefunded
                     ? kWarning
                     : kSuccess;
+                if (sale.pendingSync) {
+                  return Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: c.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      sale.gagalTerkirim
+                          ? Icons.error_outline_rounded
+                          : Icons.cloud_upload_outlined,
+                      color: c,
+                      size: 20,
+                    ),
+                  );
+                }
                 return Container(
                   width: 40,
                   height: 40,
@@ -567,6 +676,28 @@ class _SaleTile extends StatelessWidget {
                           child: const Text(
                             'BELUM BAYAR',
                             style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      if (sale.pendingSync)
+                        Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: sale.gagalTerkirim ? kDanger : kWarning,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            sale.gagalTerkirim
+                                ? 'GAGAL TERKIRIM'
+                                : 'BELUM TERKIRIM',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 9,
                               fontWeight: FontWeight.w700,

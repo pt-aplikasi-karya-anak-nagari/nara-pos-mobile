@@ -52,9 +52,23 @@ class SaleOutbox {
   /// aktif & hitungan banner supaya tidak re-POST selamanya / banner macet.
   static const int maxSyncAttempts = 5;
 
-  Future<String> enqueue(String outletId, Map<String, dynamic> payload) async {
+  /// ID lokal baru untuk transaksi offline. Bisa dibuat lebih dulu (lalu
+  /// diberikan ke [enqueue]) supaya struk lokal yang disimpan bersama
+  /// transaksinya sudah memakai ID yang sama.
+  static String idLokalBaru() =>
+      'offline_${DateTime.now().microsecondsSinceEpoch}';
+
+  /// ID transaksi offline selalu berawalan ini — dipakai untuk membedakannya
+  /// dari ID transaksi server (mis. di halaman detail riwayat).
+  static bool idOffline(String id) => id.startsWith('offline_');
+
+  Future<String> enqueue(
+    String outletId,
+    Map<String, dynamic> payload, {
+    String? localId,
+  }) async {
     final db = await OfflineDb.instance.database;
-    final localId = 'offline_${DateTime.now().microsecondsSinceEpoch}';
+    localId ??= idLokalBaru();
     await db.insert('pending_sales', {
       'local_id': localId,
       'outlet_id': outletId,

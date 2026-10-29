@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/connectivity_service.dart';
 import '../../../../core/offline/data_kasir_offline.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -195,7 +196,11 @@ class PaymentSheet extends HookConsumerWidget {
     final maxRedeemablePoints = customerPoints < affordablePoints
         ? customerPoints
         : (affordablePoints < 0 ? 0 : affordablePoints);
+    // Tukar poin & kode promo butuh server: promo divalidasi di sana, dan poin
+    // bisa terpakai dua kali dari dua tablet bila ditukar saat offline.
+    final offline = ref.watch(isOfflineProvider);
     final canRedeemPoints =
+        !offline &&
         loyaltySettings.enabled &&
         pointValue > 0 &&
         activeCustomer != null &&
@@ -233,6 +238,11 @@ class PaymentSheet extends HookConsumerWidget {
     Future<void> applyPromo() async {
       final code = promoController.text.trim();
       if (code.isEmpty || applyingPromo.value) return;
+      if (offline) {
+        promoError.value =
+            'Kode promo butuh internet untuk diperiksa. Coba lagi saat online.';
+        return;
+      }
       applyingPromo.value = true;
       promoError.value = null;
       try {

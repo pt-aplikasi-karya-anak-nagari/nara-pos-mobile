@@ -10,6 +10,11 @@ class AuthStorage {
   static const refreshTokenKey = 'auth.refreshToken';
   static const userDataKey = 'auth.userData';
 
+  /// Kapan token terakhir diterbitkan/diperbarui server (milidetik epoch).
+  /// Dipakai memperingatkan kasir sebelum sesi berakhir saat lama offline —
+  /// lihat sesi_login.dart.
+  static const sesiDiperbaruiKey = 'auth.sesiDiperbarui';
+
   final SharedPreferences _prefs;
   final FlutterSecureStorage _secureStorage;
 
@@ -19,6 +24,11 @@ class AuthStorage {
   String? get accessToken => _accessToken;
   String? get refreshToken => _refreshToken;
   String? get userData => _prefs.getString(userDataKey);
+
+  DateTime? get sesiDiperbaruiPada {
+    final ms = _prefs.getInt(sesiDiperbaruiKey);
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
 
   Future<void> init() async {
     // Baca secure-storage bisa throw (BadPaddingException / AEADBadTagException /
@@ -70,6 +80,8 @@ class AuthStorage {
       _secureStorage.write(key: refreshTokenKey, value: refreshToken),
       _prefs.remove(accessTokenKey),
       _prefs.remove(refreshTokenKey),
+      // Setiap token baru (login maupun perpanjangan) = sesi berlaku penuh lagi.
+      _prefs.setInt(sesiDiperbaruiKey, DateTime.now().millisecondsSinceEpoch),
     ]);
   }
 
@@ -86,6 +98,7 @@ class AuthStorage {
       _prefs.remove(accessTokenKey),
       _prefs.remove(refreshTokenKey),
       _prefs.remove(userDataKey),
+      _prefs.remove(sesiDiperbaruiKey),
     ]);
   }
 }

@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:gap/gap.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import '../../../app/theme.dart';
+import '../../../shared/widgets/butuh_online.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/format.dart';
 import '../../../core/i18n.dart';
@@ -225,6 +226,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   /// karakter di backend) supaya jejak audit jelas.
   Future<void> _refund(Sale sale) async {
     if (_refunding) return;
+    if (tolakSaatOffline(context, ref, 'Refund')) return;
 
     // Apakah outlet mewajibkan PIN otorisasi manajer untuk refund? Fetch
     // on-demand (hasilnya di-cache provider). Bila gagal (mis. offline),
@@ -524,6 +526,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   }
 
   Future<void> _payNow(Sale sale) async {
+    if (tolakSaatOffline(context, ref, 'Pelunasan')) return;
     // Kalau customer sudah upload bukti (QR menu), metode pembayaran
     // sudah dipilih saat checkout. Kasir tinggal memverifikasi & terima
     // — tidak perlu MiniPaymentSheet lagi. Cukup dialog konfirmasi
@@ -709,8 +712,11 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     // Transaksi lunas (atau sudah diretur sebagian) & masih ada item bersisa
     // → user dgn Permission.refund boleh refund. Retur penuh tidak bisa
     // diretur lagi. Tombolnya ada di AppBar (di samping cetak & share).
+    // Transaksi offline yang belum terkirim belum ada di server — refund,
+    // pelunasan, dan kirim struk lewat server baru bisa setelah terkirim.
     final canRefund =
         sale != null &&
+        !sale.pendingSync &&
         (sale.isPaid || sale.isPartiallyRefunded) &&
         !sale.isRefunded &&
         sale.hasRefundableItems &&
@@ -747,7 +753,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
                 )
               : const HugeIcon(icon: AppIcons.share, color: kPrimary),
         ),
-      if (sale != null && bisaKirimStrukWa(sale))
+      if (sale != null && !sale.pendingSync && bisaKirimStrukWa(sale))
         IconButton(
           tooltip: 'Kirim struk via WhatsApp',
           onPressed: _mengirimWa ? null : () => _kirimStrukWa(sale),
@@ -829,9 +835,18 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
-            child: RepaintBoundary(
-              key: _receiptKey,
-              child: _ReceiptCard(sale: sale),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (sale.pendingSync) ...[
+                  _BannerBelumTerkirim(sale: sale),
+                  const Gap(12),
+                ],
+                RepaintBoundary(
+                  key: _receiptKey,
+                  child: _ReceiptCard(sale: sale),
+                ),
+              ],
             ),
           ),
         ),
@@ -855,6 +870,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     // aksi bayar walau payment_status bukan 'paid' lagi.
     final Widget? bottomActions =
         (sale == null ||
+            sale.pendingSync ||
             sale.isPaid ||
             sale.isRefunded ||
             sale.isPartiallyRefunded)
@@ -1922,6 +1938,71 @@ class _DialogNomorWaState extends State<_DialogNomorWa> {
         ),
         FilledButton(onPressed: _kirim, child: const Text('Kirim')),
       ],
+    );
+  }
+}
+
+/// Penanda di atas struk transaksi offline yang belum sampai ke server.
+class _BannerBelumTerkirim extends StatelessWidget {
+  const _BannerBelumTerkirim({required this.sale});
+
+  final Sale sale;
+
+  @override
+  Widget build(BuildContext context) {
+    final gagal = sale.gagalTerkirim;
+    final warna = gagal ? kDanger : kWarning;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: warna.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: warna.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            gagal ? Icons.error_outline_rounded : Icons.cloud_upload_outlined,
+            color: warna,
+            size: 20,
+          ),
+          const Gap(10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  gagal ? 'Ditolak server' : 'Belum terkirim ke server',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: warna,
+                    fontSize: 13,
+                  ),
+                ),
+                const Gap(4),
+                Text(
+                  gagal
+                      ? 'Transaksi ini tidak akan dikirim lagi otomatis. '
+                            'Periksa lalu kirim ulang atau buang dari menu '
+                            '"Pulihkan" di atas layar.'
+                      : 'Tersimpan di perangkat dan dikirim otomatis saat '
+                            'online. Struknya bisa dicetak ulang; refund dan '
+                            'pelunasan bisa dilakukan setelah terkirim.',
+                  style: TextStyle(fontSize: 12, color: kTextMid, height: 1.4),
+                ),
+                if ((sale.galatSinkron ?? '').isNotEmpty) ...[
+                  const Gap(6),
+                  Text(
+                    'Alasan: ${sale.galatSinkron}',
+                    style: const TextStyle(fontSize: 12, color: kDanger),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

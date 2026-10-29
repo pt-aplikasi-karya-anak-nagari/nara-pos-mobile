@@ -5,6 +5,7 @@ import 'package:gap/gap.dart';
 import '../../app/theme.dart';
 import '../../core/app_icons.dart';
 import '../../core/connectivity_service.dart';
+import '../../core/sesi_login.dart';
 import '../../core/i18n.dart';
 import '../../core/offline/product_cache.dart';
 
@@ -26,9 +27,14 @@ class ConnectivityBanner extends ConsumerWidget {
     // Indikator kesegaran: saat offline, beri tahu kapan data tersimpan
     // terakhir disinkron supaya owner sadar bisa jadi sudah basi.
     final syncedAt = ref.watch(offlineDataSyncedAtProvider).value;
-    final message = isOffline && syncedAt != null
-        ? '$baseMessage • data ${_relativeAge(syncedAt)}'
-        : baseMessage;
+    // Sesi login hampir / sudah berakhir — hanya relevan saat offline:
+    // online, sesi diperbarui otomatis.
+    final sesi = isOffline ? ref.watch(peringatanSesiProvider) : null;
+    final message = [
+      baseMessage,
+      if (isOffline && syncedAt != null) 'data ${_relativeAge(syncedAt)}',
+      ?sesi,
+    ].join(' • ');
     final icon = isOffline ? AppIcons.accessRights : AppIcons.inventory;
 
     return Material(

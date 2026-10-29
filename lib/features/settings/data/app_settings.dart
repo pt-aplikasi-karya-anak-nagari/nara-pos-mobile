@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/offline/entity_cache.dart';
 import '../../../core/outlet_scope.dart';
 import '../../outlet/data/outlet_service.dart';
 
@@ -61,6 +62,33 @@ class OutletAppSettings {
 final outletAppSettingsProvider = FutureProvider<OutletAppSettings>((ref) async {
   final outletId = ref.watch(activeOutletIdProvider);
   if (outletId == null) return const OutletAppSettings();
-  final json = await ref.watch(outletServiceProvider).getAppSettings(outletId);
-  return OutletAppSettings.fromJson(json);
+  // Disimpan untuk offline: batas diskon kasir dibutuhkan saat berjualan
+  // tanpa internet (lihat kasir/domain/batas_diskon.dart).
+  final st = await readThroughCacheOne<OutletAppSettings>(
+    cache: _appSettingsCache,
+    outletId: outletId,
+    fetch: () async => OutletAppSettings.fromJson(
+      await ref.read(outletServiceProvider).getAppSettings(outletId),
+    ),
+  );
+  return st ?? const OutletAppSettings();
 });
+
+final _appSettingsCache = EntityCache<OutletAppSettings>(
+  'app_settings',
+  toJson: (s) => s.toJson(),
+  fromJson: OutletAppSettings.fromJson,
+);
+
+/// Pengaturan outlet yang terakhir tersimpan di perangkat — TANPA menyentuh
+/// jaringan. Dipakai di jalur checkout offline, yang tak boleh menunggu
+/// permintaan yang pasti gagal. Kosong (tanpa batas) bila belum pernah
+/// tersimpan.
+Future<OutletAppSettings> bacaAppSettingsTersimpan(String outletId) async {
+  try {
+    final ada = await _appSettingsCache.getAll(outletId);
+    return ada.isEmpty ? const OutletAppSettings() : ada.first;
+  } catch (_) {
+    return const OutletAppSettings();
+  }
+}

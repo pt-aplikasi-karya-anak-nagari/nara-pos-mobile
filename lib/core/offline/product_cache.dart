@@ -180,6 +180,70 @@ class ProductCache {
     if (folder != null) unawaited(folder.simpan(outletId, products));
   }
 
+  /// Kurangi stok produk di katalog perangkat setelah penjualan OFFLINE.
+  ///
+  /// Tanpa ini, stok yang tampil di kasir tak bergerak selama offline: produk
+  /// yang tinggal 3 bisa terjual 10 kali, dan selisihnya baru ketahuan setelah
+  /// sinkron. Hanya produk yang "kelola stok"; varian dikurangi pada variannya
+  /// sendiri. Stok bisa jadi negatif — sama seperti di server untuk transaksi
+  /// offline — supaya selisihnya tetap terlihat.
+  ///
+  /// Versi produk SENGAJA tidak diubah: begitu server menerima penjualannya,
+  /// versi produk di server berubah dan sinkron katalog mengambil stok yang
+  /// sebenarnya.
+  Future<void> kurangiStokLokal(
+    String outletId,
+    List<({String productId, String? variantId, int qty})> baris,
+  ) async {
+    if (outletId.isEmpty || baris.isEmpty) return;
+    final db = await OfflineDb.instance.database;
+    final perProduk = <String, List<({String? variantId, int qty})>>{};
+    for (final b in baris) {
+      if (b.productId.isEmpty || b.qty <= 0) continue;
+      (perProduk[b.productId] ??= []).add((variantId: b.variantId, qty: b.qty));
+    }
+    if (perProduk.isEmpty) return;
+
+    var berubah = false;
+    await db.transaction((tx) async {
+      for (final e in perProduk.entries) {
+        final rows = await tx.query(
+          'cached_product_items',
+          columns: ['payload'],
+          where: 'outlet_id = ? AND product_id = ?',
+          whereArgs: [outletId, e.key],
+          limit: 1,
+        );
+        if (rows.isEmpty) continue;
+        final json =
+            jsonDecode(rows.first['payload'] as String) as Map<String, dynamic>;
+        if (json['track_stock'] == false) continue;
+        for (final b in e.value) {
+          final varian = json['variants'];
+          if (b.variantId != null && varian is List) {
+            for (final v in varian) {
+              if (v is Map && v['id']?.toString() == b.variantId) {
+                v['stock'] = ((v['stock'] as num?) ?? 0).toInt() - b.qty;
+              }
+            }
+          } else {
+            json['stock'] = ((json['stock'] as num?) ?? 0).toInt() - b.qty;
+          }
+        }
+        await tx.update(
+          'cached_product_items',
+          {'payload': jsonEncode(json)},
+          where: 'outlet_id = ? AND product_id = ?',
+          whereArgs: [outletId, e.key],
+        );
+        berubah = true;
+      }
+    });
+    if (!berubah) return;
+    _memo.remove(outletId);
+    if (!_perubahan.isClosed) _perubahan.add(outletId);
+  }
+
   /// Tulis SELURUH produk lokal outlet ke folder — dipakai tepat setelah
   /// folder dipilih. Sinkron biasa hanya menulis produk yang berubah, jadi
   /// tanpa ini folder baru hanya berisi produk yang kebetulan berubah.

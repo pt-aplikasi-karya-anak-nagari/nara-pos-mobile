@@ -131,6 +131,13 @@ class Sale {
   /// konfirmasi "tersimpan offline". Tidak berasal dari backend.
   bool pendingSync;
 
+  /// Transaksi offline yang DITOLAK server berkali-kali (dead-letter): tak
+  /// akan dicoba lagi otomatis, perlu dipulihkan dari menu "Pulihkan".
+  bool gagalTerkirim;
+
+  /// Alasan penolakan terakhir dari server, bila ada.
+  String? galatSinkron;
+
   List<SaleItem> items = [];
 
   Sale({
@@ -177,6 +184,8 @@ class Sale {
     this.paymentProofUrl,
     this.source = 'kasir',
     this.pendingSync = false,
+    this.gagalTerkirim = false,
+    this.galatSinkron,
   });
 
   /// True kalau transaksi dibuat lewat QR-menu customer (mako-scan-qr).

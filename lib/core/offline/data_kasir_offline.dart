@@ -6,6 +6,7 @@ import '../../features/order_types/data/order_type_repository.dart';
 import '../../features/order_types/domain/order_type.dart';
 import '../../features/payments/data/payment_method_repository.dart';
 import '../../features/products/data/modifier_repository.dart';
+import '../../features/settings/data/app_settings.dart';
 import '../../features/payments/domain/payment_method.dart';
 import '../../features/tables/data/table_repository.dart';
 import '../../features/user/data/auth_service.dart';
@@ -113,6 +114,11 @@ final dataKasirOfflineProvider = Provider<void>((ref) {
         coba(() => ref.read(orderTypeRepositoryProvider).getAll(outletId)),
         coba(() => ref.read(tableRepositoryProvider).getTables(outletId)),
         coba(() => ref.read(tableRepositoryProvider).getGroups(outletId)),
+        // Batas diskon kasir — diperiksa di perangkat saat berjualan offline.
+        coba(() async {
+          ref.invalidate(outletAppSettingsProvider);
+          return ref.read(outletAppSettingsProvider.future);
+        }),
         // Add-on seluruh produk: tanpa ini, sheet pilihan add-on tak muncul
         // saat offline untuk produk yang belum pernah dibuka sambil online.
         coba(() async {

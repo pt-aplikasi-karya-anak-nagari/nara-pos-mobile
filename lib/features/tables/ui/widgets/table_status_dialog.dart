@@ -6,6 +6,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../app/theme.dart';
+import '../../../../shared/widgets/butuh_online.dart';
 import '../../../../core/format.dart';
 import '../../../../core/outlet_scope.dart';
 import '../../../settings/data/app_settings.dart';
@@ -378,6 +379,7 @@ class _SaleCard extends ConsumerWidget {
   });
 
   Future<void> _payNow(BuildContext context, WidgetRef ref) async {
+    if (tolakSaatOffline(context, ref, 'Pelunasan')) return;
     final result = await tampilkanSheetBawah<
       ({String method, double cash, String proofUrl})
     >(
@@ -437,6 +439,7 @@ class _SaleCard extends ConsumerWidget {
   }
 
   Future<void> _void(BuildContext context, WidgetRef ref) async {
+    if (tolakSaatOffline(context, ref, 'Membatalkan pesanan')) return;
     // Apakah outlet mewajibkan PIN otorisasi manajer untuk void? Fetch
     // on-demand (di-cache provider); bila gagal (mis. offline) fallback false
     // lalu andalkan penanganan 403 dari backend.
@@ -887,6 +890,7 @@ class _Actions extends ConsumerWidget {
   // Pindah / gabung bill: pilih meja tujuan, lalu reassign semua pesanan
   // aktif meja ini ke sana. Kalau tujuan sudah terisi → gabung bill.
   Future<void> _move(BuildContext context, WidgetRef ref) async {
+    if (tolakSaatOffline(context, ref, 'Pindah meja')) return;
     final outletId = activeOutletId;
     if (outletId == null) return;
     final allTables =
@@ -973,6 +977,7 @@ class _Actions extends ConsumerWidget {
     WidgetRef ref,
     List<Sale> settleable,
   ) async {
+    if (tolakSaatOffline(context, ref, 'Pelunasan meja')) return;
     final outletId = activeOutletId;
     if (outletId == null || settleable.isEmpty) return;
     final tabTotal = settleable.fold<double>(0, (s, x) => s + x.total);
