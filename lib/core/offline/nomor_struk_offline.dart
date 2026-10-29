@@ -37,6 +37,11 @@ class NomorStrukOffline {
     return hex.substring(0, 6).toUpperCase();
   }
 
+  /// Nomor urut terakhir yang sudah dipakai (0 = belum pernah). Dilaporkan
+  /// ke server supaya transaksi yang dihapus dari perangkat sebelum terkirim
+  /// tetap meninggalkan jejak.
+  int get urutTerakhir => _prefs.getInt(_kunciUrut) ?? 0;
+
   /// Ambil nomor berikutnya. Nomor yang sudah diambil tak pernah dipakai lagi,
   /// walau transaksinya kemudian gagal disimpan.
   Future<String> berikutnya() async {

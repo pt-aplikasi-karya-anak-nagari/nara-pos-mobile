@@ -132,6 +132,11 @@ class ApiEndpoint {
   // Add-on SELURUH produk outlet sekaligus — disimpan untuk kasir offline.
   static String outletProductModifierGroups(String outletId) =>
       '/outlets/$outletId/product-modifier-groups';
+  // Pengawasan transaksi offline (anti-kecurangan).
+  static String offlineLaporanPerangkat(String outletId) =>
+      '/outlets/$outletId/offline/laporan-perangkat';
+  static String offlineBuang(String outletId) =>
+      '/outlets/$outletId/offline/buang';
 
   // C4 (manajemen): CRUD grup modifier per-outlet — padanan menu
   // "Modifier & Add-on" di dashboard web.

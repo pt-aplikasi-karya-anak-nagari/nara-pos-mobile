@@ -9,6 +9,10 @@ import '../../core/format.dart';
 import '../../core/offline/offline_sync_service.dart';
 import '../../core/offline/sale_outbox.dart';
 import '../../core/offline/shift_outbox.dart';
+import '../../core/device_identity.dart';
+import '../../core/offline/audit_offline.dart';
+import 'butuh_online.dart';
+import 'dialog_buang_offline.dart';
 import 'sheet_bawah.dart';
 
 /// Sheet pemulihan transaksi offline yang gagal sinkron permanen (dead-letter).
@@ -66,39 +70,54 @@ class _DeadLetterRecoverySheetState
     );
   }
 
+  /// Buang transaksi yang ditolak server.
+  ///
+  /// Dulu langsung dihapus permanen oleh kasir mana pun, tanpa catatan di
+  /// server — cara paling mudah menghilangkan omzet: buat transaksi sampai
+  /// ditolak, terima uangnya, lalu buang. Kini wajib online, beralasan, dan
+  /// disetujui PIN manajer; isinya dicatat di server LEBIH DULU, dan salinan
+  /// di perangkat baru dihapus setelah server mencatatnya.
   Future<void> _discard(PendingSale ps) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Buang transaksi?',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-        ),
-        content: Text(
-          'Transaksi ini akan dihapus permanen dan TIDAK terkirim ke server. '
-          'Pastikan kamu sudah mencatatnya manual bila perlu.',
-          style: TextStyle(color: kTextMid, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: kDanger),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Buang'),
-          ),
-        ],
-      ),
+    if (tolakSaatOffline(context, ref, 'Membuang transaksi')) return;
+    final isian = await mintaAlasanDanPinBuang(
+      context,
+      judul: 'Buang transaksi?',
+      keterangan:
+          'Transaksi ini TIDAK akan masuk ke omzet. Isinya tetap tercatat di '
+          'server bersama alasan dan nama manajer yang menyetujui, dan '
+          'terlihat oleh Pemilik.',
     );
-    if (ok != true) return;
+    if (isian == null || !mounted) return;
+    final payload = Map<String, dynamic>.from(ps.payload)
+      ..remove('override_pin');
+    final String penyetuju;
+    try {
+      penyetuju = await ref.read(auditOfflineApiProvider).catatBuang(
+        ps.outletId,
+        {
+          'jenis': 'penjualan',
+          'local_id': ps.localId,
+          'offline_ref': payload['offline_ref']?.toString() ?? '',
+          'device_id': DeviceIdentity.current.id,
+          'payload': payload,
+          'total': payload['final_amount'] ?? 0,
+          'alasan': isian.alasan,
+          'galat_terakhir': ps.lastError ?? '',
+          'pin': isian.pin,
+        },
+      );
+    } on GagalCatatBuang catch (e) {
+      _snack('Tidak dibuang: ${e.pesan}');
+      return;
+    }
     await ref.read(saleOutboxProvider).remove(ps.localId);
     await _refreshCounts();
     if (mounted) {
       _reload();
-      _snack('Transaksi dibuang.');
+      _snack(
+        'Transaksi dibuang — tercatat di server'
+        '${penyetuju.isNotEmpty ? ', disetujui $penyetuju' : ''}.',
+      );
     }
   }
 
@@ -361,33 +380,66 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
     );
   }
 
+  /// Buang catatan buka/tutup shift yang ditolak server — aturannya sama
+  /// dengan membuang transaksi: online, beralasan, PIN manajer, dan dicatat di
+  /// server lebih dulu. Catatan tutup shift memuat uang laci.
   Future<void> _buang(String localShiftId) async {
-    final ya = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Buang catatan shift ini?'),
-        content: const Text(
-          'Catatan buka & tutup shift ini akan dihapus permanen dan TIDAK '
-          'terkirim ke server. Z-Report untuk shift itu tidak akan pernah '
-          'terbit, dan rekonsiliasi kasnya tak bisa diselesaikan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            style: FilledButton.styleFrom(backgroundColor: kDanger),
-            child: const Text('Buang'),
-          ),
-        ],
-      ),
+    if (tolakSaatOffline(context, ref, 'Membuang catatan shift')) return;
+    final ops = (await ref.read(shiftOutboxProvider).deadLetters())
+        .where((o) => o.localShiftId == localShiftId)
+        .toList();
+    if (ops.isEmpty || !mounted) return;
+    final isian = await mintaAlasanDanPinBuang(
+      context,
+      judul: 'Buang catatan shift ini?',
+      keterangan:
+          'Z-Report untuk shift ini tidak akan pernah terbit dan rekonsiliasi '
+          'kasnya tak bisa diselesaikan. Isinya tetap tercatat di server '
+          'bersama alasan dan nama manajer yang menyetujui.',
     );
-    if (ya != true) return;
+    if (isian == null || !mounted) return;
+    final String penyetuju;
+    try {
+      penyetuju = await ref.read(auditOfflineApiProvider).catatBuang(
+        ops.first.outletId,
+        {
+          'jenis': 'shift',
+          'local_id': localShiftId,
+          'device_id': DeviceIdentity.current.id,
+          'payload': [
+            for (final o in ops)
+              {
+                'local_id': o.localId,
+                'op_type': o.opType,
+                'client_ref': o.clientRef,
+                'occurred_at': o.occurredAt,
+                'payload': o.payload,
+              },
+          ],
+          'alasan': isian.alasan,
+          'galat_terakhir': ops.last.lastError ?? '',
+          'pin': isian.pin,
+        },
+      );
+    } on GagalCatatBuang catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Tidak dibuang: ${e.pesan}')));
+      }
+      return;
+    }
     await ref.read(shiftOutboxProvider).discardShift(localShiftId);
     if (!mounted) return;
     _muatUlang();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Catatan shift dibuang — tercatat di server'
+          '${penyetuju.isNotEmpty ? ', disetujui $penyetuju' : ''}.',
+        ),
+      ),
+    );
   }
 
   @override

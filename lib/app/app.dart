@@ -14,6 +14,7 @@ import '../core/i18n.dart';
 import '../core/realtime/realtime_service.dart';
 import '../core/offline/offline_sync_service.dart';
 import '../core/offline/product_offline_sync.dart';
+import '../core/offline/audit_offline.dart';
 import '../core/offline/cadangan_transaksi.dart';
 import '../core/offline/data_kasir_offline.dart';
 import '../core/notifications.dart';
@@ -48,6 +49,9 @@ class NaraApp extends ConsumerWidget {
     // Pulihkan transaksi offline dari folder cadangan (mis. setelah install
     // ulang) dan cerminkan antrian ke sana.
     ref.watch(cadanganTransaksiOtomatisProvider);
+    // Laporan perangkat ke server (nomor struk offline terakhir & antrian) —
+    // supaya transaksi offline tak bisa dihilangkan tanpa jejak.
+    ref.watch(laporanPerangkatOtomatisProvider);
 
     // Sinkronkan global brightness notifier sebelum subtree dibangun
     // ulang dengan theme baru. Tanpa langkah ini, getter `kBg/kCard/...`
