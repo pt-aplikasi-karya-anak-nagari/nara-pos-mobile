@@ -12,7 +12,9 @@ import '../outlet_scope.dart';
 import 'nomor_struk_offline.dart';
 import 'offline_sync_service.dart';
 import 'sale_outbox.dart';
+import '../shared_prefs.dart';
 import 'shift_outbox.dart';
+import 'tanda_tangan.dart';
 
 /// Pengawasan transaksi offline — sisi perangkat. Lihat package offlineaudit
 /// di server untuk celah yang ditutup.
@@ -27,6 +29,27 @@ class AuditOfflineApi {
         data: data,
         options: Options(extra: {'senyap': true}),
       );
+
+  /// Daftarkan kunci publik tanda tangan perangkat. true = terdaftar (atau
+  /// sudah); false = server menolak karena perangkat ini sudah punya kunci
+  /// lain (hanya Pemilik yang bisa mencabutnya). Galat lain dilempar.
+  Future<bool> daftarkanKunci(
+    String outletId,
+    String deviceId,
+    String kunciPublik,
+  ) async {
+    try {
+      await _dio.post<dynamic>(
+        ApiEndpoint.offlineKunciPerangkat(outletId),
+        data: {'device_id': deviceId, 'public_key': kunciPublik},
+        options: Options(extra: {'senyap': true}),
+      );
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 409) return false;
+      rethrow;
+    }
+  }
 
   /// Catat transaksi offline yang akan dibuang. Melempar [GagalCatatBuang]
   /// berisi pesan dari server (mis. PIN salah) — perangkat TIDAK boleh
@@ -138,6 +161,7 @@ final laporanPerangkatOtomatisProvider = Provider<void>((ref) {
         shiftMenunggu: await ref.read(shiftOutboxProvider).count(),
       );
       await ref.read(auditOfflineApiProvider).laporPerangkat(outletId, data);
+      await _daftarkanKunciSekali(ref, outletId, identitas.id);
     } catch (_) {
       // Dicoba lagi pada pemicu berikutnya.
     } finally {
@@ -159,3 +183,23 @@ final laporanPerangkatOtomatisProvider = Provider<void>((ref) {
   ref.onDispose(timer.cancel);
   Future.microtask(jalan);
 });
+
+/// Daftarkan kunci tanda tangan perangkat ke server, sekali per outlet. Hasil
+/// disimpan supaya tak diulang tiap 5 menit; penolakan (perangkat sudah punya
+/// kunci lain) juga diingat — mengulanginya tak akan mengubah apa pun.
+Future<void> _daftarkanKunciSekali(
+  Ref ref,
+  String outletId,
+  String deviceId,
+) async {
+  if (deviceId.isEmpty) return;
+  final prefs = ref.read(sharedPreferencesProvider);
+  final kunciPrefs = 'offline.kunci_terdaftar.$outletId';
+  final pub = await ref.read(kunciTandaTanganProvider).kunciPublik();
+  final tersimpan = prefs.getString(kunciPrefs);
+  if (tersimpan == pub || tersimpan == 'konflik:$pub') return;
+  final ok = await ref
+      .read(auditOfflineApiProvider)
+      .daftarkanKunci(outletId, deviceId, pub);
+  await prefs.setString(kunciPrefs, ok ? pub : 'konflik:$pub');
+}

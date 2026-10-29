@@ -135,6 +135,8 @@ class ApiEndpoint {
   // Pengawasan transaksi offline (anti-kecurangan).
   static String offlineLaporanPerangkat(String outletId) =>
       '/outlets/$outletId/offline/laporan-perangkat';
+  static String offlineKunciPerangkat(String outletId) =>
+      '/outlets/$outletId/offline/kunci-perangkat';
   static String offlineBuang(String outletId) =>
       '/outlets/$outletId/offline/buang';
 

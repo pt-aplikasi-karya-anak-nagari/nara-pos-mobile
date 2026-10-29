@@ -9,7 +9,9 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/connectivity_service.dart';
 import '../../../core/offline/entity_cache.dart';
 import '../../../core/offline/product_cache.dart';
+import '../../../core/device_identity.dart';
 import '../../../core/offline/jam_offline.dart';
+import '../../../core/offline/tanda_tangan.dart';
 import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../customers/data/customer_repository.dart';
@@ -208,9 +210,8 @@ class TransactionApiService extends BaseApiService {
     return await post<Map<String, dynamic>>(
       '/transactions/offline/lunasi/$outletId',
       data: data,
-      converter: (res) => res is Map
-          ? Map<String, dynamic>.from(res)
-          : <String, dynamic>{},
+      converter: (res) =>
+          res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{},
     );
   }
 
@@ -500,7 +501,10 @@ class TransactionRepository {
         final batas = pengaturan.maxDiscountPercent;
         final persen = persenDiskonKasir(
           cart,
-          diskonOrder: diskonOrderDari(diskonTotal: discountTotal, keranjang: cart),
+          diskonOrder: diskonOrderDari(
+            diskonTotal: discountTotal,
+            keranjang: cart,
+          ),
         );
         if (melebihiBatasDiskon(persen, batas)) {
           throw TransaksiOfflineDitolak(
@@ -516,44 +520,56 @@ class TransactionRepository {
       //  - cashier_id : kasir yang menjual — antrian bisa terkirim saat kasir
       //    lain sudah login, dan server harus mencatat kasir yang benar;
       //  - is_offline : server memakai harga & stok saat penjualan terjadi.
-      final nomorStruk = await _ref.read(nomorStrukOfflineProvider).berikutnya();
+      final nomorStruk = await _ref
+          .read(nomorStrukOfflineProvider)
+          .berikutnya();
       final kasirId = _ref.read(authProvider).user?.remoteId ?? '';
-      final localId = await _ref.read(saleOutboxProvider).enqueue(
-        oId,
-        {
-          ...checkoutData,
-          'is_offline': true,
-          'offline_ref': nomorStruk,
-          if (kasirId.isNotEmpty) 'cashier_id': kasirId,
-          // Jam tablet terdeteksi dimundurkan: penanda untuk ditinjau Pemilik.
-          if (jamMundur) 'jam_mundur': true,
-          // Dijual dalam sesi kasir yang dibuka offline (kartu/PIN dicocokkan
-          // di perangkat, belum oleh server).
-          if (_ref.read(authProvider.notifier).sesiOffline) 'sesi_offline': true,
-          // Data struk yang tak dikirim ke server tapi dibutuhkan untuk
-          // menampilkan & mencetak ulang transaksi ini dari Riwayat selama
-          // belum terkirim (lihat transaksi_offline.dart). Server
-          // mengabaikan field yang tak dikenalnya.
-          'struk_lokal': {
-            'cashier_name': cashierName,
-            'outlet_name': outletName,
-            'original_subtotal': originalSubtotal,
-            'table_name': ?tableName,
-            'points_earned': displayPointsEarned ?? pointsEarned,
-            'items': [
-              for (final item in cart)
-                {
-                  'product_name': item.product.name,
-                  'emoji': item.product.emoji,
-                  'variant': item.variantName,
-                  'original_price': item.basePrice,
-                  'modifiers_label': item.modifiersLabel,
-                },
-            ],
-          },
+      final dataOffline = <String, dynamic>{
+        ...checkoutData,
+        // Perangkat penanda tangan — server mencari kunci publiknya.
+        'device_id': DeviceIdentity.current.id,
+        'is_offline': true,
+        'offline_ref': nomorStruk,
+        if (kasirId.isNotEmpty) 'cashier_id': kasirId,
+        // Jam tablet terdeteksi dimundurkan: penanda untuk ditinjau Pemilik.
+        if (jamMundur) 'jam_mundur': true,
+        // Dijual dalam sesi kasir yang dibuka offline (kartu/PIN dicocokkan
+        // di perangkat, belum oleh server).
+        if (_ref.read(authProvider.notifier).sesiOffline) 'sesi_offline': true,
+        // Data struk yang tak dikirim ke server tapi dibutuhkan untuk
+        // menampilkan & mencetak ulang transaksi ini dari Riwayat selama
+        // belum terkirim (lihat transaksi_offline.dart). Server
+        // mengabaikan field yang tak dikenalnya.
+        'struk_lokal': {
+          'cashier_name': cashierName,
+          'outlet_name': outletName,
+          'original_subtotal': originalSubtotal,
+          'table_name': ?tableName,
+          'points_earned': displayPointsEarned ?? pointsEarned,
+          'items': [
+            for (final item in cart)
+              {
+                'product_name': item.product.name,
+                'emoji': item.product.emoji,
+                'variant': item.variantName,
+                'original_price': item.basePrice,
+                'modifiers_label': item.modifiersLabel,
+              },
+          ],
         },
-        localId: SaleOutbox.idLokalBaru(),
-      );
+      };
+      // Tanda tangan perangkat atas isi transaksi, dibuat SEKARANG — isi yang
+      // diubah sesudahnya (di antrian / cadangan) terdeteksi server. Gagal
+      // menandatangani tak boleh menggagalkan penjualan; server lalu
+      // menandainya tanpa_tanda_tangan.
+      try {
+        dataOffline['tanda_tangan'] = await _ref
+            .read(kunciTandaTanganProvider)
+            .tandatangani(dataOffline);
+      } catch (_) {}
+      final localId = await _ref
+          .read(saleOutboxProvider)
+          .enqueue(oId, dataOffline, localId: SaleOutbox.idLokalBaru());
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
 
       // Poin yang ditukar ikut berkurang di salinan pelanggan perangkat.
@@ -938,9 +954,8 @@ final transactionDetailProvider = FutureProvider.family<Sale, String>((
   // Transaksi offline yang belum terkirim: belum ada di server, ambil dari
   // antrian di perangkat.
   final dilunasi = await ref.watch(idDilunasiLokalProvider.future);
-  Sale lapis(Sale s) => dilunasi.contains(s.id) && !s.isPaid
-      ? tandaiLunasLokal(s)
-      : s;
+  Sale lapis(Sale s) =>
+      dilunasi.contains(s.id) && !s.isPaid ? tandaiLunasLokal(s) : s;
   if (SaleOutbox.idOffline(id)) {
     final sale = await cariTransaksiOffline(ref.read(saleOutboxProvider), id);
     if (sale != null) return lapis(sale);
@@ -1054,9 +1069,11 @@ List<Sale> saringRiwayatTersimpan(
   final q = (cari ?? '').trim().toLowerCase();
   final akhir = sampai == null
       ? null
-      : DateTime(sampai.year, sampai.month, sampai.day).add(
-          const Duration(days: 1),
-        );
+      : DateTime(
+          sampai.year,
+          sampai.month,
+          sampai.day,
+        ).add(const Duration(days: 1));
   final hasil = semua.where((s) {
     if (q.isNotEmpty &&
         !s.invoiceId.toLowerCase().contains(q) &&
