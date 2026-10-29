@@ -175,7 +175,13 @@ class OfflineSyncService {
             if (ditolakDiPanggilanIni.contains('sale:${ps.localId}')) continue;
             try {
               progres.sedangMengirim(ps.localId);
-              await api.checkout(ps.outletId, ps.payload);
+              // jam_kirim: jam tablet SAAT MENGIRIM. Server membandingkannya
+              // dengan jamnya sendiri untuk mendeteksi jam tablet yang
+              // diatur ulang. Tak disimpan di antrian — selalu jam terkini.
+              await api.checkout(ps.outletId, {
+                ...ps.payload,
+                'jam_kirim': DateTime.now().toUtc().toIso8601String(),
+              });
               await outbox.remove(ps.localId);
               synced++;
               adaKemajuan = true;

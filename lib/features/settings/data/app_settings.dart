@@ -25,10 +25,16 @@ class OutletAppSettings {
   /// disertai `override_pin` manajer berwenang.
   final num maxDiscountPercent;
 
+  /// Batas lama tablet boleh berjualan tanpa tersambung ke server (jam).
+  /// Lewat dari itu penjualan offline baru ditolak. `0` = tanpa batas —
+  /// juga nilai untuk pengaturan tersimpan dari versi sebelum field ini ada.
+  final int maxOfflineHours;
+
   const OutletAppSettings({
     this.requirePinRefund = false,
     this.requirePinVoid = false,
     this.maxDiscountPercent = 0,
+    this.maxOfflineHours = 0,
   });
 
   factory OutletAppSettings.fromJson(Map<String, dynamic> json) {
@@ -39,6 +45,10 @@ class OutletAppSettings {
       // Backend mengirim num; toleran juga bila datang sebagai string.
       maxDiscountPercent:
           rawMax is num ? rawMax : num.tryParse('${rawMax ?? ''}') ?? 0,
+      maxOfflineHours: switch (json['max_offline_hours']) {
+        final num n => n.toInt(),
+        final Object? v => int.tryParse('${v ?? ''}') ?? 0,
+      },
     );
   }
 
@@ -49,6 +59,7 @@ class OutletAppSettings {
         'require_pin_refund': requirePinRefund,
         'require_pin_void': requirePinVoid,
         'max_discount_percent': maxDiscountPercent,
+        'max_offline_hours': maxOfflineHours,
       };
 }
 

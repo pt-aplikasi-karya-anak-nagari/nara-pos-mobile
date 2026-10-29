@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart' show Alignment, Text, TextDirection;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../auth_storage.dart';
 import '../device_identity.dart';
+import '../offline/jam_offline.dart';
 import '../config/app_config.dart';
 import '../../features/user/data/auth_service.dart';
 import 'api_endpoint.dart';
@@ -72,7 +74,13 @@ final dioProvider = Provider<Dio>((ref) {
 
         return handler.next(options);
       },
+      onResponse: (response, handler) {
+        _catatTersambung(ref);
+        return handler.next(response);
+      },
       onError: (e, handler) async {
+        // Server membalas (walau dengan galat) = tablet tersambung.
+        if (e.response != null) _catatTersambung(ref);
         var authToastShown = false;
         if (_shouldAttemptRefresh(e, authStorage)) {
           refreshInFlight ??= _refreshTokens(
@@ -141,6 +149,14 @@ final dioProvider = Provider<Dio>((ref) {
 
   return dio;
 });
+
+/// Catat bahwa tablet baru saja tersambung ke server — dasar batas lama
+/// offline (lihat jam_offline.dart). Tak boleh mengganggu permintaannya.
+void _catatTersambung(Ref ref) {
+  try {
+    unawaited(ref.read(jamOfflineProvider).catatOnline().catchError((_) {}));
+  } catch (_) {}
+}
 
 void _applySecurityHeaders(
   RequestOptions options,

@@ -9,6 +9,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/connectivity_service.dart';
 import '../../../core/offline/entity_cache.dart';
 import '../../../core/offline/product_cache.dart';
+import '../../../core/offline/jam_offline.dart';
 import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../kasir/domain/cart_item.dart';
@@ -456,8 +457,23 @@ class TransactionRepository {
       // saat sinkron dan omzetnya tak pernah tercatat. PIN yang sudah
       // dimasukkan (checkout online yang terputus di tengah) tetap dikirim dan
       // diperiksa server saat sinkron.
+      final pengaturan = await bacaAppSettingsTersimpan(oId);
+
+      // BATAS LAMA OFFLINE. Tablet yang terlalu lama tak tersambung tak boleh
+      // terus berjualan: kasir yang dinonaktifkan Pemilik selagi tablet
+      // offline baru benar-benar terhenti saat tablet tersambung lagi.
+      // Memundurkan jam tablet tak memperpendek hitungannya (jam_offline.dart).
+      final jam = _ref.read(jamOfflineProvider);
+      final jamMundur = await jam.amati();
+      final lamaOffline = jam.lamaOffline();
+      if (melewatiBatasOffline(lamaOffline, pengaturan.maxOfflineHours)) {
+        throw TransaksiOfflineDitolak(
+          pesanBatasOffline(lamaOffline!, pengaturan.maxOfflineHours),
+        );
+      }
+
       if (overridePin == null || overridePin.isEmpty) {
-        final batas = (await bacaAppSettingsTersimpan(oId)).maxDiscountPercent;
+        final batas = pengaturan.maxDiscountPercent;
         final persen = persenDiskonKasir(
           cart,
           diskonOrder: diskonOrderDari(diskonTotal: discountTotal, keranjang: cart),
@@ -485,6 +501,8 @@ class TransactionRepository {
           'is_offline': true,
           'offline_ref': nomorStruk,
           if (kasirId.isNotEmpty) 'cashier_id': kasirId,
+          // Jam tablet terdeteksi dimundurkan: penanda untuk ditinjau Pemilik.
+          if (jamMundur) 'jam_mundur': true,
           // Data struk yang tak dikirim ke server tapi dibutuhkan untuk
           // menampilkan & mencetak ulang transaksi ini dari Riwayat selama
           // belum terkirim (lihat transaksi_offline.dart). Server
