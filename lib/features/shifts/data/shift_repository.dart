@@ -8,6 +8,7 @@ import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/offline/shift_outbox.dart';
 import '../../transactions/data/transaction_repository.dart';
 import '../../transactions/domain/sale.dart';
+import '../../user/data/auth_service.dart';
 import '../domain/shift.dart';
 import '../domain/z_report.dart';
 import 'shift_api_service.dart';
@@ -200,7 +201,12 @@ class ActiveShiftNotifier extends AsyncNotifier<Shift?> {
           outletId: outletId,
           localShiftId: localShiftId,
           clientRef: clientRef,
-          payload: {'start_balance': startingCash, 'notes': notes},
+          payload: {
+            'start_balance': startingCash,
+            'notes': notes,
+            // Kasir yang membuka — antrian bisa terkirim saat kasir lain login.
+            'cashier_id': ref.read(authProvider).user?.remoteId ?? '',
+          },
           occurredAt: occurredAt,
         );
     await ref.read(pendingShiftSyncCountProvider.notifier).refresh();
@@ -273,7 +279,11 @@ class ActiveShiftNotifier extends AsyncNotifier<Shift?> {
       outletId: outletId,
       localShiftId: shift.localShiftId ?? shift.remoteId ?? '',
       clientRef: clientRef,
-      payload: {'actual_balance': closingCash, 'notes': notes},
+      payload: {
+        'actual_balance': closingCash,
+        'notes': notes,
+        'cashier_id': ref.read(authProvider).user?.remoteId ?? '',
+      },
       occurredAt: occurredAt,
       dependsOn: dependsOn,
       serverShiftId: serverShiftId,

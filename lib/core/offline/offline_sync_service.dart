@@ -115,6 +115,7 @@ class OfflineSyncService {
               op.payload['notes']?.toString() ?? '',
               clientRef: op.clientRef,
               occurredAt: DateTime.tryParse(op.occurredAt ?? ''),
+              cashierId: op.payload['cashier_id']?.toString(),
             );
             if (op.localShiftId != null && (shift.remoteId ?? '').isNotEmpty) {
               await shiftOutbox.setServerShiftId(
@@ -286,6 +287,7 @@ class OfflineSyncService {
                 op.payload['notes']?.toString() ?? '',
                 clientRef: op.clientRef,
                 occurredAt: DateTime.tryParse(op.occurredAt ?? ''),
+                cashierId: op.payload['cashier_id']?.toString(),
               );
               await shiftOutbox.remove(op.localId);
               shiftChanged = true;

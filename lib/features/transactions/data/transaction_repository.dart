@@ -7,12 +7,14 @@ import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/connectivity_service.dart';
 import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../kasir/domain/cart_item.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
 import '../../../core/outlet_scope.dart';
 import '../../shifts/data/shift_repository.dart';
+import '../../user/data/auth_service.dart';
 
 /// Cache offline riwayat transaksi per outlet. Menyimpan RAW JSON dari API
 /// (codec identity) → fidelitas penuh tanpa perlu serializer model. Dipakai
@@ -410,6 +412,10 @@ class TransactionRepository {
               if (item.variantId != null) 'variant_id': item.variantId,
               'name': item.displayName,
               'price': item.effectivePrice,
+              // Harga dasar produk/varian saat penjualan (sebelum diskon &
+              // add-on). Dipakai server HANYA untuk transaksi offline, bila
+              // harganya sudah diubah sebelum transaksi sempat terkirim.
+              'base_price': item.basePrice,
               // Snapshot flag pajak per item. Server otoritatif atas pajak &
               // mengecualikan item non-pajak; dikirim agar payload konsisten
               // dengan preview kasir.
@@ -438,9 +444,19 @@ class TransactionRepository {
     // dipakai supaya struk tetap bisa dicetak & cart bisa dikosongkan
     // walau belum ada respons backend.
     Future<Sale> queueOffline() async {
-      final localId = await _ref
-          .read(saleOutboxProvider)
-          .enqueue(oId, checkoutData);
+      // Penanda transaksi offline untuk server:
+      //  - offline_ref: nomor struk yang dicetak (bukan lagi "OFFLINE");
+      //  - cashier_id : kasir yang menjual — antrian bisa terkirim saat kasir
+      //    lain sudah login, dan server harus mencatat kasir yang benar;
+      //  - is_offline : server memakai harga & stok saat penjualan terjadi.
+      final nomorStruk = await _ref.read(nomorStrukOfflineProvider).berikutnya();
+      final kasirId = _ref.read(authProvider).user?.remoteId ?? '';
+      final localId = await _ref.read(saleOutboxProvider).enqueue(oId, {
+        ...checkoutData,
+        'is_offline': true,
+        'offline_ref': nomorStruk,
+        if (kasirId.isNotEmpty) 'cashier_id': kasirId,
+      });
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
       final sale = Sale(
         createdAt: DateTime.now(),
@@ -455,7 +471,7 @@ class TransactionRepository {
         changeAmount: changeAmount,
         customerName: customerName,
         orderType: orderType,
-        invoiceId: 'OFFLINE',
+        invoiceId: nomorStruk,
         isPaid: isPaid,
         cashierName: cashierName,
         outletName: outletName,

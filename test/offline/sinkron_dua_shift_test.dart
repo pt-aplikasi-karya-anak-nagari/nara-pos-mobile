@@ -92,6 +92,9 @@ class ShiftApiPalsu extends ShiftApiService {
   final ServerPalsu srv;
   ShiftApiPalsu(this.srv) : super(Dio());
 
+  /// cashier_id yang ikut terkirim pada tiap buka/tutup shift.
+  final List<String?> kasirDikirim = [];
+
   @override
   Future<Shift> openShift(
     String outletId,
@@ -99,7 +102,9 @@ class ShiftApiPalsu extends ShiftApiService {
     String notes, {
     String? clientRef,
     DateTime? occurredAt,
+    String? cashierId,
   }) async {
+    kasirDikirim.add(cashierId);
     final id = srv.buka(outletId, clientRef ?? '');
     return Shift(
       remoteId: id,
@@ -131,7 +136,9 @@ class ShiftApiPalsu extends ShiftApiService {
     String notes, {
     String? clientRef,
     DateTime? occurredAt,
+    String? cashierId,
   }) async {
+    kasirDikirim.add(cashierId);
     srv.tutup(shiftId);
     return Shift(
       remoteId: shiftId,
@@ -277,12 +284,16 @@ class SaleOutboxPalsu extends SaleOutbox {
 
 const outlet = 'OUT-1';
 
-PendingOp opBuka(String n, String ref) => PendingOp(
+PendingOp opBuka(String n, String ref, {String? kasir}) => PendingOp(
   localId: 'op-buka-$n',
   opType: opShiftOpen,
   outletId: outlet,
   clientRef: ref,
-  payload: const {'start_balance': 100000, 'notes': 'buka'},
+  payload: {
+    'start_balance': 100000,
+    'notes': 'buka',
+    'cashier_id': ?kasir,
+  },
   localShiftId: 'lokal-$n',
   createdAt: DateTime(2026, 1, int.parse(n)),
 );
@@ -292,12 +303,17 @@ PendingOp opTutup(
   String ref, {
   String? serverShiftId,
   DateTime? terjadiPada,
+  String? kasir,
 }) => PendingOp(
   localId: 'op-tutup-$n',
   opType: opShiftClose,
   outletId: outlet,
   clientRef: ref,
-  payload: const {'actual_balance': 500000, 'notes': 'tutup'},
+  payload: {
+    'actual_balance': 500000,
+    'notes': 'tutup',
+    'cashier_id': ?kasir,
+  },
   localShiftId: 'lokal-$n',
   serverShiftId: serverShiftId,
   createdAt: DateTime(2026, 1, int.parse(n)),
@@ -316,6 +332,7 @@ PendingSale sale(String id, String refShift) => PendingSale(
 Future<(ServerPalsu, ShiftOutboxPalsu, SaleOutboxPalsu, SyncResult)> jalankan({
   required List<PendingOp> ops,
   required List<PendingSale> sales,
+  ShiftApiPalsu Function(ServerPalsu)? api,
 }) async {
   final srv = ServerPalsu();
   final so = ShiftOutboxPalsu(ops);
@@ -329,7 +346,9 @@ Future<(ServerPalsu, ShiftOutboxPalsu, SaleOutboxPalsu, SyncResult)> jalankan({
     overrides: [
       shiftOutboxProvider.overrideWithValue(so),
       saleOutboxProvider.overrideWithValue(salesOut),
-      shiftApiServiceProvider.overrideWithValue(ShiftApiPalsu(srv)),
+      shiftApiServiceProvider.overrideWithValue(
+        (api ?? ShiftApiPalsu.new)(srv),
+      ),
       transactionApiServiceProvider.overrideWithValue(TrxApiPalsu(srv, peta)),
     ],
   );
@@ -382,6 +401,22 @@ void main() {
           'penjualan hari-2 tidak mendarat di shift hari-2 — inilah bentuk '
           'yang membuat Z-Report menuduh kasir hari-1 kurang setor',
     );
+  });
+
+  test('kasir yang membuka/menutup shift offline ikut terkirim', () async {
+    // Antrian bisa terkirim saat kasir LAIN sudah login. Tanpa cashier_id,
+    // server mencatat shift ini milik kasir yang kebetulan login, dan
+    // penjualan kasir aslinya ditolak karena shift-nya "bukan miliknya".
+    late ShiftApiPalsu api;
+    await jalankan(
+      ops: [
+        opBuka('1', 'ref-1', kasir: 'kasir-A'),
+        opTutup('1', 'tutup-1', kasir: 'kasir-A'),
+      ],
+      sales: [sale('s1a', 'ref-1')],
+      api: (srv) => api = ShiftApiPalsu(srv),
+    );
+    expect(api.kasirDikirim, ['kasir-A', 'kasir-A']);
   });
 
   test('penolakan urutan tidak menaikkan attempts', () async {
