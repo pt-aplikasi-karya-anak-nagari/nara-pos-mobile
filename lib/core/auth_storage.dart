@@ -15,8 +15,23 @@ class AuthStorage {
   /// lihat sesi_login.dart.
   static const sesiDiperbaruiKey = 'auth.sesiDiperbarui';
 
+  /// Sesi kasir yang dibuka saat OFFLINE (kartu/PIN dicocokkan di perangkat,
+  /// lihat sesi_offline.dart). Selama true, semua permintaan ke server ditahan
+  /// sampai staf verifikasi ulang — tak ada token miliknya.
+  static const sesiOfflineKey = 'auth.sesiOffline';
+
   final SharedPreferences _prefs;
   final FlutterSecureStorage _secureStorage;
+
+  bool get sesiOffline => _prefs.getBool(sesiOfflineKey) ?? false;
+
+  Future<void> setSesiOffline(bool aktif) async {
+    if (aktif) {
+      await _prefs.setBool(sesiOfflineKey, true);
+    } else {
+      await _prefs.remove(sesiOfflineKey);
+    }
+  }
 
   String? _accessToken;
   String? _refreshToken;
@@ -75,6 +90,8 @@ class AuthStorage {
   }) async {
     _accessToken = accessToken;
     _refreshToken = refreshToken;
+    // Token asli dari server = sesi sudah diverifikasi.
+    await setSesiOffline(false);
     await Future.wait([
       _secureStorage.write(key: accessTokenKey, value: accessToken),
       _secureStorage.write(key: refreshTokenKey, value: refreshToken),
@@ -99,6 +116,7 @@ class AuthStorage {
       _prefs.remove(refreshTokenKey),
       _prefs.remove(userDataKey),
       _prefs.remove(sesiDiperbaruiKey),
+      _prefs.remove(sesiOfflineKey),
     ]);
   }
 }

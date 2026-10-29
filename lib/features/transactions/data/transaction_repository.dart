@@ -526,6 +526,9 @@ class TransactionRepository {
           if (kasirId.isNotEmpty) 'cashier_id': kasirId,
           // Jam tablet terdeteksi dimundurkan: penanda untuk ditinjau Pemilik.
           if (jamMundur) 'jam_mundur': true,
+          // Dijual dalam sesi kasir yang dibuka offline (kartu/PIN dicocokkan
+          // di perangkat, belum oleh server).
+          if (_ref.read(authProvider.notifier).sesiOffline) 'sesi_offline': true,
           // Data struk yang tak dikirim ke server tapi dibutuhkan untuk
           // menampilkan & mencetak ulang transaksi ini dari Riwayat selama
           // belum terkirim (lihat transaksi_offline.dart). Server

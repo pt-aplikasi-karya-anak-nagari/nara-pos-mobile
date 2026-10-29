@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sizer/sizer.dart';
 import 'package:toastification/toastification.dart';
+import '../shared/widgets/banner_sesi_offline.dart';
 import '../shared/widgets/connectivity_banner.dart';
 import '../shared/widgets/pending_sync_banner.dart';
 import '../shared/widgets/antrian_offline_floating.dart';
@@ -101,6 +102,12 @@ class NaraApp extends ConsumerWidget {
                             Column(
                               children: [
                                 const ConnectivityBanner(),
+                                // Sesi kasir dibuka offline & internet sudah
+                                // kembali: minta verifikasi ulang.
+                                BannerSesiOffline(
+                                  konteksDialog: () =>
+                                      rootNavigatorKey.currentContext,
+                                ),
                                 // Hanya baris merah (gagal permanen); antrian
                                 // yang menunggu tampil di floating di bawah.
                                 const PendingSyncBanner(),

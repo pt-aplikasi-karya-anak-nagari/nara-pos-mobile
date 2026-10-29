@@ -311,6 +311,7 @@ class StaffCandidate {
     required this.fullName,
     required this.role,
     required this.hasPin,
+    this.kartuOffline = const [],
   });
 
   final String id;
@@ -318,11 +319,17 @@ class StaffCandidate {
   final String role;
   final bool hasPin;
 
+  /// Sidik kartu login untuk ganti kasir saat offline (lihat sesi_offline).
+  final List<String> kartuOffline;
+
   factory StaffCandidate.fromJson(Map<String, dynamic> j) => StaffCandidate(
     id: j['id']?.toString() ?? '',
     fullName: j['full_name']?.toString() ?? '',
     role: j['role']?.toString() ?? '',
     hasPin: j['has_pin'] == true,
+    kartuOffline: [
+      for (final k in (j['kartu_offline'] as List? ?? const [])) k.toString(),
+    ],
   );
 }
 

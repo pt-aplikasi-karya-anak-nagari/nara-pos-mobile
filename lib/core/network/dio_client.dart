@@ -49,6 +49,20 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
+        // SESI OFFLINE (kasir masuk lewat kartu/PIN yang dicocokkan di
+        // perangkat): belum ada token miliknya, dan tak boleh ada permintaan
+        // atas nama orang lain. Tahan semuanya — seolah offline — kecuali
+        // jalur sesi staf untuk verifikasi ulang. Antrian & cache bekerja
+        // seperti saat offline sampai staf terverifikasi.
+        if (authStorage.sesiOffline && !bolehSaatSesiOffline(options.path)) {
+          return handler.reject(
+            DioException(
+              requestOptions: options,
+              type: DioExceptionType.connectionError,
+              error: 'Sesi kasir offline — verifikasi ulang untuk tersambung',
+            ),
+          );
+        }
         final token = authStorage.accessToken;
         if (token != null && !_isBearerSkipped(options.path)) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -209,6 +223,14 @@ String _signedPath(String rawPath, String apiBasePath) {
   if (!path.startsWith('/')) path = '/$path';
   if (!path.startsWith(apiBasePath)) path = apiBasePath + path;
   return path;
+}
+
+/// Permintaan yang tetap boleh selama sesi offline: hanya verifikasi ulang
+/// sesi staf.
+bool bolehSaatSesiOffline(String path) {
+  final p = _normalizedPath(path);
+  return p == ApiEndpoint.staffSessionResume ||
+      p == ApiEndpoint.staffSessionVerify;
 }
 
 bool _isBearerSkipped(String path) {

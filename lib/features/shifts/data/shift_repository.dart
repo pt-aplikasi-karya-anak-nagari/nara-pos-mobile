@@ -128,20 +128,38 @@ class ActiveShiftNotifier extends AsyncNotifier<Shift?> {
   Future<Shift?> build() async {
     final outletId = ref.watch(activeOutletIdProvider);
     if (outletId == null) return null;
+    // Shift aktif milik KASIR YANG SEDANG MASUK. Cache & antrian shift per
+    // outlet, bukan per kasir: tanpa saringan ini kasir yang masuk saat
+    // offline mewarisi shift kasir sebelumnya, dan seluruh penjualannya
+    // ditolak server karena shift itu bukan miliknya.
+    final saya = ref.watch(authProvider.select((s) => s.user?.remoteId)) ?? '';
+    bool milikSaya(PendingOp op) {
+      final kasir = op.payload['cashier_id']?.toString() ?? '';
+      return kasir.isEmpty || saya.isEmpty || kasir == saya;
+    }
 
     final outbox = ref.read(shiftOutboxProvider);
-    // Close offline yang belum sync → shift sudah ditutup secara lokal; gate
-    // terkunci walau server (atau open yang juga belum sync) masih "open".
-    final closes = await outbox.closesPending();
-    if (closes.any((op) => op.outletId == outletId)) return null;
-    // Open offline yang belum sync → server belum punya; sajikan shift
-    // optimistik dari cache, JANGAN overwrite dengan hasil server (yang kosong).
-    final opens = await outbox.opensPending();
-    if (opens.any((op) => op.outletId == outletId)) {
+    final closes = (await outbox.closesPending())
+        .where((op) => op.outletId == outletId && milikSaya(op))
+        .toList();
+    final opens = (await outbox.opensPending())
+        .where((op) => op.outletId == outletId && milikSaya(op))
+        .toList();
+    // Open offline yang belum sync & belum ditutup → server belum punya;
+    // sajikan shift optimistik dari cache, JANGAN overwrite dengan hasil
+    // server (yang kosong).
+    final ditutup = {for (final c in closes) c.localShiftId};
+    if (opens.any((o) => !ditutup.contains(o.localShiftId))) {
       final cached = await _activeShiftCache.getAll(outletId);
-      return cached.isEmpty ? null : cached.first;
+      return cached.isEmpty || !shiftMilik(cached.first, saya)
+          ? null
+          : cached.first;
     }
-    return ref.read(shiftRepositoryProvider).getActiveShift(outletId);
+    // Close offline yang belum sync → shift sudah ditutup secara lokal; gate
+    // terkunci walau server masih "open".
+    if (closes.isNotEmpty) return null;
+    final s = await ref.read(shiftRepositoryProvider).getActiveShift(outletId);
+    return s != null && shiftMilik(s, saya) ? s : null;
   }
 
   Future<void> open(double startingCash, String notes) async {
@@ -187,8 +205,8 @@ class ActiveShiftNotifier extends AsyncNotifier<Shift?> {
     final shift = Shift(
       startTime: occurredAt,
       startingCash: startingCash,
-      cashierName: '',
-      cashierRemoteId: '',
+      cashierName: ref.read(authProvider).user?.name ?? '',
+      cashierRemoteId: ref.read(authProvider).user?.remoteId ?? '',
       outletRemoteId: outletId,
       notes: notes,
       openingNotes: notes,
@@ -322,3 +340,8 @@ final shiftsFutureProvider = FutureProvider<List<Shift>>((ref) async {
   if (outletId == null) return [];
   return ref.watch(shiftRepositoryProvider).getHistory(outletId);
 });
+
+/// Shift [s] milik kasir [kasirId]? Shift tanpa pemilik tercatat (cache lama)
+/// dianggap milik siapa pun yang sedang masuk — perilaku sebelumnya.
+bool shiftMilik(Shift s, String kasirId) =>
+    s.cashierRemoteId.isEmpty || kasirId.isEmpty || s.cashierRemoteId == kasirId;

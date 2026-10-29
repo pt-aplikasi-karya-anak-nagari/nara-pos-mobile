@@ -30,11 +30,17 @@ class OutletAppSettings {
   /// juga nilai untuk pengaturan tersimpan dari versi sebelum field ini ada.
   final int maxOfflineHours;
 
+  /// Kasir boleh berganti saat tablet offline (kartu / PIN yang pernah
+  /// dipakai online di tablet ini). Aktif bila tak disebut — sama dengan
+  /// bawaan server.
+  final bool allowOfflineCashierSwitch;
+
   const OutletAppSettings({
     this.requirePinRefund = false,
     this.requirePinVoid = false,
     this.maxDiscountPercent = 0,
     this.maxOfflineHours = 0,
+    this.allowOfflineCashierSwitch = true,
   });
 
   factory OutletAppSettings.fromJson(Map<String, dynamic> json) {
@@ -49,6 +55,8 @@ class OutletAppSettings {
         final num n => n.toInt(),
         final Object? v => int.tryParse('${v ?? ''}') ?? 0,
       },
+      allowOfflineCashierSwitch:
+          json['allow_offline_cashier_switch'] as bool? ?? true,
     );
   }
 
@@ -60,6 +68,7 @@ class OutletAppSettings {
         'require_pin_void': requirePinVoid,
         'max_discount_percent': maxDiscountPercent,
         'max_offline_hours': maxOfflineHours,
+        'allow_offline_cashier_switch': allowOfflineCashierSwitch,
       };
 }
 

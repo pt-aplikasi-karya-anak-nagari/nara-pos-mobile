@@ -38,8 +38,10 @@ class AuthNotifier extends Notifier<AuthState> {
     _authStorage = ref.read(authStorageProvider);
     _authApi = ref.read(authApiServiceProvider);
 
-    final token = _authStorage.accessToken;
     final userJson = _authStorage.userData;
+    final token =
+        _authStorage.accessToken ??
+        (_authStorage.sesiOffline ? tokenSesiOffline : null);
 
     if (token == null || userJson == null) return const AuthState();
 
@@ -281,6 +283,29 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
+  /// Sesi kasir yang dibuka saat offline (lihat sesi_offline.dart).
+  bool get sesiOffline => _authStorage.sesiOffline;
+
+  /// Buka sesi untuk [kasir] tanpa server — kartu/PIN-nya sudah dicocokkan
+  /// di perangkat. Token lama (kasir sebelumnya) dibuang: tak boleh ada
+  /// permintaan atas nama orang lain. Semua permintaan ditahan sampai
+  /// verifikasi ulang.
+  Future<void> masukOffline({
+    required String staffId,
+    required String nama,
+    required String role,
+    required String outletId,
+  }) async {
+    await _authStorage.clear();
+    final user = User.fromJson(
+      {'id': staffId, 'full_name': nama, 'role': role},
+      outlets: [outletId],
+    );
+    await _authStorage.saveUserData(jsonEncode(user.toJson()));
+    await _authStorage.setSesiOffline(true);
+    state = AuthState(user: user, token: tokenSesiOffline);
+  }
+
   Future<void> logout() async {
     // Lepas FCM mapping di backend DULU (selama token Bearer masih aktif).
     // Kalau dijalankan setelah token di-clear, request unregister-nya akan
@@ -317,7 +342,9 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   void refresh() {
-    final token = _authStorage.accessToken;
+    final token =
+        _authStorage.accessToken ??
+        (_authStorage.sesiOffline ? tokenSesiOffline : null);
     final userJson = _authStorage.userData;
     if (token == null || userJson == null) {
       state = const AuthState();
@@ -333,6 +360,10 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 }
+
+/// Penanda token untuk sesi offline — bukan token sungguhan; tak pernah
+/// dikirim (dio_client menahan permintaan selama sesi offline).
+const tokenSesiOffline = 'sesi-offline';
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(
   AuthNotifier.new,

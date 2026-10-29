@@ -9,7 +9,10 @@ import 'package:hugeicons/hugeicons.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
+import '../../../core/offline/sale_outbox.dart' show isOfflineError;
+import '../../../core/offline/sesi_offline.dart';
 import '../../../core/staff_device_storage.dart';
+import '../../settings/data/app_settings.dart';
 import '../data/auth_api_service.dart';
 import '../../products/ui/barcode_scanner_page.dart';
 import '../data/auth_service.dart';
@@ -87,6 +90,64 @@ class StaffSessionFlow extends HookConsumerWidget {
     final memeriksaPerangkat = useState(true);
 
     final penyimpananPerangkat = ref.read(staffDeviceStorageProvider);
+    final simpananOffline = ref.read(sesiOfflineStoreProvider);
+
+    // Tablet offline: pilih staf & cocokkan kartu/PIN di perangkat (lihat
+    // core/offline/sesi_offline.dart). Sesinya diverifikasi ulang server
+    // begitu internet kembali.
+    final modeOffline = useState(false);
+
+    /// Masuk mode offline dari pengesahan perangkat yang tersimpan. Pesan
+    /// galat bila tak bisa (dimatikan Pemilik / belum ada data staf).
+    Future<String?> masukModeOffline() async {
+      final idOutlet = await penyimpananPerangkat.bacaOutletId() ?? '';
+      if (idOutlet.isEmpty) return null;
+      final pengaturan = await bacaAppSettingsTersimpan(idOutlet);
+      if (!pengaturan.allowOfflineCashierSwitch) {
+        return 'Tablet sedang offline. Ganti kasir saat offline dimatikan '
+            'Pemilik untuk outlet ini — sambungkan ke internet.';
+      }
+      final daftar = await simpananOffline.daftar(idOutlet);
+      if (daftar.isEmpty) {
+        return 'Tablet sedang offline dan belum ada data staf tersimpan. '
+            'Sambungkan ke internet sekali untuk menyimpannya.';
+      }
+      sesi.value = StaffSessionStart(
+        challengeId: '',
+        authorizerName: '',
+        authorizerEmail: '',
+        outletId: idOutlet,
+        outlets: const [],
+        staff: [
+          for (final k in daftar)
+            StaffCandidate(
+              id: k.id,
+              fullName: k.nama,
+              role: k.role,
+              hasPin: k.pin != null,
+              kartuOffline: k.kartu,
+            ),
+        ],
+      );
+      outletId.value = idOutlet;
+      outletPerangkat.value = await penyimpananPerangkat.bacaOutletName() ?? '';
+      modeOffline.value = true;
+      langkah.value = 1;
+      return null;
+    }
+
+    Future<void> masukSebagai(KasirTersimpan k) async {
+      await ref
+          .read(authProvider.notifier)
+          .masukOffline(
+            staffId: k.id,
+            nama: k.nama,
+            role: k.role,
+            outletId: outletId.value ?? '',
+          );
+      HapticFeedback.mediumImpact();
+      onSelesai();
+    }
 
     Future<void> mulai({String? pilihOutlet}) async {
       final email = emailCtrl.text.trim();
@@ -106,6 +167,13 @@ class StaffSessionFlow extends HookConsumerWidget {
             );
         sesi.value = res;
         outletId.value = res.outletId.isEmpty ? null : res.outletId;
+        if (res.outletId.isNotEmpty) {
+          unawaited(
+            simpananOffline
+                .simpanDaftar(res.outletId, res.staff)
+                .catchError((_) {}),
+          );
+        }
 
         // Sahkan perangkat begitu outlet pasti — inilah momen pengelola
         // terbukti DAN outletnya tertentu. Password tak akan diminta lagi
@@ -168,11 +236,25 @@ class StaffSessionFlow extends HookConsumerWidget {
           if (dibatalkan) return;
           sesi.value = res;
           outletId.value = res.outletId;
+          modeOffline.value = false;
+          unawaited(
+            simpananOffline
+                .simpanDaftar(res.outletId, res.staff)
+                .catchError((_) {}),
+          );
           outletPerangkat.value =
               await penyimpananPerangkat.bacaOutletName() ?? '';
           langkah.value = 1; // langsung ke pemilihan staf
         } catch (e) {
           if (dibatalkan) return;
+          // OFFLINE ≠ DITOLAK. Dulu galat koneksi ikut membuang pengesahan
+          // perangkat — membuka layar ini tanpa internet memaksa Pemilik
+          // datang mengetik password lagi. Kini: masuk mode offline.
+          if (isOfflineError(e)) {
+            final pesan = await masukModeOffline();
+            if (pesan != null) error.value = pesan;
+            return;
+          }
           // Token ditolak: dicabut, pengelola dinonaktifkan, atau aksesnya ke
           // outlet dicabut. Buang pengesahannya dan minta login pengelola —
           // menyimpan token yang sudah pasti ditolak hanya akan mengulang
@@ -232,6 +314,19 @@ class StaffSessionFlow extends HookConsumerWidget {
       final hasil = await ref.read(pemindaiKodeProvider)(context);
       if (hasil == null || hasil.trim().isEmpty) return;
 
+      if (modeOffline.value) {
+        final k = await simpananOffline.masukKartu(outletId.value ?? '', hasil);
+        if (k == null) {
+          HapticFeedback.vibrate();
+          error.value =
+              'Kartu tidak dikenali di tablet ini. Kartu yang baru dibuat '
+              'baru bisa dipakai offline setelah tablet sempat online.';
+          return;
+        }
+        await masukSebagai(k);
+        return;
+      }
+
       loading.value = true;
       error.value = null;
       final msg = await ref
@@ -259,12 +354,46 @@ class StaffSessionFlow extends HookConsumerWidget {
       }
       loading.value = true;
       error.value = null;
+      final staf = stafTerpilih.value!;
+      final pin = kodeCtrl.text;
+
+      if (modeOffline.value) {
+        final hasil = await simpananOffline.masukPin(
+          outletId.value ?? '',
+          staf.id,
+          pin,
+        );
+        loading.value = false;
+        switch (hasil) {
+          case PinBenar(:final kasir):
+            await masukSebagai(kasir);
+          case PinSalah(:final sisa):
+            HapticFeedback.vibrate();
+            kodeCtrl.clear();
+            error.value = 'PIN salah. Sisa $sisa percobaan sebelum dikunci.';
+          case PinTerkunci(:final sampai):
+            HapticFeedback.vibrate();
+            kodeCtrl.clear();
+            final j = sampai.toLocal();
+            error.value =
+                'Terlalu banyak PIN salah. Coba lagi pukul '
+                '${j.hour.toString().padLeft(2, '0')}:'
+                '${j.minute.toString().padLeft(2, '0')}, atau scan kartu.';
+          case PinBelumTersimpan():
+            error.value =
+                'PIN ${staf.fullName} belum pernah dipakai online di tablet '
+                'ini, jadi belum bisa diperiksa offline. Scan kartu karyawan, '
+                'atau sambungkan ke internet.';
+        }
+        return;
+      }
+
       final msg = await ref
           .read(authProvider.notifier)
           .verifyStaffSession(
             challengeId: sesi.value!.challengeId,
-            staffUserId: stafTerpilih.value!.id,
-            code: kodeCtrl.text,
+            staffUserId: staf.id,
+            code: pin,
           );
       loading.value = false;
       if (msg != null) {
@@ -272,6 +401,12 @@ class StaffSessionFlow extends HookConsumerWidget {
         error.value = msg;
         return;
       }
+      // PIN baru saja diterima server: simpan sidiknya supaya staf ini bisa
+      // masuk saat tablet offline nanti.
+      final idOutlet = outletId.value ?? sesi.value!.outletId;
+      unawaited(
+        simpananOffline.simpanPin(idOutlet, staf.id, pin).catchError((_) {}),
+      );
       HapticFeedback.mediumImpact();
       onSelesai();
     }
@@ -315,6 +450,7 @@ class StaffSessionFlow extends HookConsumerWidget {
         else if (langkah.value == 1)
           ..._daftarStaf(
             sesi: sesi.value!,
+            offline: modeOffline.value,
             loading: loading.value,
             // Pilih nama → langsung bertugas, di KEDUA jalur masuk.
             //
@@ -333,6 +469,7 @@ class StaffSessionFlow extends HookConsumerWidget {
         else
           ..._verifikasi(
             staf: stafTerpilih.value!,
+            offline: modeOffline.value,
             kodeCtrl: kodeCtrl,
             loading: loading.value,
             onVerifikasi: verifikasi,
@@ -443,6 +580,7 @@ List<Widget> _kredensial({
 
 List<Widget> _daftarStaf({
   required StaffSessionStart sesi,
+  bool offline = false,
   required bool loading,
   required void Function(StaffCandidate) onPilih,
   required VoidCallback onScanKartu,
@@ -451,8 +589,11 @@ List<Widget> _daftarStaf({
     const Text('Siapa yang bertugas?', style: _gayaJudul),
     const Gap(6),
     Text(
-      'Disetujui oleh ${sesi.authorizerName}. Scan kartu, atau pilih nama '
-      'lalu masukkan PIN.',
+      offline
+          ? 'Tablet sedang offline. Scan kartu, atau pilih nama lalu masukkan '
+                'PIN. Sesi diverifikasi ulang begitu internet kembali.'
+          : 'Disetujui oleh ${sesi.authorizerName}. Scan kartu, atau pilih '
+                'nama lalu masukkan PIN.',
       style: _gayaKeterangan,
     ),
     const Gap(16),
@@ -495,6 +636,7 @@ List<Widget> _daftarStaf({
 
 List<Widget> _verifikasi({
   required StaffCandidate staf,
+  bool offline = false,
   required TextEditingController kodeCtrl,
   required bool loading,
   required VoidCallback onVerifikasi,
@@ -522,6 +664,10 @@ List<Widget> _verifikasi({
     Text(
       staf.hasPin
           ? 'Masukkan PIN ${staf.fullName} untuk mulai bertugas.'
+          : offline
+          ? 'PIN ${staf.fullName} belum pernah dipakai online di tablet ini, '
+                'jadi belum bisa diperiksa saat offline. Scan kartu karyawan, '
+                'atau sambungkan ke internet.'
           // Hanya mungkin untuk karyawan lama yang dibuat sebelum PIN
           // otomatis. Yang perlu diketahui orangnya adalah jalan keluarnya,
           // bukan bahwa ada yang salah.
