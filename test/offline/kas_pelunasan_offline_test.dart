@@ -266,4 +266,18 @@ void main() {
       expect(s.pendingSync, isTrue);
     });
   });
+
+  test(
+    'meja tampil kosong hanya bila seluruh tagihannya lunas di perangkat',
+    () {
+      final kosong = mejaKosongDari([
+        _op(opLunas, {'table_id': 'MEJA-1', 'meja_kosong': true}),
+        // Lunas sebagian: meja masih terisi.
+        _op(opLunas, {'table_id': 'MEJA-2'}),
+        // Bukan pelunasan meja.
+        _op(opLunas, {'meja_kosong': true}),
+      ]);
+      expect(kosong, {'MEJA-1'});
+    },
+  );
 }

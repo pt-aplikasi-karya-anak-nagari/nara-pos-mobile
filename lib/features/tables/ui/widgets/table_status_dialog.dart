@@ -381,14 +381,15 @@ class _SaleCard extends ConsumerWidget {
 
   Future<void> _payNow(BuildContext context, WidgetRef ref) async {
     // Tetap bisa saat offline: pelunasan masuk antrian (pelunasan_offline).
-    final result = await tampilkanSheetBawah<
-      ({String method, double cash, String proofUrl})
-    >(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => MiniPaymentSheet(total: sale.total),
-    );
+    final result =
+        await tampilkanSheetBawah<
+          ({String method, double cash, String proofUrl})
+        >(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => MiniPaymentSheet(total: sale.total),
+        );
     if (result == null) return;
 
     try {
@@ -404,6 +405,12 @@ class _SaleCard extends ConsumerWidget {
           .lunasiOnlineAtauAntrikan(
             tagihan: [sale],
             tableId: tableId,
+            // Tagihan terakhir yang belum lunas di meja ini → meja kosong.
+            mejaKosong:
+                (ref.read(activeTableTransactionsProvider(tableId)).value ??
+                        const <Sale>[])
+                    .where((s) => s.isUnpaid && s.id != sale.id)
+                    .isEmpty,
             paymentMethod: result.method,
             cashAmount: cashAmount,
             changeAmount: changeAmount,
@@ -462,8 +469,9 @@ class _SaleCard extends ConsumerWidget {
     // lalu andalkan penanganan 403 dari backend.
     bool requirePin = false;
     try {
-      requirePin =
-          (await ref.read(outletAppSettingsProvider.future)).requirePinVoid;
+      requirePin = (await ref.read(
+        outletAppSettingsProvider.future,
+      )).requirePinVoid;
     } catch (_) {
       requirePin = false;
     }
@@ -484,7 +492,9 @@ class _SaleCard extends ConsumerWidget {
       if (input == null) return; // dibatalkan
 
       try {
-        await ref.read(transactionRepositoryProvider).voidSale(
+        await ref
+            .read(transactionRepositoryProvider)
+            .voidSale(
               sale.id,
               overridePin: input.pin.isEmpty ? null : input.pin,
             );
@@ -650,10 +660,7 @@ class _SaleCard extends ConsumerWidget {
               ),
               Text(
                 formatRupiah(sale.total),
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: kTextDark,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w900, color: kTextDark),
               ),
             ],
           ),
@@ -663,10 +670,7 @@ class _SaleCard extends ConsumerWidget {
               children: [
                 Icon(Icons.access_time, size: 11, color: kTextMid),
                 const Gap(4),
-                Text(
-                  timeStr,
-                  style: TextStyle(color: kTextMid, fontSize: 10),
-                ),
+                Text(timeStr, style: TextStyle(color: kTextMid, fontSize: 10)),
                 const Gap(8),
                 Text(
                   sale.invoiceId,
@@ -1001,7 +1005,9 @@ class _Actions extends ConsumerWidget {
     final tabTotal = settleable.fold<double>(0, (s, x) => s + x.total);
 
     final result =
-        await tampilkanSheetBawah<({String method, double cash, String proofUrl})>(
+        await tampilkanSheetBawah<
+          ({String method, double cash, String proofUrl})
+        >(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
@@ -1022,6 +1028,7 @@ class _Actions extends ConsumerWidget {
           .lunasiOnlineAtauAntrikan(
             tagihan: settleable,
             tableId: table.id,
+            mejaKosong: true,
             paymentMethod: result.method,
             cashAmount: cashAmount,
             changeAmount: changeAmount,

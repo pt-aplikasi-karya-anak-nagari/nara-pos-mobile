@@ -1,6 +1,7 @@
 import '../../../core/outlet_scope.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../core/offline/entity_cache.dart';
+import '../../transactions/data/pelunasan_offline.dart';
 import '../domain/pos_table.dart';
 import '../domain/table_group.dart';
 import 'table_api_service.dart';
@@ -112,7 +113,15 @@ final tableRepositoryProvider = Provider<TableRepository>((ref) {
 final tablesFutureProvider = FutureProvider<List<PosTable>>((ref) async {
   final outletId = ref.watch(activeOutletIdProvider);
   if (outletId == null) return [];
-  return ref.watch(tableRepositoryProvider).getTables(outletId);
+  final meja = await ref.watch(tableRepositoryProvider).getTables(outletId);
+  // Meja yang tagihannya sudah lunas di perangkat (pelunasan offline belum
+  // terkirim) tampil kosong — kalau tidak, kasir tak bisa mendudukkan tamu
+  // berikutnya sampai internet kembali.
+  final kosong = await ref.watch(mejaKosongLokalProvider.future);
+  for (final m in meja) {
+    if (kosong.contains(m.id) && m.statusIndex == 1) m.statusIndex = 0;
+  }
+  return meja;
 });
 
 final tableGroupsFutureProvider = FutureProvider<List<TableGroup>>((ref) async {

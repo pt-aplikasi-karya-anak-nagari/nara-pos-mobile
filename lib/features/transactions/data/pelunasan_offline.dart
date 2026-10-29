@@ -51,6 +51,29 @@ Set<String> idDilunasiDi(Iterable<PendingOp> ops) => {
       id.toString(),
 };
 
+/// Meja yang seluruh tagihannya sudah dilunasi di perangkat (pelunasan
+/// bertanda `meja_kosong`). MURNI.
+Set<String> mejaKosongDari(Iterable<PendingOp> ops) => {
+  for (final op in ops)
+    if (op.payload['meja_kosong'] == true &&
+        (op.payload['table_id']?.toString() ?? '').isNotEmpty)
+      op.payload['table_id'].toString(),
+};
+
+/// Meja yang tampil KOSONG di peta meja walau server (yang belum menerima
+/// pelunasannya) masih menganggapnya terisi. Hilang sendiri begitu
+/// pelunasannya terkirim — status meja lalu kembali dari server.
+final mejaKosongLokalProvider = FutureProvider<Set<String>>((ref) async {
+  ref.watch(pendingShiftSyncCountProvider);
+  try {
+    return mejaKosongDari(
+      await ref.read(shiftOutboxProvider).semuaBelumSelesai(opLunas),
+    );
+  } catch (_) {
+    return const {};
+  }
+});
+
 /// Tagihan yang dilunasi di perangkat, untuk menimpa tampilan dari server
 /// (yang belum tahu) — supaya kasir tak menagih dua kali.
 final idDilunasiLokalProvider = FutureProvider<Set<String>>((ref) async {
@@ -80,6 +103,7 @@ class PelunasanOffline {
     required List<Sale> tagihan,
     required Future<void> Function() online,
     String? tableId,
+    bool mejaKosong = false,
     required String paymentMethod,
     required double cashAmount,
     required double changeAmount,
@@ -89,6 +113,7 @@ class PelunasanOffline {
       await lunasi(
         tagihan: tagihan,
         tableId: tableId,
+        mejaKosong: mejaKosong,
         paymentMethod: paymentMethod,
         cashAmount: cashAmount,
         changeAmount: changeAmount,
@@ -110,9 +135,12 @@ class PelunasanOffline {
   }
 
   /// Antrikan pelunasan [tagihan]. [tableId] diisi untuk tutup meja.
+  /// [mejaKosong] — pelunasan ini menghabiskan seluruh tagihan meja, jadi
+  /// meja tampil kosong di perangkat sampai pelunasannya terkirim.
   Future<void> lunasi({
     required List<Sale> tagihan,
     String? tableId,
+    bool mejaKosong = false,
     required String paymentMethod,
     required double cashAmount,
     required double changeAmount,
@@ -148,6 +176,7 @@ class PelunasanOffline {
       payload: {
         'transaction_ids': [for (final t in tagihan) t.id],
         if ((tableId ?? '').isNotEmpty) 'table_id': tableId,
+        if (mejaKosong && (tableId ?? '').isNotEmpty) 'meja_kosong': true,
         'payment_method': paymentMethod,
         'cash_amount': cashAmount,
         'change_amount': changeAmount,
@@ -162,6 +191,7 @@ class PelunasanOffline {
     );
     await ref.read(pendingShiftSyncCountProvider.notifier).refresh();
     ref.invalidate(idDilunasiLokalProvider);
+    ref.invalidate(mejaKosongLokalProvider);
   }
 }
 
