@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:image/image.dart' as img;
 import '../../../core/permission_service.dart';
@@ -15,6 +13,7 @@ import '../../products/domain/product.dart';
 import '../../transactions/domain/sale.dart';
 import '../../shifts/domain/shift.dart';
 import '../../../core/outlet_scope.dart';
+import 'logo_struk.dart';
 import 'printer_settings.dart';
 import 'receipt_settings_repository.dart';
 import 'role_printer_config_repository.dart';
@@ -98,32 +97,38 @@ class PrinterService {
     );
   }
 
-  Future<img.Image?> _renderLogo({int size = 160}) async {
+  // Logo terakhir yang sudah disiapkan untuk printer, supaya tak didekode
+  // ulang setiap cetak struk.
+  String? _kunciLogo;
+  img.Image? _logoSiap;
+
+  /// Logo kepala struk dari Pengaturan Struk outlet. Null bila outlet tak
+  /// punya logo atau logonya dimatikan — struk lalu tercetak tanpa logo.
+  /// Tak pernah melempar: logo yang gagal dimuat tak boleh menggagalkan cetak.
+  Future<img.Image?> _logoStruk(OutletReceiptSettings? rs, PaperSize kertas) async {
     try {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final bg = Paint()..color = const Color(0xFFFFFFFF);
-      canvas.drawRect(
-        Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()),
-        bg,
-      );
-      const decoration = FlutterLogoDecoration(
-        style: FlutterLogoStyle.markOnly,
-      );
-      final painter = decoration.createBoxPainter(() {});
-      final inset = size * 0.12;
-      painter.paint(
-        canvas,
-        Offset(inset, inset),
-        ImageConfiguration(size: Size(size - inset * 2, size - inset * 2)),
-      );
-      final picture = recorder.endRecording();
-      final uiImage = await picture.toImage(size, size);
-      final bd = await uiImage.toByteData(format: ui.ImageByteFormat.png);
-      if (bd == null) return null;
-      final decoded = img.decodePng(bd.buffer.asUint8List());
-      if (decoded == null) return null;
-      return img.grayscale(decoded);
+      if (rs == null || !rs.headerShowLogo) return null;
+      final url = rs.headerLogoUrl?.trim() ?? '';
+      final outletId = rs.outletId.isNotEmpty
+          ? rs.outletId
+          : (_ref.read(activeOutletIdProvider) ?? 'outlet');
+      final bytes = await _ref.read(logoStrukStoreProvider).ambil(outletId, url);
+      if (bytes == null) return null;
+      final lebar = lebarLogoUntuk(kertas);
+      final kunci = '$outletId|$url|${bytes.length}|$lebar';
+      if (kunci != _kunciLogo) {
+        _logoSiap = siapkanLogoStruk(bytes, lebarMaks: lebar);
+        _kunciLogo = kunci;
+      }
+      return _logoSiap;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<OutletReceiptSettings?> _pengaturanStruk() async {
+    try {
+      return await _ref.read(receiptSettingsFutureProvider.future);
     } catch (_) {
       return null;
     }
@@ -133,7 +138,7 @@ class PrinterService {
     if (!await _ensureConnected()) return false;
     final s = _ref.read(printerSettingsProvider);
     final header = _resolveHeader(s);
-    final logo = await _renderLogo();
+    final logo = await _logoStruk(await _pengaturanStruk(), s.paperSize);
     final profile = await CapabilityProfile.load();
     final gen = Generator(s.paperSize, profile);
     final bytes = <int>[
@@ -186,17 +191,12 @@ class PrinterService {
     final s = _ref.read(printerSettingsProvider);
     // Branding/toggle struk dari backend (single source of truth per outlet).
     // Null-safe: kalau gagal fetch, struk tetap tercetak dengan default lama.
-    OutletReceiptSettings? rs;
-    try {
-      rs = await _ref.read(receiptSettingsFutureProvider.future);
-    } catch (_) {
-      rs = null;
-    }
+    final rs = await _pengaturanStruk();
     // Ukuran kertas & salinan pakai nilai EFEKTIF (override user → default role
     // → struk outlet). Salinan tak lagi hanya dari rs supaya default role &
     // override user ikut diperhitungkan.
     final eff = _effectiveConfig(rs);
-    final logo = await _renderLogo();
+    final logo = await _logoStruk(rs, eff.paperSize);
     final profile = await CapabilityProfile.load();
     final gen = Generator(eff.paperSize, profile);
     final bytes = _buildReceipt(gen, s, sale, reprint: reprint, logo: logo, rs: rs);

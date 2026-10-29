@@ -7,6 +7,7 @@ import '../../features/order_types/domain/order_type.dart';
 import '../../features/payments/data/payment_method_repository.dart';
 import '../../features/products/data/modifier_repository.dart';
 import '../../features/settings/data/app_settings.dart';
+import '../../features/printer/data/receipt_settings_repository.dart';
 import '../../features/payments/domain/payment_method.dart';
 import '../../features/tables/data/table_repository.dart';
 import '../../features/user/data/auth_service.dart';
@@ -118,6 +119,12 @@ final dataKasirOfflineProvider = Provider<void>((ref) {
         coba(() async {
           ref.invalidate(outletAppSettingsProvider);
           return ref.read(outletAppSettingsProvider.future);
+        }),
+        // Pengaturan struk + logonya: struk saat offline tetap memakai
+        // branding outlet, dan logo yang baru diganti Pemilik ikut terunduh.
+        coba(() async {
+          ref.invalidate(receiptSettingsFutureProvider);
+          return ref.read(receiptSettingsFutureProvider.future);
         }),
         // Add-on seluruh produk: tanpa ini, sheet pilihan add-on tak muncul
         // saat offline untuk produk yang belum pernah dibuka sambil online.

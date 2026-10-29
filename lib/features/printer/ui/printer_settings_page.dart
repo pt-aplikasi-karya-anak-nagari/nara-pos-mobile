@@ -7,10 +7,12 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:gap/gap.dart';
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
+import '../../../core/network/dio_client.dart';
 import '../../../core/responsive.dart';
 import '../../../shared/widgets/tablet_components.dart';
 import '../data/printer_service.dart';
 import '../data/printer_settings.dart';
+import '../data/receipt_settings_repository.dart';
 import '../data/role_printer_config_repository.dart';
 import '../../../core/permission_service.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
@@ -1642,7 +1644,11 @@ class _HeaderEditorCard extends HookConsumerWidget {
       ],
     );
 
+    final pengaturanStruk = ref.watch(receiptSettingsFutureProvider).value;
     final preview = _ReceiptPreview(
+      logoUrl: (pengaturanStruk?.headerShowLogo ?? false)
+          ? pengaturanStruk?.headerLogoUrl
+          : null,
       storeName: defaults.name.isEmpty ? 'Nama Toko' : defaults.name,
       storeAddress: defaults.address.isEmpty ? 'Alamat toko' : defaults.address,
       storePhone: defaults.phone,
@@ -1777,11 +1783,14 @@ class _ReadOnlyField extends StatelessWidget {
 // ─── Receipt preview widget ───────────────────────────────────────────────────
 
 class _ReceiptPreview extends StatelessWidget {
+  /// Logo dari Pengaturan Struk outlet; null/kosong = struk tanpa logo.
+  final String? logoUrl;
   final String storeName;
   final String storeAddress;
   final String storePhone;
   final String footer;
   const _ReceiptPreview({
+    this.logoUrl,
     required this.storeName,
     required this.storeAddress,
     required this.storePhone,
@@ -1817,26 +1826,25 @@ class _ReceiptPreview extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Logo placeholder
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: kPrimary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'M',
-                      style: TextStyle(
-                        color: kPrimary,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
+                // Logo yang diunggah Pemilik — sama dengan yang tercetak.
+                if ((logoUrl ?? '').trim().isNotEmpty) ...[
+                  ColorFiltered(
+                    // Printer thermal hitam-putih.
+                    colorFilter: const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0, 0, 0, 1, 0,
+                    ]),
+                    child: Image.network(
+                      resolveAssetUrl(logoUrl),
+                      height: 40,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
-                ),
-                const Gap(6),
+                  const Gap(6),
+                ],
                 Text(
                   storeName,
                   textAlign: TextAlign.center,

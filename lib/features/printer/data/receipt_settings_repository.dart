@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../../core/offline/entity_cache.dart';
 
 import '../../../core/outlet_scope.dart';
 import '../../outlet/data/outlet_service.dart';
 import '../domain/receipt_settings.dart';
+import 'logo_struk.dart';
 
 /// Repository untuk OutletReceiptSettings — wraps OutletService API
 /// calls dengan domain conversion. Pattern sama dengan
@@ -38,19 +43,49 @@ final receiptSettingsRepositoryProvider =
   return ReceiptSettingsRepository(ref);
 });
 
+/// Pengaturan struk mentah dari server, disimpan di perangkat supaya struk
+/// yang dicetak saat offline tetap memakai branding outlet (nama usaha,
+/// logo, footer) — bukan default kosong.
+final _receiptSettingsCache = EntityCache<Map<String, dynamic>>(
+  'receipt_settings',
+  toJson: (m) => m,
+  fromJson: (m) => m,
+);
+
 /// Auto-fetch settings untuk outlet aktif. Kasir tinggal `ref.watch`
 /// provider ini — auto-rebuild saat owner ubah dari web (kalau kita
 /// invalidate setelah background refresh) atau saat outlet aktif
 /// berpindah.
+///
+/// Offline → pengaturan terakhir yang tersimpan di perangkat; belum pernah
+/// tersimpan → default, supaya printer tetap bisa mencetak.
 final receiptSettingsFutureProvider =
     FutureProvider<OutletReceiptSettings?>((ref) async {
   final outletId = ref.watch(activeOutletIdProvider);
   if (outletId == null) return null;
+  final outletService = ref.watch(outletServiceProvider);
+  Map<String, dynamic>? raw;
   try {
-    return await ref.watch(receiptSettingsRepositoryProvider).get(outletId);
+    raw = await readThroughCacheOne<Map<String, dynamic>>(
+      cache: _receiptSettingsCache,
+      outletId: outletId,
+      fetch: () => outletService.getReceiptSettings(outletId),
+    );
   } catch (_) {
-    // Fallback ke default supaya printer tetap bisa cetak walaupun
-    // backend unreachable.
-    return OutletReceiptSettings.defaults(outletId);
+    try {
+      final ada = await _receiptSettingsCache.getAll(outletId);
+      raw = ada.isEmpty ? null : ada.first;
+    } catch (_) {}
   }
+  if (raw == null) return OutletReceiptSettings.defaults(outletId);
+  final rs = OutletReceiptSettings.fromJson(raw);
+  // Unduh logo selagi online, supaya struk pertama saat offline sudah
+  // berlogo. Gagal = tak apa; dicoba lagi saat mencetak.
+  unawaited(
+    ref
+        .read(logoStrukStoreProvider)
+        .ambil(outletId, rs.headerShowLogo ? rs.headerLogoUrl : '')
+        .then((_) {}, onError: (_) {}),
+  );
+  return rs;
 });
