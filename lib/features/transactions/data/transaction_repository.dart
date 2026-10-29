@@ -12,6 +12,7 @@ import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/jam_offline.dart';
 import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
+import '../../customers/data/customer_repository.dart';
 import '../../kasir/domain/cart_item.dart';
 import '../../kasir/domain/batas_diskon.dart';
 import '../domain/sale.dart';
@@ -554,6 +555,16 @@ class TransactionRepository {
         localId: SaleOutbox.idLokalBaru(),
       );
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
+
+      // Poin yang ditukar ikut berkurang di salinan pelanggan perangkat.
+      if (pointsUsed > 0 && (customerId ?? '').isNotEmpty) {
+        unawaited(
+          _ref
+              .read(customerRepositoryProvider)
+              .kurangiPoinLokal(oId, customerId!, pointsUsed)
+              .catchError((_) {}),
+        );
+      }
 
       // Stok di katalog perangkat ikut berkurang, supaya kasir tak menjual
       // melebihi stok selama offline.

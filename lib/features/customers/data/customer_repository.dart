@@ -34,6 +34,27 @@ class CustomerRepository {
     );
   }
 
+  /// Kurangi saldo poin pelanggan di salinan perangkat setelah ditukar dalam
+  /// transaksi OFFLINE — supaya poin yang sama tak bisa ditukar lagi di
+  /// tablet ini sebelum terkirim. (Antar tablet tak bisa dicegah offline;
+  /// server menandainya poin_kurang.)
+  Future<void> kurangiPoinLokal(
+    String outletId,
+    String customerId,
+    int poin,
+  ) async {
+    if (poin <= 0 || customerId.isEmpty) return;
+    final semua = await _customerCache.getAll(outletId);
+    var berubah = false;
+    for (final c in semua) {
+      if (c.id == customerId) {
+        c.points = c.points > poin ? c.points - poin : 0;
+        berubah = true;
+      }
+    }
+    if (berubah) await _customerCache.replaceAll(outletId, semua);
+  }
+
   /// Ambil 1 customer dari backend.
   Future<Customer> getDetail(String id) async {
     return apiService.getCustomer(id);

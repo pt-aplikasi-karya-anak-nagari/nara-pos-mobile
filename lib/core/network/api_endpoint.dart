@@ -147,6 +147,10 @@ class ApiEndpoint {
   static String modifierGroup(String outletId, String id) =>
       '/outlets/$outletId/modifier-groups/$id';
 
+  // Daftar promo outlet (disimpan untuk validasi kode promo saat offline).
+  static String outletPromotions(String outletId) =>
+      '/outlets/$outletId/promotions';
+
   // Validasi kode promo untuk checkout (?code=XXX).
   static String outletPromotionsValidate(String outletId) =>
       '/outlets/$outletId/promotions/validate';

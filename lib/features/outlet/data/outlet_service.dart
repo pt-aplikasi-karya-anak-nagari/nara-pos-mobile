@@ -618,6 +618,20 @@ class OutletService extends BaseApiService {
     );
   }
 
+  /// Daftar promo outlet (untuk disimpan & dipakai saat offline).
+  Future<List<Map<String, dynamic>>> getPromotions(String outletId) async {
+    final data = await get<Map<String, dynamic>>(
+      ApiEndpoint.outletPromotions(outletId),
+      queryParameters: {'limit': 200},
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
+    );
+    return [
+      for (final m in (data['items'] as List? ?? const []))
+        if (m is Map) Map<String, dynamic>.from(m),
+    ];
+  }
+
   Future<Map<String, dynamic>> validatePromo(
     String outletId,
     String code,

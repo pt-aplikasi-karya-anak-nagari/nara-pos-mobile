@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../features/discounts/data/promo_repository.dart';
 import '../../features/order_types/data/order_type_repository.dart';
 import '../../features/order_types/domain/order_type.dart';
 import '../../features/payments/data/payment_method_repository.dart';
@@ -124,13 +125,19 @@ final dataKasirOfflineProvider = Provider<void>((ref) {
         // Tab meja yang sedang terisi: saat internet putus, tagihannya tetap
         // bisa dilihat & dilunasi (pelunasan masuk antrian).
         coba(() async {
-          final meja = await ref.read(tableRepositoryProvider).getTables(outletId);
+          final meja = await ref
+              .read(tableRepositoryProvider)
+              .getTables(outletId);
           final repo = ref.read(transactionRepositoryProvider);
           for (final m in meja.where((m) => m.statusIndex == 1).take(60)) {
             await repo.getActiveSalesByTable(m.id);
           }
           return true;
         }),
+        // Promo outlet: kode promo tetap bisa dipakai saat offline.
+        coba(
+          () => ref.read(promoRepositoryProvider).simpanUntukOffline(outletId),
+        ),
         // Pengaturan struk + logonya: struk saat offline tetap memakai
         // branding outlet, dan logo yang baru diganti Pemilik ikut terunduh.
         coba(() async {
