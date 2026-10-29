@@ -105,6 +105,8 @@ final peringatanBatasOfflineProvider = FutureProvider<String?>((ref) async {
   ref.watch(detakMenitProvider);
   final outletId = ref.watch(activeOutletIdProvider);
   if (outletId == null) return null;
-  final batas = (await bacaAppSettingsTersimpan(outletId)).maxOfflineHours;
+  final batas = batasOfflineEfektif(
+    (await bacaAppSettingsTersimpan(outletId)).maxOfflineHours,
+  );
   return peringatanBatasOffline(ref.read(jamOfflineProvider).lamaOffline(), batas);
 });

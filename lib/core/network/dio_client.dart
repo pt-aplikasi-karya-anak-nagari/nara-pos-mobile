@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show HttpDate;
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -89,12 +90,14 @@ final dioProvider = Provider<Dio>((ref) {
         return handler.next(options);
       },
       onResponse: (response, handler) {
-        _catatTersambung(ref);
+        _catatTersambung(ref, response.headers.value('date'));
         return handler.next(response);
       },
       onError: (e, handler) async {
         // Server membalas (walau dengan galat) = tablet tersambung.
-        if (e.response != null) _catatTersambung(ref);
+        if (e.response != null) {
+          _catatTersambung(ref, e.response!.headers.value('date'));
+        }
         var authToastShown = false;
         if (_shouldAttemptRefresh(e, authStorage)) {
           refreshInFlight ??= _refreshTokens(
@@ -166,9 +169,17 @@ final dioProvider = Provider<Dio>((ref) {
 
 /// Catat bahwa tablet baru saja tersambung ke server — dasar batas lama
 /// offline (lihat jam_offline.dart). Tak boleh mengganggu permintaannya.
-void _catatTersambung(Ref ref) {
+void _catatTersambung(Ref ref, [String? headerDate]) {
   try {
-    unawaited(ref.read(jamOfflineProvider).catatOnline().catchError((_) {}));
+    final jam = ref.read(jamOfflineProvider);
+    unawaited(jam.catatOnline().catchError((_) {}));
+    // Jam server: acuan masa berlaku langganan saat offline yang tak
+    // terpengaruh jam tablet.
+    if (headerDate != null) {
+      try {
+        unawaited(jam.catatJamServer(HttpDate.parse(headerDate)).catchError((_) {}));
+      } catch (_) {}
+    }
   } catch (_) {}
 }
 

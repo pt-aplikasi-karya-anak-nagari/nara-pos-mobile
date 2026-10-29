@@ -22,6 +22,8 @@ import '../domain/sale_item.dart';
 import '../../../core/outlet_scope.dart';
 import '../../shifts/data/shift_repository.dart';
 import '../../settings/data/app_settings.dart';
+import '../../subscription/data/subscription_repository.dart';
+import '../../subscription/domain/subscription.dart';
 import 'pelunasan_offline.dart';
 import 'transaksi_offline.dart';
 import '../../user/data/auth_service.dart';
@@ -491,9 +493,24 @@ class TransactionRepository {
       final jam = _ref.read(jamOfflineProvider);
       final jamMundur = await jam.amati();
       final lamaOffline = jam.lamaOffline();
-      if (melewatiBatasOffline(lamaOffline, pengaturan.maxOfflineHours)) {
+      // Pengaturan Pemilik, tapi tak pernah lebih longgar dari batas platform.
+      final batasOffline = batasOfflineEfektif(pengaturan.maxOfflineHours);
+      if (melewatiBatasOffline(lamaOffline, batasOffline)) {
         throw TransaksiOfflineDitolak(
-          pesanBatasOffline(lamaOffline!, pengaturan.maxOfflineHours),
+          pesanBatasOffline(lamaOffline!, batasOffline),
+        );
+      }
+
+      // LANGGANAN. Saat offline server tak bisa menolak; dinilai di sini dari
+      // status terakhir yang tersimpan, dengan jam acuan yang tak bisa
+      // dimundurkan. Sesudah masa tenggang server menolak transaksinya —
+      // berjualan terus offline hanya menumpuk transaksi yang tak diterima.
+      final langganan = await bacaLanggananTersimpan(oId);
+      if (langganan != null && !bolehJualOffline(langganan, jam.waktuAcuan())) {
+        throw TransaksiOfflineDitolak(
+          'Langganan outlet sudah berakhir. Sambungkan ke internet dan '
+          'perpanjang langganan untuk melanjutkan penjualan — transaksi yang '
+          'sudah tersimpan tetap aman.',
         );
       }
 

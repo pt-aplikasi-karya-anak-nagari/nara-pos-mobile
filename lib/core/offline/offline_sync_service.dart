@@ -29,8 +29,23 @@ class OfflineSyncService {
   bool _syncing = false;
   OfflineSyncService(this._ref);
 
+  /// Kiriman terakhir ditolak karena langganan outlet berakhir.
+  bool _tertahanLangganan = false;
+
+  /// Galat yang menghentikan pengiriman TANPA menyalahkan datanya: koneksi
+  /// putus, atau langganan berakhir (data offline yang dibuat sesudah masa
+  /// tenggang — menunggu perpanjangan).
+  bool _tertahan(Object e) {
+    if (isGalatLangganan(e)) {
+      _tertahanLangganan = true;
+      return true;
+    }
+    return isOfflineError(e);
+  }
+
   Future<SyncResult> sync() async {
     if (_syncing) return const SyncResult();
+    _tertahanLangganan = false;
     _syncing = true;
     int synced = 0;
     int failed = 0;
@@ -116,6 +131,7 @@ class OfflineSyncService {
               clientRef: op.clientRef,
               occurredAt: DateTime.tryParse(op.occurredAt ?? ''),
               cashierId: op.payload['cashier_id']?.toString(),
+              offline: true,
             );
             if (op.localShiftId != null && (shift.remoteId ?? '').isNotEmpty) {
               await shiftOutbox.setServerShiftId(
@@ -129,7 +145,7 @@ class OfflineSyncService {
             shiftTerkirim++;
             progres.maju();
           } catch (e) {
-            if (isOfflineError(e)) {
+            if (_tertahan(e)) {
               stoppedOffline = true;
               break;
             }
@@ -193,7 +209,7 @@ class OfflineSyncService {
               adaKemajuan = true;
               progres.maju();
             } catch (e) {
-              if (isOfflineError(e)) {
+              if (_tertahan(e)) {
                 stoppedOffline = true;
                 break;
               }
@@ -277,7 +293,7 @@ class OfflineSyncService {
               try {
                 aktif = await shiftApi.getActiveShift(op.outletId);
               } catch (e) {
-                if (isOfflineError(e)) {
+                if (_tertahan(e)) {
                   stoppedOffline = true;
                   break;
                 }
@@ -320,6 +336,7 @@ class OfflineSyncService {
                 clientRef: op.clientRef,
                 occurredAt: DateTime.tryParse(op.occurredAt ?? ''),
                 cashierId: op.payload['cashier_id']?.toString(),
+                offline: true,
               );
               await shiftOutbox.remove(op.localId);
               shiftChanged = true;
@@ -327,7 +344,7 @@ class OfflineSyncService {
               shiftTerkirim++;
               progres.maju();
             } catch (e) {
-              if (isOfflineError(e)) {
+              if (_tertahan(e)) {
                 stoppedOffline = true;
                 break;
               }
@@ -348,6 +365,7 @@ class OfflineSyncService {
         terkirim: synced + shiftTerkirim,
         gagal: failed,
         terhentiOffline: stoppedOffline,
+        tertahanLangganan: _tertahanLangganan,
       );
       await _ref.read(pendingSyncCountProvider.notifier).refresh();
       // Transaksi yang menembus batas attempts jadi dead-letter → refresh
@@ -451,6 +469,9 @@ class OfflineSyncService {
           }
           await txApi.lunasiOffline(op.outletId, {
             ...op.payload,
+            // Dinilai server dengan waktu kejadian (langganan, lihat
+            // SubscriptionGuard), bukan waktu antrian terkirim.
+            'is_offline': true,
             'client_ref': op.clientRef,
             'occurred_at': op.occurredAt,
             if (shiftId.isNotEmpty) 'shift_id': shiftId,
@@ -460,7 +481,7 @@ class OfflineSyncService {
         terkirim++;
         progres.maju();
       } catch (e) {
-        if (isOfflineError(e)) return (terkirim: terkirim, offline: true);
+        if (_tertahan(e)) return (terkirim: terkirim, offline: true);
         ditolak.add('op:${op.localId}');
         // Tagihan sudah dilunasi di tempat lain: mencoba ulang tak akan
         // mengubahnya. Langsung tampil di "Perlu dipulihkan" untuk dicek —
@@ -497,6 +518,7 @@ class ProgresSinkron {
     this.terkirimTerakhir = 0,
     this.gagalTerakhir = 0,
     this.terhentiOffline = false,
+    this.tertahanLangganan = false,
   });
 
   /// Sedang mengirim antrian sekarang.
@@ -515,6 +537,10 @@ class ProgresSinkron {
   final int terkirimTerakhir;
   final int gagalTerakhir;
   final bool terhentiOffline;
+
+  /// Antrian ditahan server karena langganan outlet berakhir — terkirim
+  /// begitu diperpanjang.
+  final bool tertahanLangganan;
 
   int get diproses => terkirim + gagal;
   double get rasio => total <= 0 ? 0 : (diproses / total).clamp(0, 1);
@@ -551,6 +577,7 @@ class ProgresSinkronNotifier extends Notifier<ProgresSinkron> {
     required int terkirim,
     required int gagal,
     required bool terhentiOffline,
+    bool tertahanLangganan = false,
   }) {
     final adaHasil = terkirim > 0 || gagal > 0;
     state = ProgresSinkron(
@@ -558,6 +585,7 @@ class ProgresSinkronNotifier extends Notifier<ProgresSinkron> {
       terkirimTerakhir: adaHasil ? terkirim : state.terkirimTerakhir,
       gagalTerakhir: adaHasil ? gagal : state.gagalTerakhir,
       terhentiOffline: terhentiOffline,
+      tertahanLangganan: tertahanLangganan,
     );
   }
 

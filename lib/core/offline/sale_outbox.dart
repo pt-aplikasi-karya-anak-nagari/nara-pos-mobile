@@ -223,6 +223,15 @@ final deadLetterCountProvider =
 /// penolakan server (4xx/5xx). Dipakai untuk memutuskan: queue offline vs
 /// lempar error nyata. Mencakup dua bentuk: DioException mentah dan String
 /// pesan yang sudah di-handle BaseApiService.
+/// Ditolak karena langganan outlet berakhir (HTTP 402). Bukan cacat datanya:
+/// begitu langganan diperpanjang, kiriman yang sama diterima. Antrian
+/// karenanya ditahan — tidak dihitung sebagai percobaan gagal yang lama-lama
+/// menjadikannya "Perlu dipulihkan".
+bool isGalatLangganan(Object e) {
+  if (e is DioException && e.response?.statusCode == 402) return true;
+  return e.toString().toLowerCase().contains('langganan');
+}
+
 bool isOfflineError(Object e) {
   if (e is DioException) {
     switch (e.type) {

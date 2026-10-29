@@ -44,6 +44,9 @@ class OutletSubscription {
   final int priceIdrPaid;
   final int daysRemaining;
 
+  /// Akhir masa tenggang (expires_at + tenggang). Null dari server lama.
+  final DateTime? graceUntil;
+
   /// Key fitur katalog yang termasuk dalam plan langganan outlet ini
   /// (Basic ≈ 12, Pro ≈ 28, Enterprise ≈ 41). Dipakai untuk gating menu
   /// berbasis plan di halaman Profil. Kosong = fail-open (semua fitur tampil).
@@ -60,6 +63,7 @@ class OutletSubscription {
     required this.expiresAt,
     required this.priceIdrPaid,
     required this.daysRemaining,
+    this.graceUntil,
     this.featureKeys = const [],
   });
 
@@ -87,9 +91,26 @@ class OutletSubscription {
       expiresAt: parseDate(json['expires_at']),
       priceIdrPaid: (json['price_idr_paid'] as num?)?.toInt() ?? 0,
       daysRemaining: (json['days_remaining'] as num?)?.toInt() ?? 0,
+      graceUntil: DateTime.tryParse(
+        json['grace_until']?.toString() ?? '',
+      )?.toLocal(),
       featureKeys: (json['feature_keys'] as List? ?? const [])
           .map((e) => e.toString())
           .toList(),
     );
   }
 }
+
+/// Masa tenggang bawaan server bila respons tak menyebutkan grace_until.
+const masaTenggangAsal = Duration(days: 3);
+
+/// Batas terakhir outlet boleh BERJUALAN OFFLINE: akhir masa tenggang.
+DateTime batasJualOffline(OutletSubscription s) =>
+    s.graceUntil ?? s.expiresAt.add(masaTenggangAsal);
+
+/// Masih boleh berjualan offline pada [acuan] (jam yang tak bisa dimundurkan,
+/// lihat JamOffline.waktuAcuan)? Sesudah masa tenggang server menolak
+/// transaksinya; berjualan terus offline hanya menumpuk transaksi yang tak
+/// akan diterima. MURNI.
+bool bolehJualOffline(OutletSubscription s, DateTime acuan) =>
+    !acuan.isAfter(batasJualOffline(s));

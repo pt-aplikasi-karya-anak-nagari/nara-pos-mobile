@@ -275,7 +275,10 @@ class _Pil extends StatelessWidget {
       'Mengirim ${(progres.diproses + 1).clamp(1, progres.total)}'
           ' dari ${progres.total}',
     _Keadaan.offline => '$menunggu tersimpan offline',
-    _Keadaan.menunggu => '$menunggu menunggu dikirim',
+    _Keadaan.menunggu =>
+      progres.tertahanLangganan
+          ? '$menunggu menunggu perpanjangan langganan'
+          : '$menunggu menunggu dikirim',
     _Keadaan.gagal => '$gagal gagal terkirim',
     _Keadaan.terkirim => '${progres.terkirimTerakhir} terkirim',
   };

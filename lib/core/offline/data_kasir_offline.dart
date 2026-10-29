@@ -10,6 +10,7 @@ import '../../features/products/data/modifier_repository.dart';
 import '../../features/settings/data/app_settings.dart';
 import '../../features/printer/data/receipt_settings_repository.dart';
 import '../../features/payments/domain/payment_method.dart';
+import '../../features/subscription/data/subscription_repository.dart';
 import '../../features/tables/data/table_repository.dart';
 import '../../features/transactions/data/transaction_repository.dart';
 import '../../features/user/data/auth_service.dart';
@@ -133,6 +134,11 @@ final dataKasirOfflineProvider = Provider<void>((ref) {
             await repo.getActiveSalesByTable(m.id);
           }
           return true;
+        }),
+        // Status langganan & fitur paketnya: tetap berlaku saat offline.
+        coba(() async {
+          ref.invalidate(activeOutletSubscriptionProvider);
+          return ref.read(activeOutletSubscriptionProvider.future);
         }),
         // Promo outlet: kode promo tetap bisa dipakai saat offline.
         coba(

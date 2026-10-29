@@ -32,6 +32,7 @@ class ShiftApiService extends BaseApiService {
     String? clientRef,
     DateTime? occurredAt,
     String? cashierId,
+    bool offline = false,
   }) async {
     debugPrint('Opening shift: $outletId, $startingCash, $notes');
     return post(
@@ -46,6 +47,8 @@ class ShiftApiService extends BaseApiService {
         // Kasir yang membuka shift saat offline — bisa berbeda dari yang
         // sedang login saat antrian terkirim.
         if (cashierId != null && cashierId.isNotEmpty) 'cashier_id': cashierId,
+        // Dari antrian offline: server menilai langganan dengan occurred_at.
+        if (offline) 'is_offline': true,
       },
       converter: (data) => Shift.fromJson(data),
     );
@@ -59,6 +62,7 @@ class ShiftApiService extends BaseApiService {
     String? clientRef,
     DateTime? occurredAt,
     String? cashierId,
+    bool offline = false,
   }) async {
     return post(
       '/shifts/$shiftId/close',
@@ -69,6 +73,8 @@ class ShiftApiService extends BaseApiService {
         if (occurredAt != null)
           'occurred_at': occurredAt.toUtc().toIso8601String(),
         if (cashierId != null && cashierId.isNotEmpty) 'cashier_id': cashierId,
+        // Dari antrian offline: server menilai langganan dengan occurred_at.
+        if (offline) 'is_offline': true,
       },
       converter: (data) => Shift.fromJson(data),
     );

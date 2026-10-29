@@ -27,6 +27,7 @@ class JamOffline {
     : _sekarang = sekarang ?? DateTime.now;
 
   static const _kunciOnline = 'offline.jam.terakhir_online';
+  static const _kunciServer = 'offline.jam.server';
   static const _kunciTerbesar = 'offline.jam.terbesar';
 
   /// Selisih jam yang masih dianggap wajar (sinkronisasi jam otomatis).
@@ -47,6 +48,29 @@ class JamOffline {
       _prefs.setInt(kunci, t.millisecondsSinceEpoch);
 
   DateTime? get terakhirOnline => _baca(_kunciOnline);
+
+  /// Jam SERVER pada kontak terakhir (header Date respons).
+  DateTime? get jamServerTerakhir => _baca(_kunciServer);
+
+  /// Catat jam server dari respons. Hanya pernah maju.
+  Future<void> catatJamServer(DateTime server) async {
+    final lama = jamServerTerakhir;
+    if (lama == null || server.isAfter(lama)) {
+      await _tulis(_kunciServer, server);
+    }
+  }
+
+  /// Jam acuan yang tak bisa dimundurkan: yang paling akhir di antara jam
+  /// tablet, jam terbesar yang pernah dilihat tablet, dan jam server pada
+  /// kontak terakhir. Dipakai untuk masa berlaku langganan saat offline —
+  /// memundurkan jam tablet tak membuat langganan yang habis hidup lagi.
+  DateTime waktuAcuan() {
+    var acuan = _sekarang();
+    for (final t in [jamTerbesar, jamServerTerakhir]) {
+      if (t != null && t.isAfter(acuan)) acuan = t;
+    }
+    return acuan;
+  }
   DateTime? get jamTerbesar => _baca(_kunciTerbesar);
 
   /// Dipanggil setiap ada respons dari server. Jam tablet saat itu dianggap
@@ -89,6 +113,19 @@ class JamOffline {
     return lama.isNegative ? Duration.zero : lama;
   }
 }
+
+/// Batas lama offline dari PLATFORM (jam) — tak bisa dilonggarkan Pemilik.
+/// Tanpa ini, outlet yang mengisi batasnya 0 ("tanpa batas") bisa memakai
+/// aplikasi offline selamanya, termasuk setelah langganannya habis, karena
+/// status langganan tak pernah diperbarui.
+const batasOfflinePlatformJam = 168; // 7 hari
+
+/// Batas yang benar-benar berlaku: pengaturan Pemilik, tapi tak pernah lebih
+/// longgar dari batas platform.
+int batasOfflineEfektif(int pengaturanPemilik) =>
+    pengaturanPemilik <= 0 || pengaturanPemilik > batasOfflinePlatformJam
+    ? batasOfflinePlatformJam
+    : pengaturanPemilik;
 
 /// `true` bila tablet sudah lebih lama offline dari batas outlet.
 /// [batasJam] 0 = tanpa batas.

@@ -114,6 +114,7 @@ class ShiftApiPalsu extends ShiftApiService {
     String? clientRef,
     DateTime? occurredAt,
     String? cashierId,
+    bool offline = false,
   }) async {
     kasirDikirim.add(cashierId);
     final id = srv.buka(outletId, clientRef ?? '');
@@ -162,6 +163,7 @@ class ShiftApiPalsu extends ShiftApiService {
     String? clientRef,
     DateTime? occurredAt,
     String? cashierId,
+    bool offline = false,
   }) async {
     kasirDikirim.add(cashierId);
     srv.tutup(shiftId);
@@ -815,4 +817,48 @@ void main() {
       expect(so.ops.single.status, 'dead');
     },
   );
+
+  test(
+    'ditolak karena langganan berakhir: antrian DITAHAN, bukan dibakar',
+    () async {
+      final srv = ServerPalsu();
+      final salesOut = SaleOutboxPalsu([
+        sale('s1', 'ref-1'),
+        sale('s2', 'ref-1'),
+      ]);
+      final c = ProviderContainer(
+        overrides: [
+          shiftOutboxProvider.overrideWithValue(ShiftOutboxPalsu([])),
+          saleOutboxProvider.overrideWithValue(salesOut),
+          shiftApiServiceProvider.overrideWithValue(ShiftApiPalsu(srv)),
+          transactionApiServiceProvider.overrideWithValue(
+            TrxApiLanggananHabis(srv),
+          ),
+        ],
+      );
+      addTearDown(c.dispose);
+      await c.read(offlineSyncServiceProvider).sync();
+
+      expect(salesOut.sales, hasLength(2), reason: 'tak satu pun dibuang');
+      expect(
+        salesOut.sales.map((s) => s.attempts),
+        everyElement(0),
+        reason:
+            'percobaan tak boleh habis — begitu diperpanjang semuanya terkirim',
+      );
+      expect(c.read(progresSinkronProvider).tertahanLangganan, isTrue);
+    },
+  );
+}
+
+class TrxApiLanggananHabis extends TrxApiPalsu {
+  TrxApiLanggananHabis(ServerPalsu srv) : super(srv, {});
+
+  @override
+  Future<Map<String, dynamic>> checkout(
+    String outletId,
+    Map<String, dynamic> data,
+  ) async {
+    throw 'Langganan outlet sudah berakhir. Silakan perpanjang untuk melanjutkan akses.';
+  }
 }

@@ -3,6 +3,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../core/network/api_endpoint.dart';
 import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/outlet_scope.dart';
 import '../domain/subscription.dart';
 
@@ -23,6 +25,15 @@ class SubscriptionRepository extends BaseApiService {
     );
   }
 
+  /// Respons mentah — disimpan di perangkat apa adanya.
+  Future<Map<String, dynamic>?> getOutletSubscriptionRaw(String outletId) {
+    return get<Map<String, dynamic>?>(
+      ApiEndpoint.outletSubscription(outletId),
+      converter: (data) =>
+          data is Map ? Map<String, dynamic>.from(data) : null,
+    );
+  }
+
   Future<OutletSubscription?> getOutletSubscription(String outletId) {
     return get<OutletSubscription?>(
       ApiEndpoint.outletSubscription(outletId),
@@ -38,14 +49,44 @@ final subscriptionRepositoryProvider = Provider<SubscriptionRepository>((ref) {
   return SubscriptionRepository(ref.watch(dioProvider));
 });
 
+/// Langganan outlet terakhir dari server, disimpan di perangkat. Tanpanya,
+/// saat offline aplikasi tak tahu apa-apa soal langganan: menu paket terbuka
+/// semua (fail-open) dan penjualan offline jalan terus walau langganan sudah
+/// lama habis.
+final _langgananCache = EntityCache<Map<String, dynamic>>(
+  'langganan',
+  toJson: (m) => m,
+  fromJson: (m) => m,
+);
+
+/// Langganan yang tersimpan di perangkat, tanpa jaringan. Null bila belum
+/// pernah tersimpan.
+Future<OutletSubscription?> bacaLanggananTersimpan(String outletId) async {
+  try {
+    final ada = await _langgananCache.getAll(outletId);
+    return ada.isEmpty ? null : OutletSubscription.fromJson(ada.first);
+  } catch (_) {
+    return null;
+  }
+}
+
 final activeOutletSubscriptionProvider = FutureProvider<OutletSubscription?>((
   ref,
 ) async {
   final outletId = ref.watch(activeOutletIdProvider);
   if (outletId == null || outletId.isEmpty) return null;
-  return ref
-      .watch(subscriptionRepositoryProvider)
-      .getOutletSubscription(outletId);
+  try {
+    final raw = await ref
+        .watch(subscriptionRepositoryProvider)
+        .getOutletSubscriptionRaw(outletId);
+    await _langgananCache.replaceAll(outletId, raw == null ? const [] : [raw]);
+    return raw == null ? null : OutletSubscription.fromJson(raw);
+  } catch (e) {
+    // Offline: status terakhir yang diketahui — paket & masa berlakunya tetap
+    // berlaku tanpa internet.
+    if (!isOfflineError(e)) rethrow;
+    return bacaLanggananTersimpan(outletId);
+  }
 });
 
 final subscriptionPlansProvider = FutureProvider<List<SubscriptionPlan>>((
