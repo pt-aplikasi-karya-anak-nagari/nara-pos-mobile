@@ -19,6 +19,7 @@ import '../domain/sale_item.dart';
 import '../../../core/outlet_scope.dart';
 import '../../shifts/data/shift_repository.dart';
 import '../../settings/data/app_settings.dart';
+import 'pelunasan_offline.dart';
 import 'transaksi_offline.dart';
 import '../../user/data/auth_service.dart';
 
@@ -27,6 +28,13 @@ import '../../user/data/auth_service.dart';
 /// untuk lihat & cetak ulang struk transaksi yang sudah tersinkron saat offline.
 final _salesRawCache = EntityCache<Map<String, dynamic>>(
   'sales',
+  toJson: (m) => m,
+  fromJson: (m) => m,
+);
+
+/// Tab (transaksi aktif) per meja, kunci = ID meja.
+final _tabMejaCache = EntityCache<Map<String, dynamic>>(
+  'tab_meja',
   toJson: (m) => m,
   fromJson: (m) => m,
 );
@@ -187,6 +195,21 @@ class TransactionApiService extends BaseApiService {
           'payment_proof_url': paymentProofUrl,
       },
       converter: (res) => res as Map<String, dynamic>,
+    );
+  }
+
+  /// Pelunasan "Bayar Nanti" yang dilakukan saat offline (dari antrian).
+  /// Hanya [data]['transaction_ids'] yang dilunasi; idempoten per client_ref.
+  Future<Map<String, dynamic>> lunasiOffline(
+    String outletId,
+    Map<String, dynamic> data,
+  ) async {
+    return await post<Map<String, dynamic>>(
+      '/transactions/offline/lunasi/$outletId',
+      data: data,
+      converter: (res) => res is Map
+          ? Map<String, dynamic>.from(res)
+          : <String, dynamic>{},
     );
   }
 
@@ -644,8 +667,27 @@ class TransactionRepository {
   }
 
   Future<List<Sale>> getActiveSalesByTable(String tableId) async {
-    final res = await apiService.getActiveByTable(tableId);
-    return res.map((e) => Sale.fromJson(e as Map<String, dynamic>)).toList();
+    // Disimpan per meja: saat offline tab meja tetap bisa dilihat & dilunasi.
+    final raw = await readThroughCache<Map<String, dynamic>>(
+      cache: _tabMejaCache,
+      outletId: tableId,
+      fetch: () async => [
+        for (final e in await apiService.getActiveByTable(tableId))
+          Map<String, dynamic>.from(e as Map),
+      ],
+    );
+    return raw.map(Sale.fromJson).toList();
+  }
+
+  /// Transaksi dari riwayat yang tersimpan di perangkat — untuk membuka
+  /// detail tagihan saat offline.
+  Future<Sale?> cariTersimpan(String outletId, String id) async {
+    try {
+      for (final m in await _salesRawCache.getAll(outletId)) {
+        if (m['id']?.toString() == id) return Sale.fromJson(m);
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Pindahkan / gabungkan semua bill aktif dari meja asal ke meja tujuan.
@@ -881,13 +923,28 @@ final transactionDetailProvider = FutureProvider.family<Sale, String>((
 ) async {
   // Transaksi offline yang belum terkirim: belum ada di server, ambil dari
   // antrian di perangkat.
+  final dilunasi = await ref.watch(idDilunasiLokalProvider.future);
+  Sale lapis(Sale s) => dilunasi.contains(s.id) && !s.isPaid
+      ? tandaiLunasLokal(s)
+      : s;
   if (SaleOutbox.idOffline(id)) {
     final sale = await cariTransaksiOffline(ref.read(saleOutboxProvider), id);
-    if (sale != null) return sale;
+    if (sale != null) return lapis(sale);
     throw 'Transaksi ini sudah terkirim ke server. Muat ulang Riwayat untuk '
         'melihat versi terbarunya.';
   }
-  return ref.watch(transactionRepositoryProvider).getDetail(id);
+  final repo = ref.watch(transactionRepositoryProvider);
+  try {
+    return lapis(await repo.getDetail(id));
+  } catch (e) {
+    // Offline: tagihan dari riwayat yang tersimpan, supaya tetap bisa
+    // dilihat dan dilunasi.
+    if (!isOfflineError(e)) rethrow;
+    final outletId = ref.read(activeOutletIdProvider) ?? '';
+    final tersimpan = await repo.cariTersimpan(outletId, id);
+    if (tersimpan == null) rethrow;
+    return lapis(tersimpan);
+  }
 });
 
 /// Riwayat pembelian satu pelanggan, di-fetch dari backend dan auto-refetch
@@ -905,12 +962,34 @@ final customerSalesProvider = FutureProvider.family<List<Sale>, String>((
 ///
 /// Auto-refetch saat di-invalidate, mis. setelah checkout meja yang sama
 /// atau setelah staff melunasi salah satu transaksinya.
+///
+/// Saat offline: tab yang tersimpan + penjualan Bayar Nanti meja ini yang
+/// dibuat offline (antrian). Tagihan yang sudah dilunasi di perangkat tampil
+/// lunas — server belum tahu, tapi kasir tak boleh menagihnya lagi.
 final activeTableTransactionsProvider =
     FutureProvider.family<List<Sale>, String>((ref, tableId) async {
       if (tableId.isEmpty) return const [];
-      return ref
-          .watch(transactionRepositoryProvider)
-          .getActiveSalesByTable(tableId);
+      ref.watch(pendingSyncCountProvider);
+      final dilunasi = await ref.watch(idDilunasiLokalProvider.future);
+      List<Sale> server;
+      try {
+        server = await ref
+            .watch(transactionRepositoryProvider)
+            .getActiveSalesByTable(tableId);
+      } catch (e) {
+        if (!isOfflineError(e)) rethrow;
+        server = const [];
+      }
+      final antrian = [
+        for (final ps in await ref.read(saleOutboxProvider).pending())
+          if (ps.payload['table_id']?.toString() == tableId &&
+              ps.payload['is_paid'] == false)
+            saleDariAntrian(ps),
+      ];
+      return [
+        for (final s in [...server, ...antrian])
+          dilunasi.contains(s.id) && !s.isPaid ? tandaiLunasLokal(s) : s,
+      ];
     });
 
 /// True bila pesanan QR ini masih PEKERJAAN kasir — layak muncul di tab

@@ -25,6 +25,9 @@ import '../../shifts/data/shift_repository.dart';
 import '../../access_rights/data/access_rights_repository.dart';
 import '../../access_rights/domain/permission.dart';
 import '../../settings/data/app_settings.dart';
+import '../../../core/connectivity_service.dart';
+import '../../../core/offline/sale_outbox.dart' show isOfflineError;
+import '../data/pelunasan_offline.dart';
 import '../data/transaction_repository.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
@@ -526,7 +529,7 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
   }
 
   Future<void> _payNow(Sale sale) async {
-    if (tolakSaatOffline(context, ref, 'Pelunasan')) return;
+    // Pelunasan tetap bisa saat offline: masuk antrian (pelunasan_offline).
     // Kalau customer sudah upload bukti (QR menu), metode pembayaran
     // sudah dipilih saat checkout. Kasir tinggal memverifikasi & terima
     // — tidak perlu MiniPaymentSheet lagi. Cukup dialog konfirmasi
@@ -667,16 +670,55 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     required double changeAmount,
     String? paymentProofUrl,
   }) async {
-    try {
+    // Offline, atau penjualan Bayar Nanti yang belum terkirim: pelunasan
+    // masuk antrian dan langsung tampil lunas di perangkat.
+    Future<void> antrikan() async {
       await ref
-          .read(transactionRepositoryProvider)
-          .markAsPaid(
-            sale.id,
+          .read(pelunasanOfflineProvider)
+          .lunasi(
+            tagihan: [sale],
             paymentMethod: paymentMethod,
             cashAmount: cashAmount,
             changeAmount: changeAmount,
             paymentProofUrl: paymentProofUrl,
           );
+      ref.invalidate(transactionDetailProvider(sale.id));
+      if (sale.tableId != null) {
+        ref.invalidate(activeTableTransactionsProvider(sale.tableId!));
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pembayaran tersimpan di perangkat — terkirim otomatis saat online.',
+            ),
+          ),
+        );
+      }
+    }
+
+    try {
+      if (sale.pendingSync || ref.read(isOfflineProvider)) {
+        await antrikan();
+        return;
+      }
+      try {
+        await ref
+            .read(transactionRepositoryProvider)
+            .markAsPaid(
+              sale.id,
+              paymentMethod: paymentMethod,
+              cashAmount: cashAmount,
+              changeAmount: changeAmount,
+              paymentProofUrl: paymentProofUrl,
+            );
+      } catch (e) {
+        // Koneksi putus di tengah: belum tentu tercatat. Antrian aman untuk
+        // keduanya — server menolak pelunasan ganda dan menampilkannya.
+        if (!isOfflineError(e)) rethrow;
+        await antrikan();
+        return;
+      }
       ref.invalidate(transactionDetailProvider(sale.id));
       ref.invalidate(salesFutureProvider);
       ref.invalidate(activeShiftProvider);
@@ -869,8 +911,9 @@ class _TransactionDetailPageState extends ConsumerState<TransactionDetailPage> {
     // yang sudah diretur (penuh/sebagian) sudah pernah lunas → jangan tampilkan
     // aksi bayar walau payment_status bukan 'paid' lagi.
     final Widget? bottomActions =
+        // Penjualan Bayar Nanti yang belum terkirim (pendingSync, belum lunas)
+        // tetap bisa dilunasi — pelunasannya masuk antrian.
         (sale == null ||
-            sale.pendingSync ||
             sale.isPaid ||
             sale.isRefunded ||
             sale.isPartiallyRefunded)

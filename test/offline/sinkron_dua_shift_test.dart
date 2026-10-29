@@ -74,7 +74,18 @@ class ServerPalsu {
   void tutup(String shiftId) {
     terbuka.remove(shiftId);
     ditutup.add(shiftId);
+    urutan.add('tutup:$shiftId');
   }
+
+  /// Urutan kejadian di server — untuk memastikan kas & pelunasan sampai
+  /// SEBELUM shift-nya ditutup.
+  final List<String> urutan = [];
+
+  /// Kas offline yang diterima: shiftId → client_ref.
+  final Map<String, List<String>> kasPerShift = {};
+
+  /// Pelunasan offline yang diterima: ID transaksi + shift-nya.
+  final List<({List<String> ids, String? shiftId})> pelunasan = [];
 
   /// Cermin cabang server sesudah perbaikan: sale yang MENYEBUT shift lewat
   /// client-ref dan tak bisa di-resolve ditolak, tidak ditebak.
@@ -113,6 +124,20 @@ class ShiftApiPalsu extends ShiftApiService {
       cashierName: 'Kasir',
       cashierRemoteId: 'kasir-1',
     );
+  }
+
+  @override
+  Future<void> addCashMovement(
+    String shiftId, {
+    required String type,
+    required double amount,
+    String note = '',
+    String? clientRef,
+    DateTime? occurredAt,
+    bool offline = false,
+  }) async {
+    srv.kasPerShift.putIfAbsent(shiftId, () => []).add(clientRef ?? '');
+    srv.urutan.add('kas:$shiftId');
   }
 
   @override
@@ -162,8 +187,22 @@ class TrxApiPalsu extends TransactionApiService {
     Map<String, dynamic> data,
   ) async {
     final ref = data['shift_client_ref']?.toString() ?? '';
-    srv.jual(localIdPerPayload[ref + data['tanda'].toString()] ?? '?', ref);
-    return {'id': 'ok'};
+    final localId = localIdPerPayload[ref + data['tanda'].toString()] ?? '?';
+    srv.jual(localId, ref);
+    return {'id': 'srv-$localId'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> lunasiOffline(
+    String outletId,
+    Map<String, dynamic> data,
+  ) async {
+    srv.pelunasan.add((
+      ids: [for (final id in data['transaction_ids'] as List) id.toString()],
+      shiftId: data['shift_id']?.toString(),
+    ));
+    srv.urutan.add('lunas:${data['shift_id']}');
+    return {'dilunasi': 1};
   }
 }
 
@@ -186,6 +225,44 @@ class ShiftOutboxPalsu extends ShiftOutbox {
   Future<List<PendingOp>> opensPending() async => _aktif(opShiftOpen);
   @override
   Future<List<PendingOp>> closesPending() async => _aktif(opShiftClose);
+  @override
+  Future<List<PendingOp>> kasPending() async => _aktif(opKas);
+  @override
+  Future<List<PendingOp>> lunasPending() async => _aktif(opLunas);
+  @override
+  Future<List<PendingOp>> semuaBelumSelesai(String opType) async =>
+      ops.where((o) => o.opType == opType).toList();
+
+  @override
+  Future<void> petakanIdPenjualan(String localSaleId, String serverId) async =>
+      _ubah(
+        (o) => o.opType == opLunas,
+        (o) => PendingOp(
+          localId: o.localId,
+          opType: o.opType,
+          outletId: o.outletId,
+          clientRef: o.clientRef,
+          payload: {
+            ...o.payload,
+            'transaction_ids': [
+              for (final id in o.payload['transaction_ids'] as List)
+                id == localSaleId ? serverId : id,
+            ],
+          },
+          localShiftId: o.localShiftId,
+          serverShiftId: o.serverShiftId,
+          status: o.status,
+          createdAt: o.createdAt,
+          attempts: o.attempts,
+          lastError: o.lastError,
+        ),
+      );
+
+  @override
+  Future<void> markDead(String localId, String reason) async => _ubah(
+    (o) => o.localId == localId,
+    (o) => _salin(o, status: 'dead', lastError: reason),
+  );
 
   PendingOp _salin(
     PendingOp o, {
@@ -239,7 +316,10 @@ class ShiftOutboxPalsu extends ShiftOutbox {
 
   @override
   Future<int> count() async =>
-      _aktif(opShiftOpen).length + _aktif(opShiftClose).length;
+      _aktif(opShiftOpen).length +
+      _aktif(opShiftClose).length +
+      _aktif(opKas).length +
+      _aktif(opLunas).length;
   @override
   Future<int> deadLetterCount() async => ops
       .where(
@@ -280,6 +360,9 @@ class SaleOutboxPalsu extends SaleOutbox {
   @override
   Future<int> deadLetterCount() async =>
       sales.where((s) => s.attempts >= SaleOutbox.maxSyncAttempts).length;
+  @override
+  Future<List<PendingSale>> deadLetters() async =>
+      sales.where((s) => s.attempts >= SaleOutbox.maxSyncAttempts).toList();
 }
 
 const outlet = 'OUT-1';
@@ -289,11 +372,7 @@ PendingOp opBuka(String n, String ref, {String? kasir}) => PendingOp(
   opType: opShiftOpen,
   outletId: outlet,
   clientRef: ref,
-  payload: {
-    'start_balance': 100000,
-    'notes': 'buka',
-    'cashier_id': ?kasir,
-  },
+  payload: {'start_balance': 100000, 'notes': 'buka', 'cashier_id': ?kasir},
   localShiftId: 'lokal-$n',
   createdAt: DateTime(2026, 1, int.parse(n)),
 );
@@ -309,11 +388,7 @@ PendingOp opTutup(
   opType: opShiftClose,
   outletId: outlet,
   clientRef: ref,
-  payload: {
-    'actual_balance': 500000,
-    'notes': 'tutup',
-    'cashier_id': ?kasir,
-  },
+  payload: {'actual_balance': 500000, 'notes': 'tutup', 'cashier_id': ?kasir},
   localShiftId: 'lokal-$n',
   serverShiftId: serverShiftId,
   createdAt: DateTime(2026, 1, int.parse(n)),
@@ -656,4 +731,88 @@ void main() {
       },
     );
   });
+
+  test(
+    'kas & pelunasan offline: menunggu shift & penjualannya, terkirim sebelum tutup',
+    () async {
+      // Shift dibuka offline. Selama itu: penjualan Bayar Nanti, kas keluar,
+      // lalu tagihan itu dilunasi — semuanya sebelum internet kembali.
+      final ops = [
+        opBuka('1', 'ref-1'),
+        PendingOp(
+          localId: 'op-kas-1',
+          opType: opKas,
+          outletId: outlet,
+          clientRef: 'kas-1',
+          payload: {'type': 'out', 'amount': 15000, 'note': 'es batu'},
+          localShiftId: 'lokal-1',
+          createdAt: DateTime(2026, 1, 1, 10),
+        ),
+        PendingOp(
+          localId: 'op-lunas-1',
+          opType: opLunas,
+          outletId: outlet,
+          clientRef: 'lunas-1',
+          payload: {
+            'transaction_ids': ['offline_s1'],
+            'payment_method': 'Tunai',
+            'total': 80000,
+          },
+          localShiftId: 'lokal-1',
+          createdAt: DateTime(2026, 1, 1, 11),
+        ),
+        opTutup('1', 'tutup-1'),
+      ];
+      final (srv, so, _, _) = await jalankan(
+        ops: ops,
+        sales: [sale('offline_s1', 'ref-1')],
+      );
+      final shift1 = srv.refKeShift['ref-1']!;
+
+      expect(
+        so.ops,
+        isEmpty,
+        reason: 'tersisa: ${so.ops.map((o) => o.localId)}',
+      );
+      expect(srv.kasPerShift[shift1], ['kas-1']);
+      expect(srv.pelunasan.single.ids, [
+        'srv-offline_s1',
+      ], reason: 'pelunasan harus merujuk ID server penjualannya');
+      expect(srv.pelunasan.single.shiftId, shift1);
+      expect(
+        srv.urutan.indexOf('tutup:$shift1'),
+        greaterThan(srv.urutan.indexOf('lunas:$shift1')),
+        reason:
+            'kas & pelunasan harus sampai sebelum shift ditutup, supaya '
+            'ekspektasi kas yang dihitung server saat tutup sudah memuatnya',
+      );
+      expect(
+        srv.urutan.indexOf('kas:$shift1'),
+        lessThan(srv.urutan.indexOf('tutup:$shift1')),
+      );
+    },
+  );
+
+  test(
+    'pelunasan yang penjualannya sudah dibuang jadi terlihat, bukan menunggu selamanya',
+    () async {
+      final ops = [
+        PendingOp(
+          localId: 'op-lunas-yatim',
+          opType: opLunas,
+          outletId: outlet,
+          clientRef: 'lunas-yatim',
+          payload: {
+            'transaction_ids': ['offline_hilang'],
+            'payment_method': 'Tunai',
+          },
+          serverShiftId: 'OUT-1/9',
+          createdAt: DateTime(2026, 1, 1),
+        ),
+      ];
+      final (srv, so, _, _) = await jalankan(ops: ops, sales: []);
+      expect(srv.pelunasan, isEmpty);
+      expect(so.ops.single.status, 'dead');
+    },
+  );
 }

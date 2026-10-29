@@ -10,6 +10,7 @@ import '../../features/settings/data/app_settings.dart';
 import '../../features/printer/data/receipt_settings_repository.dart';
 import '../../features/payments/domain/payment_method.dart';
 import '../../features/tables/data/table_repository.dart';
+import '../../features/transactions/data/transaction_repository.dart';
 import '../../features/user/data/auth_service.dart';
 import '../connectivity_service.dart';
 import '../outlet_scope.dart';
@@ -119,6 +120,16 @@ final dataKasirOfflineProvider = Provider<void>((ref) {
         coba(() async {
           ref.invalidate(outletAppSettingsProvider);
           return ref.read(outletAppSettingsProvider.future);
+        }),
+        // Tab meja yang sedang terisi: saat internet putus, tagihannya tetap
+        // bisa dilihat & dilunasi (pelunasan masuk antrian).
+        coba(() async {
+          final meja = await ref.read(tableRepositoryProvider).getTables(outletId);
+          final repo = ref.read(transactionRepositoryProvider);
+          for (final m in meja.where((m) => m.statusIndex == 1).take(60)) {
+            await repo.getActiveSalesByTable(m.id);
+          }
+          return true;
         }),
         // Pengaturan struk + logonya: struk saat offline tetap memakai
         // branding outlet, dan logo yang baru diganti Pemilik ikut terunduh.

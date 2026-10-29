@@ -6,7 +6,10 @@ import 'package:gap/gap.dart';
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/format.dart';
+import '../../../shared/widgets/sheet_bawah.dart';
+import '../data/kas_shift.dart';
 import '../data/shift_repository.dart';
+import 'cash_movement_sheet.dart';
 
 class ShiftManagementDialog extends HookConsumerWidget {
   final bool isClosing;
@@ -28,44 +31,20 @@ class ShiftManagementDialog extends HookConsumerWidget {
     final amountCtrl = useTextEditingController();
     final noteCtrl = useTextEditingController();
 
-    // Saat closing, ambil total penjualan & expected langsung dari backend
-    // (sudah dihitung di SQL subquery shift_repository.go).
-    final totalSales = activeShift?.totalSales ?? 0.0;
-    // Kas masuk/keluar (petty cash) shift ini — dimasukkan ke preview expected
-    // supaya konsisten dengan hitungan backend saat close (B7).
-    final cashMovements = (isClosing && activeShift?.remoteId != null)
-        ? (ref.watch(cashMovementsProvider(activeShift!.remoteId!)).value ??
-              const <Map<String, dynamic>>[])
-        : const <Map<String, dynamic>>[];
-    final cashIn = cashMovements
-        .where((m) => m['type'] == 'in')
-        .fold<double>(0, (s, m) => s + ((m['amount'] as num?)?.toDouble() ?? 0));
-    final cashOut = cashMovements
-        .where((m) => m['type'] == 'out')
-        .fold<double>(0, (s, m) => s + ((m['amount'] as num?)?.toDouble() ?? 0));
-    // totalSales DATANG DARI SERVER (shift_repository.go menghitungnya lewat
-    // subquery). Untuk shift yang dibuka saat LURING, remoteId masih null dan
-    // angkanya 0 — bukan karena tak ada penjualan, melainkan karena servernya
-    // belum pernah tahu shift ini ada.
-    //
-    // Menghitung ekspektasi dari nol itu berarti menyodorkan angka selisih
-    // sebesar SELURUH penjualan shift-nya, tepat pada saat serah terima uang.
-    // Kasir yang laci-nya berisi Rp2.200.000 diberi tahu ia kurang Rp2.000.000,
-    // di depan orang yang sedang menghitung bersamanya.
-    //
-    // Angka yang akhirnya tersimpan di server BENAR (applyClose menghitung
-    // ulang di sana). Yang salah hanya yang ditampilkan — dan justru itu yang
-    // dibaca orang saat menentukan siapa yang bertanggung jawab.
-    //
-    // Yang TIDAK dilakukan: menjumlahkan antrean penjualan luring ke totalSales.
-    // Pada kasus paling umum — shift dibuka luring lalu perangkatnya kembali
-    // daring — penjualannya sudah tersinkron DAN masih tersisa di antrean
-    // sampai antreannya terkuras, sehingga angkanya terhitung dua kali. Menukar
-    // angka yang terlalu kecil dengan angka yang terlalu besar bukan perbaikan.
-    final totalSalesTepercaya = activeShift?.remoteId != null;
-    final expected = isClosing && activeShift != null && totalSalesTepercaya
-        ? (activeShift.startingCash + totalSales + cashIn - cashOut)
+    // Ekspektasi kas dari BUKU KAS SHIFT (kas_shift.dart): bagian yang sudah
+    // diketahui server + penjualan, pelunasan, dan kas masuk/keluar yang masih
+    // di antrian perangkat. Dulu angkanya hanya dari server — shift yang dibuka
+    // offline tak punya angka, dan penjualan offline tak terhitung sehingga
+    // laci terlihat lebih padahal pas. Yang sudah terkirim dihapus dari
+    // antrian, jadi tak terhitung dua kali.
+    final ringkasan = (isClosing && activeShift != null)
+        ? ref.watch(ringkasanKasShiftProvider(kunciShift(activeShift))).value
         : null;
+    final totalSales = ringkasan?.penjualanTunai ?? 0.0;
+    final cashIn = ringkasan?.kasMasuk ?? 0.0;
+    final cashOut = ringkasan?.kasKeluar ?? 0.0;
+    final expected = ringkasan?.ekspektasi;
+    final belumTerkirim = ringkasan?.belumTerkirim ?? 0;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -110,25 +89,24 @@ class ShiftManagementDialog extends HookConsumerWidget {
                 style: TextStyle(color: kTextMid, fontSize: 14),
               ),
               const Gap(24),
-              // Shift luring: ekspektasi kas tak bisa dihitung di sini karena
-              // totalSales-nya milik server. Katakan apa adanya, jangan
-              // menghitung dari nol — angka selisih palsu sebesar seluruh
-              // penjualan shift jauh lebih merugikan daripada tak ada angka.
-              if (isClosing && expected == null) ...[
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: kWarning.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    'Shift ini dibuka saat offline, jadi ekspektasi kas belum '
-                    'bisa dihitung di perangkat. Masukkan saja uang fisik yang '
-                    'Anda hitung — selisihnya dihitung server setelah tersinkron.',
-                    style: TextStyle(color: kTextMid, fontSize: 12, height: 1.4),
+              if (isClosing && activeShift != null) ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => tampilkanSheetBawah(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => CashMovementSheet(shift: activeShift),
+                    ),
+                    icon: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 18,
+                    ),
+                    label: const Text('Catat kas masuk / keluar'),
                   ),
                 ),
-                const Gap(20),
+                const Gap(4),
               ],
               if (isClosing && expected != null) ...[
                 Container(
@@ -158,6 +136,19 @@ class ShiftManagementDialog extends HookConsumerWidget {
                         isBold: true,
                         valueColor: kPrimary,
                       ),
+                      if (belumTerkirim > 0) ...[
+                        const Gap(8),
+                        Text(
+                          'Termasuk $belumTerkirim transaksi/kas yang masih '
+                          'tersimpan di perangkat dan belum terkirim.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: kTextMid,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

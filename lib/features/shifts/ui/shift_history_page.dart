@@ -718,7 +718,7 @@ class _TabletDetailPanel extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              if (s.remoteId != null)
+                              if (s.remoteId != null || s.localShiftId != null)
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton.icon(
@@ -727,7 +727,7 @@ class _TabletDetailPanel extends ConsumerWidget {
                                       isScrollControlled: true,
                                       backgroundColor: Colors.transparent,
                                       builder: (_) =>
-                                          CashMovementSheet(shiftId: s.remoteId!),
+                                          CashMovementSheet(shift: s),
                                     ),
                                     icon: const Icon(
                                       Icons.account_balance_wallet_outlined,

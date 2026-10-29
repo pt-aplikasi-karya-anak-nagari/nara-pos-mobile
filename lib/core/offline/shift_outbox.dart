@@ -10,6 +10,17 @@ import 'transaksi_folder.dart';
 const String opShiftOpen = 'shift_open';
 const String opShiftClose = 'shift_close';
 
+/// Kas masuk/keluar yang dicatat saat offline (atau gagal terkirim).
+/// payload: type ('in'|'out'), amount, note, cashier_id.
+const String opKas = 'kas';
+
+/// Pelunasan "Bayar Nanti" saat offline. payload: transaction_ids (ID server,
+/// atau ID lokal `offline_…` untuk penjualan yang juga belum terkirim — diganti
+/// ID server begitu penjualannya terkirim), table_id, payment_method,
+/// cash_amount, change_amount, payment_proof_url, total, porsi_tunai,
+/// shift_client_ref, cashier_id.
+const String opLunas = 'lunas';
+
 /// Satu operasi tulis offline (buka/tutup shift) menunggu sinkron.
 class PendingOp {
   final String localId;
@@ -142,6 +153,94 @@ class ShiftOutbox {
 
   Future<List<PendingOp>> opensPending() => _activeByType(opShiftOpen);
   Future<List<PendingOp>> closesPending() => _activeByType(opShiftClose);
+  Future<List<PendingOp>> kasPending() => _activeByType(opKas);
+  Future<List<PendingOp>> lunasPending() => _activeByType(opLunas);
+
+  /// Antrikan kas masuk/keluar atau pelunasan offline. Terikat ke shift lewat
+  /// [serverShiftId] (shift sudah tersinkron) atau [localShiftId] (shift
+  /// dibuka offline — server_shift_id terisi saat op buka-nya terkirim).
+  Future<String> enqueueOp({
+    required String opType,
+    required String outletId,
+    required String clientRef,
+    required Map<String, dynamic> payload,
+    required DateTime occurredAt,
+    String? localShiftId,
+    String? serverShiftId,
+    String? dependsOn,
+  }) async {
+    final db = await OfflineDb.instance.database;
+    final localId = 'op_${DateTime.now().microsecondsSinceEpoch}';
+    await db.insert('pending_ops', {
+      'local_id': localId,
+      'op_type': opType,
+      'outlet_id': outletId,
+      'client_ref': clientRef,
+      'payload': jsonEncode(payload),
+      'depends_on': dependsOn,
+      'local_shift_id': localShiftId,
+      'server_shift_id': serverShiftId,
+      'status': 'pending',
+      'created_at': DateTime.now().toIso8601String(),
+      'occurred_at': occurredAt.toUtc().toIso8601String(),
+      'attempts': 0,
+    });
+    onBerubah?.call();
+    return localId;
+  }
+
+  /// SEMUA op satu jenis yang belum selesai — termasuk yang gagal permanen.
+  /// Dipakai buku kas shift: uang yang sudah berpindah tangan tetap ada di
+  /// laci walau catatannya belum (atau gagal) sampai ke server.
+  Future<List<PendingOp>> semuaBelumSelesai(String opType) async {
+    final db = await OfflineDb.instance.database;
+    final rows = await db.query(
+      'pending_ops',
+      where: "op_type = ? AND status != 'done'",
+      whereArgs: [opType],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(PendingOp.fromRow).toList();
+  }
+
+  /// Penjualan offline [localSaleId] sudah terkirim dan mendapat ID server:
+  /// ganti rujukannya di pelunasan yang menunggu penjualan itu.
+  Future<void> petakanIdPenjualan(String localSaleId, String serverId) async {
+    if (serverId.isEmpty) return;
+    final db = await OfflineDb.instance.database;
+    final rows = await db.query(
+      'pending_ops',
+      where: "op_type = ? AND status != 'done' AND payload LIKE ?",
+      whereArgs: [opLunas, '%$localSaleId%'],
+    );
+    for (final row in rows) {
+      final op = PendingOp.fromRow(row);
+      final ids = [
+        for (final id in (op.payload['transaction_ids'] as List? ?? const []))
+          id == localSaleId ? serverId : id,
+      ];
+      await db.update(
+        'pending_ops',
+        {'payload': jsonEncode({...op.payload, 'transaction_ids': ids})},
+        where: 'local_id = ?',
+        whereArgs: [op.localId],
+      );
+    }
+    if (rows.isNotEmpty) onBerubah?.call();
+  }
+
+  /// Tandai gagal permanen sekarang juga — untuk penolakan yang tak akan
+  /// berubah dengan dicoba ulang (mis. tagihan sudah dilunasi di tempat lain).
+  Future<void> markDead(String localId, String reason) async {
+    final db = await OfflineDb.instance.database;
+    await db.update(
+      'pending_ops',
+      {'status': 'dead', 'last_error': reason},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+    onBerubah?.call();
+  }
 
   /// local_id op open untuk satu localShiftId (dipakai close sebagai depends_on).
   Future<String?> openLocalIdFor(String localShiftId) async {

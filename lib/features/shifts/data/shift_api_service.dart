@@ -97,15 +97,29 @@ class ShiftApiService extends BaseApiService {
     );
   }
 
+  /// [clientRef] membuat kiriman ulang tak mencatat dua kali. [offline] =
+  /// kas dicatat saat offline (antrian): waktunya [occurredAt], dan boleh
+  /// mendarat di shift yang sudah ditutup.
   Future<void> addCashMovement(
     String shiftId, {
     required String type, // 'in' | 'out'
     required double amount,
     String note = '',
+    String? clientRef,
+    DateTime? occurredAt,
+    bool offline = false,
   }) async {
     await post(
       '/shifts/$shiftId/cash-movements',
-      data: {'type': type, 'amount': amount, 'note': note},
+      data: {
+        'type': type,
+        'amount': amount,
+        'note': note,
+        if (clientRef != null && clientRef.isNotEmpty) 'client_ref': clientRef,
+        if (occurredAt != null)
+          'occurred_at': occurredAt.toUtc().toIso8601String(),
+        if (offline) 'is_offline': true,
+      },
       converter: (data) => data,
     );
   }

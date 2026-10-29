@@ -5,15 +5,19 @@ import 'package:gap/gap.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/format.dart';
-import '../data/shift_api_service.dart';
+import '../data/kas_shift.dart';
 import '../data/shift_repository.dart';
+import '../domain/shift.dart';
 
 /// Bottom-sheet catat kas masuk/keluar (petty cash) untuk shift aktif (B7).
 /// Setelah catat, expected balance shift ikut ter-update (invalidate
 /// activeShiftProvider) sehingga selisih kas saat tutup bisa dijelaskan.
+///
+/// Tetap bisa dipakai saat offline (termasuk shift yang dibuka offline): kas
+/// masuk antrian dan terkirim otomatis begitu tersambung.
 class CashMovementSheet extends HookConsumerWidget {
-  final String shiftId;
-  const CashMovementSheet({super.key, required this.shiftId});
+  final Shift shift;
+  const CashMovementSheet({super.key, required this.shift});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,25 +25,39 @@ class CashMovementSheet extends HookConsumerWidget {
     final amountCtrl = useTextEditingController();
     final noteCtrl = useTextEditingController();
     final saving = useState(false);
-    final movementsAsync = ref.watch(cashMovementsProvider(shiftId));
+    final kunci = kunciShift(shift);
+    final movementsAsync = ref.watch(daftarKasShiftProvider(kunci));
 
     Future<void> submit() async {
       final amount = parseRupiahInput(amountCtrl.text).toDouble();
       if (amount <= 0 || saving.value) return;
       saving.value = true;
       try {
-        await ref
-            .read(shiftApiServiceProvider)
-            .addCashMovement(
-              shiftId,
+        final terkirim = await ref
+            .read(kasShiftServiceProvider)
+            .catat(
+              shift,
               type: type.value,
               amount: amount,
               note: noteCtrl.text.trim(),
             );
         amountCtrl.clear();
         noteCtrl.clear();
-        ref.invalidate(cashMovementsProvider(shiftId));
+        ref.invalidate(daftarKasShiftProvider(kunci));
+        ref.invalidate(ringkasanKasShiftProvider(kunci));
+        if (shift.remoteId != null) {
+          ref.invalidate(cashMovementsProvider(shift.remoteId!));
+        }
         ref.invalidate(activeShiftProvider);
+        if (!terkirim && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Kas tersimpan di perangkat — terkirim otomatis saat online.',
+              ),
+            ),
+          );
+        }
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -143,9 +161,9 @@ class CashMovementSheet extends HookConsumerWidget {
                   }
                   return Column(
                     children: list.map((m) {
-                      final isIn = (m['type']?.toString() ?? 'out') == 'in';
-                      final amount = (m['amount'] as num?)?.toDouble() ?? 0;
-                      final note = m['note']?.toString() ?? '';
+                      final isIn = m.masuk;
+                      final amount = m.amount;
+                      final note = m.note;
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
@@ -163,6 +181,16 @@ class CashMovementSheet extends HookConsumerWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (m.menunggu) ...[
+                              Icon(
+                                m.gagal
+                                    ? Icons.error_outline
+                                    : Icons.cloud_upload_outlined,
+                                size: 14,
+                                color: m.gagal ? kDanger : kTextLight,
+                              ),
+                              const Gap(6),
+                            ],
                             Text(
                               '${isIn ? '+' : '−'} ${formatRupiah(amount)}',
                               style: TextStyle(

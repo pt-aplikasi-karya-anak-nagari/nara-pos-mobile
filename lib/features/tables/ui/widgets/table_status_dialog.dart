@@ -13,6 +13,7 @@ import '../../../settings/data/app_settings.dart';
 import '../../../kasir/providers.dart';
 import '../../../order_types/data/order_type_repository.dart';
 import '../../../shifts/data/shift_repository.dart';
+import '../../../transactions/data/pelunasan_offline.dart';
 import '../../../transactions/data/transaction_repository.dart';
 import '../../../transactions/domain/sale.dart';
 import '../../../transactions/ui/widgets/mini_payment_sheet.dart';
@@ -379,7 +380,7 @@ class _SaleCard extends ConsumerWidget {
   });
 
   Future<void> _payNow(BuildContext context, WidgetRef ref) async {
-    if (tolakSaatOffline(context, ref, 'Pelunasan')) return;
+    // Tetap bisa saat offline: pelunasan masuk antrian (pelunasan_offline).
     final result = await tampilkanSheetBawah<
       ({String method, double cash, String proofUrl})
     >(
@@ -397,14 +398,25 @@ class _SaleCard extends ConsumerWidget {
           ? result.cash - sale.total
           : 0.0;
 
-      await ref
-          .read(transactionRepositoryProvider)
-          .markAsPaid(
-            sale.id,
+      final proof = result.proofUrl.isEmpty ? null : result.proofUrl;
+      final diantrikan = await ref
+          .read(pelunasanOfflineProvider)
+          .lunasiOnlineAtauAntrikan(
+            tagihan: [sale],
+            tableId: tableId,
             paymentMethod: result.method,
             cashAmount: cashAmount,
             changeAmount: changeAmount,
-            paymentProofUrl: result.proofUrl.isEmpty ? null : result.proofUrl,
+            paymentProofUrl: proof,
+            online: () => ref
+                .read(transactionRepositoryProvider)
+                .markAsPaid(
+                  sale.id,
+                  paymentMethod: result.method,
+                  cashAmount: cashAmount,
+                  changeAmount: changeAmount,
+                  paymentProofUrl: proof,
+                ),
           );
 
       // Invalidate caches yang terdampak supaya UI sinkron:
@@ -421,7 +433,12 @@ class _SaleCard extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Transaksi ${sale.invoiceId} berhasil dilunasi'),
+            content: Text(
+              diantrikan
+                  ? 'Transaksi ${sale.invoiceId} lunas — tersimpan di '
+                        'perangkat, terkirim otomatis saat online'
+                  : 'Transaksi ${sale.invoiceId} berhasil dilunasi',
+            ),
             backgroundColor: kSuccess,
           ),
         );
@@ -977,7 +994,8 @@ class _Actions extends ConsumerWidget {
     WidgetRef ref,
     List<Sale> settleable,
   ) async {
-    if (tolakSaatOffline(context, ref, 'Pelunasan meja')) return;
+    // Tetap bisa saat offline: yang dilunasi TEPAT tagihan yang tampil di
+    // sini (bukan seluruh tab di server, yang bisa sudah bertambah).
     final outletId = activeOutletId;
     if (outletId == null || settleable.isEmpty) return;
     final tabTotal = settleable.fold<double>(0, (s, x) => s + x.total);
@@ -997,15 +1015,29 @@ class _Actions extends ConsumerWidget {
           ? result.cash - tabTotal
           : 0.0;
 
-      final settled = await ref
-          .read(transactionRepositoryProvider)
-          .settleTable(
-            outletId,
-            table.id,
+      final proof = result.proofUrl.isEmpty ? null : result.proofUrl;
+      var settled = settleable.length;
+      final diantrikan = await ref
+          .read(pelunasanOfflineProvider)
+          .lunasiOnlineAtauAntrikan(
+            tagihan: settleable,
+            tableId: table.id,
             paymentMethod: result.method,
             cashAmount: cashAmount,
             changeAmount: changeAmount,
-            paymentProofUrl: result.proofUrl.isEmpty ? null : result.proofUrl,
+            paymentProofUrl: proof,
+            online: () async {
+              settled = await ref
+                  .read(transactionRepositoryProvider)
+                  .settleTable(
+                    outletId,
+                    table.id,
+                    paymentMethod: result.method,
+                    cashAmount: cashAmount,
+                    changeAmount: changeAmount,
+                    paymentProofUrl: proof,
+                  );
+            },
           );
 
       ref.invalidate(activeTableTransactionsProvider(table.id));
@@ -1019,7 +1051,10 @@ class _Actions extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Meja ${table.name} ditutup — $settled pesanan dilunasi',
+              diantrikan
+                  ? 'Meja ${table.name} lunas — $settled pesanan, tersimpan di '
+                        'perangkat dan terkirim otomatis saat online'
+                  : 'Meja ${table.name} ditutup — $settled pesanan dilunasi',
             ),
             backgroundColor: kSuccess,
           ),

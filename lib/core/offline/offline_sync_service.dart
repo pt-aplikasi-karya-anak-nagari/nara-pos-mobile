@@ -178,10 +178,16 @@ class OfflineSyncService {
               // jam_kirim: jam tablet SAAT MENGIRIM. Server membandingkannya
               // dengan jamnya sendiri untuk mendeteksi jam tablet yang
               // diatur ulang. Tak disimpan di antrian — selalu jam terkini.
-              await api.checkout(ps.outletId, {
+              final hasil = await api.checkout(ps.outletId, {
                 ...ps.payload,
                 'jam_kirim': DateTime.now().toUtc().toIso8601String(),
               });
+              // Pelunasan offline yang menunggu penjualan ini kini bisa
+              // merujuk ID server-nya.
+              await shiftOutbox.petakanIdPenjualan(
+                ps.localId,
+                hasil['id']?.toString() ?? '',
+              );
               await outbox.remove(ps.localId);
               synced++;
               adaKemajuan = true;
@@ -210,6 +216,26 @@ class OfflineSyncService {
               failed++;
               progres.maju(gagal: true);
             }
+          }
+        }
+
+        // ── FASE B2: kas masuk/keluar & pelunasan offline ──────────────────
+        // Sesudah penjualan (pelunasan bisa menunggu penjualannya), SEBELUM
+        // tutup shift — supaya ekspektasi kas yang dihitung server saat tutup
+        // sudah memuat uangnya. Yang terlambat pun tetap diterima server dan
+        // shift-nya dihitung ulang.
+        if (!stoppedOffline) {
+          final hasilB2 = await _kirimKasDanPelunasan(
+            shiftOutbox,
+            shiftApi,
+            ditolakDiPanggilanIni,
+            progres,
+          );
+          if (hasilB2.offline) stoppedOffline = true;
+          if (hasilB2.terkirim > 0) {
+            adaKemajuan = true;
+            shiftChanged = true;
+            shiftTerkirim += hasilB2.terkirim;
           }
         }
 
@@ -362,6 +388,94 @@ class OfflineSyncService {
   /// menghapusnya. Sekarang ia ditolak, dan penolakan itu HARUS dibaca sebagai
   /// "tunggu sebentar" — kalau tidak, seluruh omzet satu shift naik attempts
   /// lalu dead-letter padahal tak ada yang salah dengannya.
+  /// Kirim antrian kas masuk/keluar & pelunasan offline (Fase B2).
+  Future<({int terkirim, bool offline})> _kirimKasDanPelunasan(
+    ShiftOutbox shiftOutbox,
+    ShiftApiService shiftApi,
+    Set<String> ditolak,
+    ProgresSinkronNotifier progres,
+  ) async {
+    var terkirim = 0;
+    final bukaMasihAntri = <String>{
+      for (final o in await shiftOutbox.opensPending())
+        if (o.localShiftId != null) o.localShiftId!,
+    };
+    final txApi = _ref.read(transactionApiServiceProvider);
+    final ops = [
+      ...await shiftOutbox.kasPending(),
+      ...await shiftOutbox.lunasPending(),
+    ];
+    for (final op in ops) {
+      if (ditolak.contains('op:${op.localId}')) continue;
+      final shiftId = op.serverShiftId ?? '';
+      // Shift dibuka offline dan buka-nya belum terkirim: tunggu.
+      if (shiftId.isEmpty && bukaMasihAntri.contains(op.localShiftId)) {
+        continue;
+      }
+      try {
+        if (op.opType == opKas) {
+          if (shiftId.isEmpty) {
+            throw 'Shift tujuan kas ini tidak ditemukan di server.';
+          }
+          await shiftApi.addCashMovement(
+            shiftId,
+            type: op.payload['type']?.toString() ?? 'out',
+            amount: (op.payload['amount'] as num?)?.toDouble() ?? 0,
+            note: op.payload['note']?.toString() ?? '',
+            clientRef: op.clientRef,
+            occurredAt: DateTime.tryParse(op.occurredAt ?? ''),
+            offline: true,
+          );
+        } else {
+          final ids = [
+            for (final id in (op.payload['transaction_ids'] as List? ?? []))
+              id.toString(),
+          ];
+          // Menunggu penjualan offline yang dilunasi ini terkirim dulu —
+          // kecuali penjualannya sudah tak ada di antrian (dibuang): pelunasan
+          // ini tak akan pernah bisa terkirim, jadi harus terlihat.
+          final lokal = ids.where(SaleOutbox.idOffline).toSet();
+          if (lokal.isNotEmpty) {
+            final outbox = _ref.read(saleOutboxProvider);
+            final masihAda = {
+              for (final ps in await outbox.pending()) ps.localId,
+              for (final ps in await outbox.deadLetters()) ps.localId,
+            };
+            if (lokal.every(masihAda.contains)) continue;
+            await shiftOutbox.markDead(
+              op.localId,
+              'Penjualan yang dilunasi ini sudah tidak ada di antrian.',
+            );
+            progres.maju(gagal: true);
+            continue;
+          }
+          await txApi.lunasiOffline(op.outletId, {
+            ...op.payload,
+            'client_ref': op.clientRef,
+            'occurred_at': op.occurredAt,
+            if (shiftId.isNotEmpty) 'shift_id': shiftId,
+          });
+        }
+        await shiftOutbox.remove(op.localId);
+        terkirim++;
+        progres.maju();
+      } catch (e) {
+        if (isOfflineError(e)) return (terkirim: terkirim, offline: true);
+        ditolak.add('op:${op.localId}');
+        // Tagihan sudah dilunasi di tempat lain: mencoba ulang tak akan
+        // mengubahnya. Langsung tampil di "Perlu dipulihkan" untuk dicek —
+        // pelanggan mungkin membayar dua kali.
+        if (e.toString().contains('di tempat lain')) {
+          await shiftOutbox.markDead(op.localId, e.toString());
+        } else {
+          await shiftOutbox.markError(op.localId, e.toString());
+        }
+        progres.maju(gagal: true);
+      }
+    }
+    return (terkirim: terkirim, offline: false);
+  }
+
   bool _isShiftOrderingError(Object e) {
     final s = e.toString().toLowerCase();
     return s.contains('membuka shift') ||

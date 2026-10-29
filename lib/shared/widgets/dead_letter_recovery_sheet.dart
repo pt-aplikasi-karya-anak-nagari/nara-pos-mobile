@@ -369,8 +369,15 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
     widget.onSelesai();
   }
 
-  Future<void> _coba(String localShiftId) async {
-    await ref.read(shiftOutboxProvider).retryShift(localShiftId);
+  /// Pulihkan TEPAT operasi yang tampil di kartu ini. (Op buka/tutup satu
+  /// shift selalu mati bersamaan — markDeadCascade — jadi semuanya ada di
+  /// kartu yang sama.) Kas/pelunasan dari shift online tak punya
+  /// local_shift_id, jadi tak bisa dipulihkan per shift.
+  Future<void> _coba(List<PendingOp> ops) async {
+    final outbox = ref.read(shiftOutboxProvider);
+    for (final o in ops) {
+      await outbox.retry(o.localId);
+    }
     if (!mounted) return;
     _muatUlang();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -383,11 +390,8 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
   /// Buang catatan buka/tutup shift yang ditolak server — aturannya sama
   /// dengan membuang transaksi: online, beralasan, PIN manajer, dan dicatat di
   /// server lebih dulu. Catatan tutup shift memuat uang laci.
-  Future<void> _buang(String localShiftId) async {
+  Future<void> _buang(String kunci, List<PendingOp> ops) async {
     if (tolakSaatOffline(context, ref, 'Membuang catatan shift')) return;
-    final ops = (await ref.read(shiftOutboxProvider).deadLetters())
-        .where((o) => o.localShiftId == localShiftId)
-        .toList();
     if (ops.isEmpty || !mounted) return;
     final isian = await mintaAlasanDanPinBuang(
       context,
@@ -404,7 +408,7 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
         ops.first.outletId,
         {
           'jenis': 'shift',
-          'local_id': localShiftId,
+          'local_id': kunci,
           'device_id': DeviceIdentity.current.id,
           'payload': [
             for (final o in ops)
@@ -429,7 +433,12 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
       }
       return;
     }
-    await ref.read(shiftOutboxProvider).discardShift(localShiftId);
+    // Hanya yang tampil di kartu — kas/pelunasan lain dari shift yang sama
+    // yang masih menunggu tak boleh ikut terhapus.
+    final outbox = ref.read(shiftOutboxProvider);
+    for (final o in ops) {
+      await outbox.remove(o.localId);
+    }
     if (!mounted) return;
     _muatUlang();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -472,7 +481,7 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
           children: [
             const Gap(8),
             Text(
-              'BUKA/TUTUP SHIFT GAGAL',
+              'SHIFT, KAS & PELUNASAN GAGAL',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
@@ -484,8 +493,8 @@ class _SeksiShiftGagalState extends ConsumerState<_SeksiShiftGagal> {
             for (final e in perShift.entries) ...[
               _KartuShiftGagal(
                 ops: e.value,
-                onCoba: () => _coba(e.key),
-                onBuang: () => _buang(e.key),
+                onCoba: () => _coba(e.value),
+                onBuang: () => _buang(e.key, e.value),
               ),
               const Gap(10),
             ],
@@ -509,7 +518,14 @@ class _KartuShiftGagal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final jenis = ops.map((o) => o.opType).toSet().toList()..sort();
+    final jenis = ops.map((o) => labelOpShift(o.opType)).toSet().toList()
+      ..sort();
+    final uang = ops.fold<double>(0, (s, o) {
+      final v = o.payload['total'] ?? o.payload['amount'];
+      return o.opType == opLunas || o.opType == opKas
+          ? s + (v is num ? v.toDouble() : 0)
+          : s;
+    });
     final galat = ops
         .map((o) => o.lastError)
         .whereType<String>()
@@ -532,8 +548,10 @@ class _KartuShiftGagal extends StatelessWidget {
           ),
           const Gap(4),
           Text(
-            '${ops.length} operasi dalam satu shift — dipulihkan bersamaan '
-            'supaya urutannya tetap benar.',
+            ops.length == 1
+                ? (uang > 0 ? formatRupiah(uang) : '1 operasi')
+                : '${ops.length} operasi dalam satu shift — dipulihkan '
+                      'bersamaan supaya urutannya tetap benar.',
             style: TextStyle(color: kTextMid, fontSize: 12, height: 1.4),
           ),
           if (galat.isNotEmpty) ...[
@@ -571,3 +589,12 @@ class _KartuShiftGagal extends StatelessWidget {
     );
   }
 }
+
+/// Nama operasi antrian shift untuk kasir.
+String labelOpShift(String opType) => switch (opType) {
+  opShiftOpen => 'Buka shift',
+  opShiftClose => 'Tutup shift',
+  opKas => 'Kas masuk/keluar',
+  opLunas => 'Pelunasan',
+  _ => opType,
+};
