@@ -95,4 +95,30 @@ void main() {
     );
     expect(st.maxOfflineHours, 24, reason: 'bertahan di cache perangkat');
   });
+
+  group('peringatan sebelum batas offline', () {
+    test('belum perlu saat sisa waktu masih banyak', () {
+      expect(peringatanBatasOffline(const Duration(hours: 30), 48), isNull);
+      expect(peringatanBatasOffline(null, 48), isNull);
+      expect(peringatanBatasOffline(const Duration(hours: 100), 0), isNull);
+    });
+
+    test('seperempat terakhir: sisa jam / menit', () {
+      expect(
+        peringatanBatasOffline(const Duration(hours: 40), 48),
+        'tablet harus online dalam 8 jam',
+      );
+      expect(
+        peringatanBatasOffline(const Duration(hours: 47, minutes: 50), 48),
+        'tablet harus online dalam 10 menit',
+      );
+    });
+
+    test('sudah lewat batas', () {
+      expect(
+        peringatanBatasOffline(const Duration(hours: 49), 48),
+        contains('terkunci'),
+      );
+    });
+  });
 }

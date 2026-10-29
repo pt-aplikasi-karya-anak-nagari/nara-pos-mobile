@@ -7,7 +7,10 @@ import '../../core/app_icons.dart';
 import '../../core/connectivity_service.dart';
 import '../../core/sesi_login.dart';
 import '../../core/i18n.dart';
+import '../../core/offline/jam_offline.dart';
 import '../../core/offline/product_cache.dart';
+import '../../core/outlet_scope.dart';
+import '../../features/settings/data/app_settings.dart';
 
 class ConnectivityBanner extends ConsumerWidget {
   const ConnectivityBanner({super.key});
@@ -30,9 +33,14 @@ class ConnectivityBanner extends ConsumerWidget {
     // Sesi login hampir / sudah berakhir — hanya relevan saat offline:
     // online, sesi diperbarui otomatis.
     final sesi = isOffline ? ref.watch(peringatanSesiProvider) : null;
+    // Batas lama offline (Pengaturan App) hampir tercapai.
+    final batas = isOffline
+        ? ref.watch(peringatanBatasOfflineProvider).value
+        : null;
     final message = [
       baseMessage,
       if (isOffline && syncedAt != null) 'data ${_relativeAge(syncedAt)}',
+      ?batas,
       ?sesi,
     ].join(' • ');
     final icon = isOffline ? AppIcons.accessRights : AppIcons.inventory;
@@ -91,3 +99,12 @@ String _relativeAge(DateTime t) {
   if (d.inHours < 24) return '${d.inHours} jam lalu';
   return '${d.inDays} hari lalu';
 }
+
+/// Peringatan batas lama offline untuk banner — bergerak tiap menit.
+final peringatanBatasOfflineProvider = FutureProvider<String?>((ref) async {
+  ref.watch(detakMenitProvider);
+  final outletId = ref.watch(activeOutletIdProvider);
+  if (outletId == null) return null;
+  final batas = (await bacaAppSettingsTersimpan(outletId)).maxOfflineHours;
+  return peringatanBatasOffline(ref.read(jamOfflineProvider).lamaOffline(), batas);
+});

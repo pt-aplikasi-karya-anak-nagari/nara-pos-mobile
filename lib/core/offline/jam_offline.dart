@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -100,6 +102,24 @@ String pesanBatasOffline(Duration lama, int batasJam) {
   return 'Tablet sudah $teks tidak tersambung ke internet (batas $batasJam '
       'jam). Sambungkan ke internet dulu untuk melanjutkan penjualan — '
       'transaksi yang sudah tersimpan tetap aman.';
+}
+
+/// Peringatan sebelum batas offline tercapai, atau null bila belum perlu.
+/// Muncul saat sisa waktu ≤ seperempat batas (48 jam → 12 jam terakhir),
+/// supaya kasir sempat mencari internet SEBELUM penjualan terhenti di tengah
+/// ramai. MURNI.
+String? peringatanBatasOffline(Duration? lama, int batasJam) {
+  if (batasJam <= 0 || lama == null) return null;
+  final batas = Duration(hours: batasJam);
+  final sisa = batas - lama;
+  if (sisa <= Duration.zero) {
+    return 'penjualan offline terkunci — sambungkan internet';
+  }
+  if (sisa > batas ~/ 4) return null;
+  final teks = sisa.inHours >= 1
+      ? '${sisa.inHours} jam'
+      : '${max(1, sisa.inMinutes)} menit';
+  return 'tablet harus online dalam $teks';
 }
 
 final jamOfflineProvider = Provider<JamOffline>(

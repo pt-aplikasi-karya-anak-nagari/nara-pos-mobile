@@ -18,6 +18,7 @@ import 'core/device_identity.dart';
 import 'core/config/app_config.dart';
 import 'core/format.dart';
 import 'core/notifications.dart';
+import 'core/offline/sinkron_latar.dart';
 import 'core/shared_prefs.dart';
 import 'features/notifications/data/notification_history.dart';
 import 'features/notifications/domain/app_notification.dart';
@@ -149,6 +150,13 @@ Future<void> _bootstrap() async {
       await authStorage.init();
     } catch (e, st) {
       debugPrint('[NARA] AuthStorage.init gagal (lanjut logged-out): $e\n$st');
+    }
+
+    // Sinkron antrian offline di latar belakang (Android). Best-effort.
+    try {
+      await daftarkanSinkronLatar();
+    } catch (e) {
+      debugPrint('[NARA] daftarkanSinkronLatar gagal: $e');
     }
 
     // Inisialisasi notifikasi bersifat best-effort. Kegagalan plugin (ikon hilang,

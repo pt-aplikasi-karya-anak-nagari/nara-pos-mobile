@@ -10,6 +10,10 @@ import '../shared/widgets/banner_sesi_offline.dart';
 import '../shared/widgets/connectivity_banner.dart';
 import '../shared/widgets/pending_sync_banner.dart';
 import '../shared/widgets/antrian_offline_floating.dart';
+import '../core/offline/sale_outbox.dart';
+import '../core/offline/shift_outbox.dart';
+import '../core/shared_prefs.dart';
+import '../core/offline/sinkron_latar.dart';
 import '../core/format.dart';
 import '../core/i18n.dart';
 import '../core/realtime/realtime_service.dart';
@@ -168,6 +172,11 @@ class _NotificationTapListenerState
     // dari disk supaya notif yang ditulis isolate background (FCM
     // background handler di main.dart) langsung muncul tanpa restart.
     WidgetsBinding.instance.addObserver(this);
+    // Aplikasi di layar → sinkron latar belakang tak perlu jalan.
+    unawaited(
+      tandaiLatarDepan(ref.read(sharedPreferencesProvider), true)
+          .catchError((_) {}),
+    );
     // Konsumsi initial message (app diluncurkan dari state killed via tap
     // notif). Pakai post-frame supaya router sudah ter-mount saat di-call.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -177,7 +186,26 @@ class _NotificationTapListenerState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final prefs = ref.read(sharedPreferencesProvider);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      // Keluar layar → sinkron latar belakang boleh mengambil alih.
+      unawaited(tandaiLatarDepan(prefs, false).catchError((_) {}));
+    }
     if (state == AppLifecycleState.resumed && mounted) {
+      unawaited(() async {
+        try {
+          // Sinkron latar belakang (isolate lain) mungkin sudah mengirim
+          // antrian & mencatat kontak dengan server selama aplikasi tertutup.
+          await prefs.reload();
+          await tandaiLatarDepan(prefs, true);
+        } catch (_) {}
+        if (!mounted) return;
+        await ref.read(pendingSyncCountProvider.notifier).refresh();
+        await ref.read(deadLetterCountProvider.notifier).refresh();
+        await ref.read(pendingShiftSyncCountProvider.notifier).refresh();
+        await ref.read(shiftDeadLetterCountProvider.notifier).refresh();
+      }());
       // Background isolate menulis ke SharedPreferences saat app tidak
       // aktif. Provider state in-memory tidak tahu, jadi pas user
       // foreground app, kita re-read disk supaya badge & list sinkron.

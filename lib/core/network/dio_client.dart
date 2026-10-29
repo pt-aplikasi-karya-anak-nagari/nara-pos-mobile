@@ -419,6 +419,15 @@ const _pesanSesiBerakhir = 'Sesi berakhir, silakan login ulang.';
 
 void _showErrorToast(String message, {bool kondisiMenetap = false}) {
   if (!_peredamToast.boleh(message, kondisiMenetap: kondisiMenetap)) return;
+  // Bisa dipanggil tanpa layar sama sekali (sinkron latar belakang, lihat
+  // sinkron_latar.dart): tak ada overlay → jangan sampai melempar dari dalam
+  // interceptor dan menggantung permintaannya.
+  try {
+    _tampilkanToast(message);
+  } catch (_) {}
+}
+
+void _tampilkanToast(String message) {
   toastification.show(
     type: ToastificationType.error,
     style: ToastificationStyle.fillColored,

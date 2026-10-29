@@ -93,6 +93,7 @@ dependencies:
   sqflite: ^2.4.3
   path: ^1.9.1
   url_launcher: ^6.3.2
+  workmanager: ^0.10.10
 
 dev_dependencies:
   flutter_test:
