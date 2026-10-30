@@ -8,6 +8,10 @@ class Category {
   int order;
   List<Product> products;
 
+  /// Sidik isi kategori dari server (cache perangkat: diambil ulang hanya
+  /// bila versinya berubah). Kosong dari server lama.
+  String version;
+
   Category({
     this.remoteId,
     this.outletRemoteId,
@@ -15,6 +19,7 @@ class Category {
     this.description = '',
     this.order = 0,
     this.products = const [],
+    this.version = '',
   });
 
   factory Category.fromJson(Map<String, dynamic> json) {
@@ -23,6 +28,8 @@ class Category {
       outletRemoteId: json['outlet_id']?.toString(),
       name: json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
+      order: (json['sort_order'] as num?)?.toInt() ?? 0,
+      version: json['version']?.toString() ?? '',
       products: (json['products'] as List? ?? [])
           .map((p) => Product.fromJson(p))
           .toList(),
@@ -38,6 +45,8 @@ class Category {
       'outlet_id': outletRemoteId,
       'name': name,
       'description': description,
+      'sort_order': order,
+      'version': version,
     };
   }
 }

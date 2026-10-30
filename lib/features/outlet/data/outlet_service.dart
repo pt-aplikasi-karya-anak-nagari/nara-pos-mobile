@@ -9,7 +9,9 @@ import '../../user/data/auth_service.dart';
 import '../../user/domain/user.dart';
 import '../../user/domain/assignable_role.dart';
 import '../../products/domain/category.dart';
+import '../../../core/connectivity_service.dart';
 import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/kategori_offline.dart';
 import '../domain/outlet.dart';
 
 /// Cache offline daftar outlet (global, lintas-outlet) + kategori per outlet.
@@ -20,11 +22,6 @@ final _outletCache = EntityCache<Outlet>(
   'outlets',
   toJson: (o) => o.toCacheJson(),
   fromJson: Outlet.fromJson,
-);
-final _categoryCache = EntityCache<Category>(
-  'categories',
-  toJson: (c) => c.toCacheJson(),
-  fromJson: Category.fromJson,
 );
 
 class OutletService extends BaseApiService {
@@ -233,6 +230,46 @@ class OutletService extends BaseApiService {
       if (kode == 404 || kode == 405) return null;
       rethrow;
     }
+  }
+
+  /// Versi kategori outlet (pola sama dengan [getProductVersions]). Null =
+  /// server lama tanpa endpoint ini.
+  Future<VersiKatalogServer?> getCategoryVersions(
+    String outletId, {
+    int sejak = 0,
+  }) async {
+    try {
+      final res = await dio.get<dynamic>(
+        ApiEndpoint.outletCategoryVersions(outletId),
+        queryParameters: {'since': sejak},
+        options: Options(extra: {'senyap': true}),
+      );
+      final body = res.data;
+      return VersiKatalogServer.dari(body is Map ? body['data'] : null);
+    } on DioException catch (e) {
+      final kode = e.response?.statusCode;
+      if (kode == 404 || kode == 405) return null;
+      rethrow;
+    }
+  }
+
+  /// Kategori untuk [ids] (mentah, tanpa produk, membawa `version`).
+  Future<List<Map<String, dynamic>>> getCategoriesByIds(
+    String outletId,
+    List<String> ids,
+  ) async {
+    final res = await dio.get<dynamic>(
+      ApiEndpoint.outletCategoriesByIds(outletId),
+      queryParameters: {'ids': ids.join(',')},
+      options: Options(extra: {'senyap': true}),
+    );
+    final body = res.data;
+    final list = body is Map ? body['data'] : null;
+    return [
+      if (list is List)
+        for (final m in list)
+          if (m is Map) Map<String, dynamic>.from(m),
+    ];
   }
 
   /// Produk lengkap untuk [ids] (maksimal 100 per panggilan). Senyap, sama
@@ -756,15 +793,23 @@ final outletEmployeesProvider = FutureProvider.family<List<User>, String>((
   return ref.watch(outletServiceProvider).getEmployees(outletId);
 });
 
+/// Kategori outlet — dari simpanan perangkat (lihat kategori_offline.dart).
+/// Online: diperiksa dulu ke server dengan versi (murah bila tak berubah; bila
+/// berubah, hanya kategori yang berubah diambil). Offline / gagal: yang
+/// tersimpan — termasuk dari folder cadangan setelah install ulang.
 final outletCategoriesProvider = FutureProvider.family<List<Category>, String>((
   ref,
   outletId,
 ) async {
-  return readThroughCache(
-    cache: _categoryCache,
-    outletId: outletId,
-    fetch: () => ref.read(outletServiceProvider).getCategories(outletId),
-  );
+  final lokal = ref.read(kategoriLokalProvider);
+  if (!ref.read(isOfflineProvider)) {
+    try {
+      await ref.read(kategoriOfflineSyncProvider).sinkron(outletId);
+    } catch (_) {
+      // Offline / galat server: pakai yang tersimpan.
+    }
+  }
+  return [for (final m in await lokal.muat(outletId)) Category.fromJson(m)];
 });
 
 /// Daftar produk favorit untuk satu outlet, langsung dari endpoint khusus.

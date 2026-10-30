@@ -8,6 +8,7 @@ import '../../features/products/domain/product.dart';
 import '../../features/user/data/auth_service.dart';
 import '../connectivity_service.dart';
 import '../outlet_scope.dart';
+import 'kategori_offline.dart';
 import 'product_cache.dart';
 
 class HasilSinkronProduk {
@@ -288,6 +289,16 @@ class SinkronProduk {
     if (hasil.daftarBerubah) {
       _ref.read(katalogLokalBerubahProvider.notifier).state++;
     }
+    // Kategori ikut diperiksa dengan pemicu yang sama (pola versi yang sama:
+    // murah bila tak berubah). Yang berubah → chip kategori kasir dimuat ulang.
+    try {
+      final kategori = await _ref
+          .read(kategoriOfflineSyncProvider)
+          .sinkron(outletId);
+      if (kategori.adaPerubahan) {
+        _ref.invalidate(outletCategoriesProvider(outletId));
+      }
+    } catch (_) {}
     return hasil;
   }
 }
