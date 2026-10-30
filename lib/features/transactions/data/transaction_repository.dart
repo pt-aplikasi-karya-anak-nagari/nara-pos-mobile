@@ -362,6 +362,10 @@ class TransactionRepository {
     int? displayPointsEarned,
     int pointsUsed = 0,
     String? promoCode,
+    // Potongan promo resmi + tukar poin yang dihitung aplikasi dari aturan
+    // outlet — dikecualikan dari batas diskon kasir saat offline (sama
+    // dengan server).
+    double diskonResmi = 0,
     String? tableId,
     String? tableName,
     String? paymentProofUrl,
@@ -518,9 +522,9 @@ class TransactionRepository {
         final batas = pengaturan.maxDiscountPercent;
         final persen = persenDiskonKasir(
           cart,
-          diskonOrder: diskonOrderDari(
-            diskonTotal: discountTotal,
-            keranjang: cart,
+          diskonOrder: diskonOrderKasir(
+            diskonOrderDari(diskonTotal: discountTotal, keranjang: cart),
+            diskonResmi: diskonResmi,
           ),
         );
         if (melebihiBatasDiskon(persen, batas)) {

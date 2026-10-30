@@ -422,6 +422,7 @@ class PaymentSheet extends HookConsumerWidget {
             serviceCharge: serviceCharge,
             total: total,
             promoCode: appliedPromo.value?.code,
+            diskonResmi: promoDiscount + pointsDiscount,
             paymentMethod: method,
             cashAmount: splitActive
                 ? splitCashPaid

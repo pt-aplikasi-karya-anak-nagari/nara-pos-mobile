@@ -64,6 +64,14 @@ double diskonOrderDari({
   return sisa < 0 ? 0 : sisa;
 }
 
+/// Bagian diskon order yang diberikan KASIR: diskon order dikurangi potongan
+/// promo resmi & tukar poin. Padanan `diskonOrderKasir` di server — promo
+/// buatan Pemilik dan poin pelanggan bukan diskon kasir. Tak pernah negatif.
+double diskonOrderKasir(double diskonOrder, {double diskonResmi = 0}) {
+  final d = diskonOrder - (diskonResmi < 0 ? 0 : diskonResmi);
+  return d < 0 ? 0 : d;
+}
+
 /// Apakah [persen] melebihi [batas] — sama dengan server (toleransi 0,001).
 /// Batas 0 atau kurang = tak ada batas.
 bool melebihiBatasDiskon(double persen, num batas) =>
