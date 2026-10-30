@@ -35,12 +35,18 @@ class OutletAppSettings {
   /// bawaan server.
   final bool allowOfflineCashierSwitch;
 
+  /// Pemilik mengizinkan "Pesanan Custom" (nama & harga diketik kasir, tanpa
+  /// stok). Aktif bila tak disebut — sama dengan bawaan server, yang juga
+  /// menolak pesanan custom bila dimatikan.
+  final bool allowCustomItems;
+
   const OutletAppSettings({
     this.requirePinRefund = false,
     this.requirePinVoid = false,
     this.maxDiscountPercent = 0,
     this.maxOfflineHours = 0,
     this.allowOfflineCashierSwitch = true,
+    this.allowCustomItems = true,
   });
 
   factory OutletAppSettings.fromJson(Map<String, dynamic> json) {
@@ -57,6 +63,7 @@ class OutletAppSettings {
       },
       allowOfflineCashierSwitch:
           json['allow_offline_cashier_switch'] as bool? ?? true,
+      allowCustomItems: json['allow_custom_items'] as bool? ?? true,
     );
   }
 
@@ -69,6 +76,7 @@ class OutletAppSettings {
         'max_discount_percent': maxDiscountPercent,
         'max_offline_hours': maxOfflineHours,
         'allow_offline_cashier_switch': allowOfflineCashierSwitch,
+        'allow_custom_items': allowCustomItems,
       };
 }
 

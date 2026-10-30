@@ -11,6 +11,7 @@ import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:sizer/sizer.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
+import '../../settings/data/app_settings.dart';
 import '../../../app/app_routes.dart';
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
@@ -1632,6 +1633,28 @@ class CustomOrderSheet extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final nameCtrl = useTextEditingController();
     final priceCtrl = useTextEditingController();
+
+    // Pemilik bisa mematikan pesanan custom (server ikut menolaknya). Dicek
+    // di sini supaya berlaku dari semua pintu masuk — header & rail.
+    final diizinkan =
+        ref.watch(outletAppSettingsProvider).value?.allowCustomItems ?? true;
+    if (!diizinkan) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Text(
+            'Pesanan custom dimatikan Pemilik untuk outlet ini. Pilih produk '
+            'dari katalog, atau minta Pemilik mengaktifkannya di Pengaturan App.',
+            style: TextStyle(color: kTextMid, fontSize: 14, height: 1.5),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: EdgeInsets.only(
