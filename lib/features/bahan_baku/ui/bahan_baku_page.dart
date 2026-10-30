@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:gap/gap.dart';
 
 import '../../../app/theme.dart';
+import '../../../shared/widgets/pin_stok.dart';
 import '../../../core/format.dart';
 import '../../../core/outlet_scope.dart';
 import '../data/bahan_baku_service.dart';
@@ -98,8 +99,14 @@ class _IngredientsTab extends ConsumerWidget {
     );
     if (result == null || result == 0) return;
     try {
-      await ref.read(bahanBakuServiceProvider).adjustStock(ing.id, result);
-      ref.invalidate(ingredientsProvider);
+      if (!context.mounted) return;
+      final ok = await denganPinStok(context, (pin) async {
+        await ref
+            .read(bahanBakuServiceProvider)
+            .adjustStock(ing.id, result, overridePin: pin);
+        return true;
+      });
+      if (ok == true) ref.invalidate(ingredientsProvider);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

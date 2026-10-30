@@ -21,17 +21,19 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
-    <!-- Android <= 11 menolak memindai perangkat Bluetooth tanpa izin lokasi.
-         maxSdkVersion menutupnya di Android 12+, supaya kasir tidak dimintai
-         izin lokasi yang memang tak dipakai aplikasi ini untuk apa pun.
-
-         Tanpa deklarasi ini, jalur cadangan Permission.location di
-         SystemPermissionService selalu gagal — dan itulah yang terjadi selama
-         ini pada perangkat Android 11 ke bawah. -->
+    <!-- Lokasi. Dua pemakai:
+         - Android <= 11 menolak memindai perangkat Bluetooth (printer) tanpa
+           izin lokasi;
+         - absensi: outlet yang mewajibkan radius lokasi memeriksa posisi saat
+           absen masuk/pulang (internal/attendance/aturan.go di backend).
+         Dulu dibatasi maxSdkVersion=30 karena hanya dipakai Bluetooth. Kini
+         diperlukan di semua versi; tools:node="replace" menimpa deklarasi
+         ber-maxSdkVersion dari manifest plugin supaya batas itu tak ikut
+         ter-merge. Izin hanya DIMINTA saat absen di outlet yang mewajibkannya. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+        tools:node="replace" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
-        android:maxSdkVersion="30" />
+        tools:node="replace" />
 
     <!-- Android 13+ menahan SEMUA notifikasi sampai izin ini diberikan.
          Aplikasi ini memakai FCM untuk memberitahu kasir ada pesanan QR baru;

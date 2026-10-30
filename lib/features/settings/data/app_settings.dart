@@ -40,6 +40,13 @@ class OutletAppSettings {
   /// menolak pesanan custom bila dimatikan.
   final bool allowCustomItems;
 
+  /// Aturan absensi (backend internal/attendance/aturan.go). Aplikasi
+  /// memakainya untuk menyiapkan bukti: meminta lokasi hanya bila radius
+  /// aktif, dan mewajibkan foto di layar absen. Server tetap yang memutuskan.
+  final int absenRadiusMeter;
+  final bool absenWajibFoto;
+  final bool absenPerangkatTerdaftar;
+
   const OutletAppSettings({
     this.requirePinRefund = false,
     this.requirePinVoid = false,
@@ -47,6 +54,9 @@ class OutletAppSettings {
     this.maxOfflineHours = 0,
     this.allowOfflineCashierSwitch = true,
     this.allowCustomItems = true,
+    this.absenRadiusMeter = 0,
+    this.absenWajibFoto = false,
+    this.absenPerangkatTerdaftar = false,
   });
 
   factory OutletAppSettings.fromJson(Map<String, dynamic> json) {
@@ -64,6 +74,13 @@ class OutletAppSettings {
       allowOfflineCashierSwitch:
           json['allow_offline_cashier_switch'] as bool? ?? true,
       allowCustomItems: json['allow_custom_items'] as bool? ?? true,
+      absenRadiusMeter: switch (json['absen_radius_meter']) {
+        final num n => n.toInt(),
+        final Object? v => int.tryParse('${v ?? ''}') ?? 0,
+      },
+      absenWajibFoto: json['absen_wajib_foto'] as bool? ?? false,
+      absenPerangkatTerdaftar:
+          json['absen_perangkat_terdaftar'] as bool? ?? false,
     );
   }
 
@@ -77,6 +94,9 @@ class OutletAppSettings {
         'max_offline_hours': maxOfflineHours,
         'allow_offline_cashier_switch': allowOfflineCashierSwitch,
         'allow_custom_items': allowCustomItems,
+        'absen_radius_meter': absenRadiusMeter,
+        'absen_wajib_foto': absenWajibFoto,
+        'absen_perangkat_terdaftar': absenPerangkatTerdaftar,
       };
 }
 

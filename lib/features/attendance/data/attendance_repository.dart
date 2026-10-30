@@ -6,6 +6,7 @@ import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/outlet_scope.dart';
 import '../domain/attendance.dart';
+import 'bukti_absen.dart';
 
 class AttendanceApiService extends BaseApiService {
   AttendanceApiService(super.dio);
@@ -72,7 +73,8 @@ final attendanceApiServiceProvider = Provider<AttendanceApiService>((ref) {
 
 class AttendanceRepository {
   final AttendanceApiService api;
-  AttendanceRepository(this.api);
+  final BuktiAbsen? bukti;
+  AttendanceRepository(this.api, {this.bukti});
 
   Future<Attendance> checkIn({
     required String outletId,
@@ -83,6 +85,7 @@ class AttendanceRepository {
       'outlet_id': outletId,
       'photo_url': photoUrl ?? '',
       'notes': notes ?? '',
+      ...?await bukti?.susun(outletId: outletId, jenis: 'masuk'),
     });
     if (res == null) throw 'Response check-in kosong';
     return Attendance.fromJson(res);
@@ -90,12 +93,14 @@ class AttendanceRepository {
 
   Future<void> checkOut(
     String id, {
+    required String outletId,
     String? photoUrl,
     String? notes,
   }) async {
     await api.checkOut(id, {
       'photo_url': photoUrl ?? '',
       'notes': notes ?? '',
+      ...?await bukti?.susun(outletId: outletId, jenis: 'pulang'),
     });
   }
 
@@ -116,7 +121,10 @@ class AttendanceRepository {
 }
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
-  return AttendanceRepository(ref.watch(attendanceApiServiceProvider));
+  return AttendanceRepository(
+    ref.watch(attendanceApiServiceProvider),
+    bukti: ref.watch(buktiAbsenProvider),
+  );
 });
 
 /// Sesi absensi aktif user (null kalau belum check-in atau sudah

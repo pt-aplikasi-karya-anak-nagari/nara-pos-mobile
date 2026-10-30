@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'api_response.dart';
+import 'galat_api.dart';
 
 abstract class BaseApiService {
   final Dio dio;
@@ -119,11 +120,15 @@ abstract class BaseApiService {
     }
   }
 
-  String _handleDioError(DioException e) {
+  /// Pesan galat untuk pengguna — atau [GalatApi] bila server menyertakan
+  /// kode mesin, supaya pemanggil bisa bertindak (mis. membuka dialog PIN).
+  Object _handleDioError(DioException e) {
     final data = e.response?.data;
     if (data is Map) {
       final message = data['message'];
+      final kode = data['code']?.toString() ?? '';
       if (message != null && message.toString().isNotEmpty) {
+        if (kode.isNotEmpty) return GalatApi(kode, message.toString());
         return message.toString();
       }
       // Backend validator mengirim { success: false, errors: [...] }.

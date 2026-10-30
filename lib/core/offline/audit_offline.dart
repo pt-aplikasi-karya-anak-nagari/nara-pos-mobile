@@ -203,3 +203,14 @@ Future<void> _daftarkanKunciSekali(
       .daftarkanKunci(outletId, deviceId, pub);
   await prefs.setString(kunciPrefs, ok ? pub : 'konflik:$pub');
 }
+
+/// Pastikan kunci perangkat ini sudah terdaftar di outlet — dipanggil
+/// sebelum absen di outlet yang mewajibkan perangkat terdaftar, supaya
+/// tablet yang baru dipasang tak perlu menunggu laporan berkala 5 menit.
+Future<void> pastikanKunciPerangkatTerdaftar(Ref ref, String outletId) async {
+  try {
+    await _daftarkanKunciSekali(ref, outletId, DeviceIdentity.current.id);
+  } catch (_) {
+    // Server yang memutuskan; galatnya muncul sebagai penolakan absen.
+  }
+}

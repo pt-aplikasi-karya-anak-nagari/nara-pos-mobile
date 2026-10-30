@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:gap/gap.dart';
 
 import '../../../app/theme.dart';
+import '../../../shared/widgets/pin_stok.dart';
 import '../data/bahan_baku_service.dart';
 
 /// Halaman full-screen Stock Opname bahan baku (B1). Menampilkan SELURUH bahan
@@ -74,11 +75,23 @@ class _StockOpnamePageState extends ConsumerState<StockOpnamePage> {
 
     setState(() => _submitting = true);
     try {
-      final changed = await ref
-          .read(bahanBakuServiceProvider)
-          .bulkOpname(widget.outletId, items, note: _noteCtrl.text);
-      ref.invalidate(ingredientsProvider);
+      final changed = await denganPinStok(
+        context,
+        (pin) => ref
+            .read(bahanBakuServiceProvider)
+            .bulkOpname(
+              widget.outletId,
+              items,
+              note: _noteCtrl.text,
+              overridePin: pin,
+            ),
+      );
       if (!mounted) return;
+      if (changed == null) {
+        setState(() => _submitting = false); // PIN dibatalkan
+        return;
+      }
+      ref.invalidate(ingredientsProvider);
       Navigator.pop(context, changed);
     } catch (e) {
       if (!mounted) return;

@@ -95,6 +95,7 @@ dependencies:
   url_launcher: ^6.3.2
   workmanager: ^0.10.10
   cryptography: ^2.9.0
+  geolocator: ^14.1.2
 
 dev_dependencies:
   flutter_test:

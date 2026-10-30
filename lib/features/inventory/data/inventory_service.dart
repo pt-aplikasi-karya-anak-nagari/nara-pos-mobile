@@ -68,6 +68,7 @@ class InventoryService extends BaseApiService {
     String productId,
     int qtyDelta, {
     String reason = '',
+    String? overridePin,
   }) async {
     await post(
       '/outlets/$outletId/inventory/adjust',
@@ -76,6 +77,9 @@ class InventoryService extends BaseApiService {
         'type': qtyDelta >= 0 ? 'restock' : 'adjustment',
         'qty_delta': qtyDelta,
         'reason': reason,
+        // PIN atasan bila pengurangan melebihi batas outlet (perlu_pin_stok).
+        if (overridePin != null && overridePin.isNotEmpty)
+          'override_pin': overridePin,
       },
       converter: (data) => data,
     );

@@ -24,6 +24,8 @@
 	<string>NARA POS memakai Bluetooth untuk menyambung ke printer struk termal di kasir.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Kamera dipakai untuk memindai barcode produk saat transaksi dan saat menambah produk.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Lokasi dipakai untuk memastikan absensi dilakukan di outlet, bila outlet mewajibkannya.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Galeri dipakai untuk memilih foto produk dan logo struk.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

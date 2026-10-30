@@ -12,6 +12,7 @@ import '../../../core/image_crop.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/outlet_scope.dart';
 import '../../../core/responsive.dart';
+import '../../settings/data/app_settings.dart';
 import '../data/attendance_repository.dart';
 import '../domain/attendance.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
@@ -382,21 +383,25 @@ class _ActiveSessionCard extends HookConsumerWidget {
   }
 
   Future<void> _checkOut(BuildContext context, WidgetRef ref) async {
+    final wajibFoto = await _wajibFoto(ref);
+    if (!context.mounted) return;
     final result = await tampilkanSheetBawah<_AbsenSheetResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _AbsenSheet(
+      builder: (_) => _AbsenSheet(
         title: 'Absen Pulang',
-        subtitle: 'Foto opsional — bisa skip kalau tidak diperlukan.',
+        subtitle: _subjudul(wajibFoto),
         confirmLabel: 'Konfirmasi Pulang',
         confirmColor: kDanger,
+        wajibFoto: wajibFoto,
       ),
     );
     if (result == null) return;
     try {
       await ref.read(attendanceRepositoryProvider).checkOut(
             attendance.id,
+            outletId: attendance.outletId,
             photoUrl: result.photoUrl,
             notes: result.notes,
           );
@@ -500,15 +505,18 @@ class _CheckInCard extends ConsumerWidget {
       );
       return;
     }
+    final wajibFoto = await _wajibFoto(ref);
+    if (!context.mounted) return;
     final result = await tampilkanSheetBawah<_AbsenSheetResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _AbsenSheet(
+      builder: (_) => _AbsenSheet(
         title: 'Absen Masuk',
-        subtitle: 'Foto opsional — bisa skip kalau tidak diperlukan.',
+        subtitle: _subjudul(wajibFoto),
         confirmLabel: 'Konfirmasi Masuk',
         confirmColor: kPrimary,
+        wajibFoto: wajibFoto,
       ),
     );
     if (result == null) return;
@@ -543,6 +551,20 @@ class _CheckInCard extends ConsumerWidget {
 
 // ─── Bottom sheet untuk check-in / check-out ────────────────────────────
 
+/// Outlet mewajibkan foto saat absen? Gagal baca → tidak (server tetap
+/// menolak absen tanpa foto bila aturannya aktif).
+Future<bool> _wajibFoto(WidgetRef ref) async {
+  try {
+    return (await ref.read(outletAppSettingsProvider.future)).absenWajibFoto;
+  } catch (_) {
+    return false;
+  }
+}
+
+String _subjudul(bool wajibFoto) => wajibFoto
+    ? 'Foto wajib — outlet ini mewajibkan foto saat absen.'
+    : 'Foto opsional — bisa skip kalau tidak diperlukan.';
+
 class _AbsenSheetResult {
   final String? photoUrl;
   final String? notes;
@@ -554,11 +576,13 @@ class _AbsenSheet extends HookConsumerWidget {
   final String subtitle;
   final String confirmLabel;
   final Color confirmColor;
+  final bool wajibFoto;
   const _AbsenSheet({
     required this.title,
     required this.subtitle,
     required this.confirmLabel,
     required this.confirmColor,
+    this.wajibFoto = false,
   });
 
   @override
@@ -736,7 +760,9 @@ class _AbsenSheet extends HookConsumerWidget {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: uploading.value
+              // Outlet yang mewajibkan foto: tombol menunggu foto terunggah.
+              onPressed: uploading.value ||
+                      (wajibFoto && (photoUrl.value ?? '').isEmpty)
                   ? null
                   : () => Navigator.pop(
                         context,

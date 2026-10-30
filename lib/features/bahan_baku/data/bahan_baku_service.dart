@@ -165,10 +165,20 @@ class BahanBakuService extends BaseApiService {
     );
   }
 
-  Future<void> adjustStock(String ingredientId, double delta, {String note = ''}) async {
+  Future<void> adjustStock(
+    String ingredientId,
+    double delta, {
+    String note = '',
+    String? overridePin,
+  }) async {
     await post(
       '/ingredients/$ingredientId/adjust',
-      data: {'delta': delta, 'note': note},
+      data: {
+        'delta': delta,
+        'note': note,
+        if (overridePin != null && overridePin.isNotEmpty)
+          'override_pin': overridePin,
+      },
       converter: (data) => data,
     );
   }
@@ -180,11 +190,14 @@ class BahanBakuService extends BaseApiService {
     String outletId,
     List<({String ingredientId, double actualQty})> items, {
     String? note,
+    String? overridePin,
   }) async {
     return post<int>(
       '/outlets/$outletId/ingredients/opname',
       data: {
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        if (overridePin != null && overridePin.isNotEmpty)
+          'override_pin': overridePin,
         'items': items
             .map((e) => {
                   'ingredient_id': e.ingredientId,

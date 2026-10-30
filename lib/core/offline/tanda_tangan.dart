@@ -68,6 +68,16 @@ String kanonikTransaksi(Map<String, dynamic> p) {
   ].join('\n');
 }
 
+/// Isi yang ditandatangani saat absen. HARUS identik dengan
+/// attendance.PesanAbsen di server. MURNI.
+String pesanAbsen({
+  required String outletId,
+  required String userId,
+  required String jenis, // masuk | pulang
+  required String waktu,
+  required String deviceId,
+}) => ['absen', 'v1', outletId, userId, jenis, waktu, deviceId].join('|');
+
 class KunciTandaTangan {
   KunciTandaTangan({FlutterSecureStorage? secure, List<int>? benih})
     : _secure = secure ?? const FlutterSecureStorage(),
@@ -100,6 +110,13 @@ class KunciTandaTangan {
   Future<String> kunciPublik() async {
     final pub = await (await _kunci()).extractPublicKey();
     return base64Encode(pub.bytes);
+  }
+
+  /// Tanda tangan (base64) atas teks apa adanya — dipakai bukti absensi
+  /// ([pesanAbsen]).
+  Future<String> tandatanganiTeks(String teks) async {
+    final sig = await _algo.sign(utf8.encode(teks), keyPair: await _kunci());
+    return base64Encode(sig.bytes);
   }
 
   /// Tanda tangan (base64) atas isi kanonik [payload].
