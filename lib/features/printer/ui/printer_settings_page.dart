@@ -10,6 +10,7 @@ import '../../../core/app_icons.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/responsive.dart';
 import '../../../shared/widgets/tablet_components.dart';
+import '../data/printer_lan.dart';
 import '../data/printer_service.dart';
 import '../data/printer_settings.dart';
 import '../data/receipt_settings_repository.dart';
@@ -42,6 +43,12 @@ class PrinterSettingsPage extends HookConsumerWidget {
 
     Future<void> refreshStatus() async {
       connected.value = await service.isConnected;
+      // Printer LAN tak butuh Bluetooth maupun izin perangkat sekitar.
+      if (service.pakaiLan) {
+        btEnabled.value = true;
+        permissionOk.value = true;
+        return;
+      }
       btEnabled.value = await service.isBluetoothEnabled;
       permissionOk.value = await service.isPermissionGranted;
     }
@@ -129,6 +136,49 @@ class PrinterSettingsPage extends HookConsumerWidget {
       }
     }
 
+    Future<void> tambahLan() async {
+      final alamat = await showDialog<AlamatPrinterLan>(
+        context: context,
+        builder: (_) => _DialogPrinterLan(
+          awal: AlamatPrinterLan.dariKunci(settings.deviceMac),
+        ),
+      );
+      if (alamat == null) return;
+      connecting.value = true;
+      try {
+        final ok = await service.connect(alamat.kunci);
+        if (ok) {
+          await ref
+              .read(printerSettingsProvider.notifier)
+              .setDevice(
+                mac: alamat.kunci,
+                name: 'Printer LAN ${alamat.label}',
+              );
+        }
+        connected.value = ok;
+        if (ok) {
+          btEnabled.value = true;
+          permissionOk.value = true;
+        }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                ok
+                    ? 'Printer ${alamat.label} tersimpan'
+                    : 'Printer ${alamat.label} tidak bisa dihubungi. Pastikan '
+                          'tablet & printer di jaringan Wi-Fi yang sama dan '
+                          'alamat IP-nya benar.',
+              ),
+              backgroundColor: ok ? kSuccess : kDanger,
+            ),
+          );
+        }
+      } finally {
+        connecting.value = false;
+      }
+    }
+
     Future<void> disconnect() async {
       await service.disconnect();
       connected.value = false;
@@ -171,6 +221,7 @@ class PrinterSettingsPage extends HookConsumerWidget {
       settings: settings,
       onScan: loadPaired,
       onConnect: connect,
+      onTambahLan: tambahLan,
       onDisconnect: disconnect,
       onTestPrint: testPrint,
       onRequestPermission: showPermissionSheet,
@@ -341,6 +392,7 @@ class _DevicePanel extends StatelessWidget {
   final PrinterSettings settings;
   final VoidCallback onScan;
   final Future<void> Function(BluetoothInfo) onConnect;
+  final Future<void> Function() onTambahLan;
   final Future<void> Function() onDisconnect;
   final Future<void> Function() onTestPrint;
   final VoidCallback onRequestPermission;
@@ -353,6 +405,7 @@ class _DevicePanel extends StatelessWidget {
     required this.settings,
     required this.onScan,
     required this.onConnect,
+    required this.onTambahLan,
     required this.onDisconnect,
     required this.onTestPrint,
     required this.onRequestPermission,
@@ -390,6 +443,28 @@ class _DevicePanel extends StatelessWidget {
               connecting: connecting && d.macAdress == settings.deviceMac,
               onTap: () => onConnect(d),
             ),
+
+        // ── Printer jaringan (LAN / Wi-Fi)
+        const Gap(20),
+        _SectionLabel(title: 'Printer Jaringan (LAN / Wi-Fi)'),
+        const Gap(10),
+        if (AlamatPrinterLan.dariKunci(settings.deviceMac) case final lan?)
+          _DeviceTile(
+            name: settings.deviceName,
+            mac: lan.label,
+            active: true,
+            connecting: connecting,
+            onTap: onTambahLan,
+          ),
+        OutlinedButton.icon(
+          onPressed: connecting ? null : onTambahLan,
+          icon: const Icon(Icons.lan_outlined, size: 18),
+          label: Text(
+            AlamatPrinterLan.dariKunci(settings.deviceMac) == null
+                ? 'Pakai printer jaringan'
+                : 'Ubah alamat printer jaringan',
+          ),
+        ),
 
         // ── Action buttons (only when a device is saved)
         if (settings.hasDevice) ...[
@@ -1831,10 +1906,26 @@ class _ReceiptPreview extends StatelessWidget {
                   ColorFiltered(
                     // Printer thermal hitam-putih.
                     colorFilter: const ColorFilter.matrix(<double>[
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0.2126, 0.7152, 0.0722, 0, 0,
-                      0, 0, 0, 1, 0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0.2126,
+                      0.7152,
+                      0.0722,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      1,
+                      0,
                     ]),
                     child: Image.network(
                       resolveAssetUrl(logoUrl),
@@ -2135,6 +2226,80 @@ class _PermissionBullet extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Masukan alamat printer jaringan. Mengembalikan alamat yang sah.
+class _DialogPrinterLan extends StatefulWidget {
+  const _DialogPrinterLan({this.awal});
+  final AlamatPrinterLan? awal;
+
+  @override
+  State<_DialogPrinterLan> createState() => _DialogPrinterLanState();
+}
+
+class _DialogPrinterLanState extends State<_DialogPrinterLan> {
+  late final _ctrl = TextEditingController(
+    text: widget.awal == null
+        ? ''
+        : '${widget.awal!.host}:${widget.awal!.port}',
+  );
+  String? _galat;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _simpan() {
+    final a = AlamatPrinterLan.urai(_ctrl.text);
+    if (a == null) {
+      setState(
+        () => _galat =
+            'Alamat tidak sah. Contoh: 192.168.1.50 atau 192.168.1.50:9100',
+      );
+      return;
+    }
+    Navigator.pop(context, a);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Printer jaringan'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Masukkan alamat IP printer (lihat struk tes printer atau '
+            'pengaturan router). Tablet dan printer harus di jaringan Wi-Fi '
+            'yang sama. Port bawaan 9100.',
+          ),
+          const Gap(12),
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            onSubmitted: (_) => _simpan(),
+            decoration: InputDecoration(
+              labelText: 'Alamat IP',
+              hintText: '192.168.1.50',
+              errorText: _galat,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(onPressed: _simpan, child: const Text('Hubungkan')),
+      ],
     );
   }
 }

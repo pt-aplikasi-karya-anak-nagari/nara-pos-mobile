@@ -14,6 +14,7 @@ import '../../transactions/domain/sale.dart';
 import '../../shifts/domain/shift.dart';
 import '../../../core/outlet_scope.dart';
 import 'logo_struk.dart';
+import 'printer_lan.dart';
 import 'printer_settings.dart';
 import 'receipt_settings_repository.dart';
 import 'role_printer_config_repository.dart';
@@ -66,12 +67,34 @@ class PrinterService {
 
   Future<bool> get isBluetoothEnabled => PrintBluetoothThermal.bluetoothEnabled;
 
-  Future<bool> get isConnected => PrintBluetoothThermal.connectionStatus;
+  /// Printer LAN yang tersimpan, atau null bila printernya Bluetooth.
+  AlamatPrinterLan? get _lan =>
+      AlamatPrinterLan.dariKunci(_ref.read(printerSettingsProvider).deviceMac);
+
+  /// Printer tersimpan adalah printer jaringan (LAN/Wi-Fi)?
+  bool get pakaiLan => _lan != null;
+
+  /// Bluetooth: status sambungan. LAN: printer bisa dihubungi.
+  Future<bool> get isConnected async {
+    final lan = _lan;
+    if (lan != null) return cekPrinterLan(lan);
+    return PrintBluetoothThermal.connectionStatus;
+  }
+
+  /// Kirim byte ESC/POS ke printer tersimpan — LAN lewat TCP, selain itu
+  /// Bluetooth.
+  Future<bool> _kirim(List<int> bytes) async {
+    final lan = _lan;
+    if (lan != null) return kirimKePrinterLan(lan, bytes);
+    return PrintBluetoothThermal.writeBytes(bytes);
+  }
 
   Future<List<BluetoothInfo>> pairedDevices() =>
       PrintBluetoothThermal.pairedBluetooths;
 
   Future<bool> connect(String mac) async {
+    final lan = AlamatPrinterLan.dariKunci(mac);
+    if (lan != null) return cekPrinterLan(lan);
     final connected = await PrintBluetoothThermal.connectionStatus;
     if (connected) {
       await PrintBluetoothThermal.disconnect;
@@ -79,9 +102,15 @@ class PrinterService {
     return PrintBluetoothThermal.connect(macPrinterAddress: mac);
   }
 
-  Future<bool> disconnect() => PrintBluetoothThermal.disconnect;
+  Future<bool> disconnect() async {
+    if (pakaiLan) return true; // LAN: koneksi dibuka-tutup per cetakan
+    return PrintBluetoothThermal.disconnect;
+  }
 
   Future<bool> _ensureConnected() async {
+    final s0 = _ref.read(printerSettingsProvider);
+    if (!s0.hasDevice) return false;
+    if (pakaiLan) return true; // dibuka saat mengirim
     if (await PrintBluetoothThermal.connectionStatus) return true;
     final s = _ref.read(printerSettingsProvider);
     if (!s.hasDevice) return false;
@@ -105,14 +134,19 @@ class PrinterService {
   /// Logo kepala struk dari Pengaturan Struk outlet. Null bila outlet tak
   /// punya logo atau logonya dimatikan — struk lalu tercetak tanpa logo.
   /// Tak pernah melempar: logo yang gagal dimuat tak boleh menggagalkan cetak.
-  Future<img.Image?> _logoStruk(OutletReceiptSettings? rs, PaperSize kertas) async {
+  Future<img.Image?> _logoStruk(
+    OutletReceiptSettings? rs,
+    PaperSize kertas,
+  ) async {
     try {
       if (rs == null || !rs.headerShowLogo) return null;
       final url = rs.headerLogoUrl?.trim() ?? '';
       final outletId = rs.outletId.isNotEmpty
           ? rs.outletId
           : (_ref.read(activeOutletIdProvider) ?? 'outlet');
-      final bytes = await _ref.read(logoStrukStoreProvider).ambil(outletId, url);
+      final bytes = await _ref
+          .read(logoStrukStoreProvider)
+          .ambil(outletId, url);
       if (bytes == null) return null;
       final lebar = lebarLogoUntuk(kertas);
       final kunci = '$outletId|$url|${bytes.length}|$lebar';
@@ -169,7 +203,7 @@ class PrinterService {
       ...gen.feed(2),
       ...gen.cut(),
     ];
-    return PrintBluetoothThermal.writeBytes(bytes);
+    return _kirim(bytes);
   }
 
   /// Nilai printer efektif (override user → default role → struk outlet →
@@ -180,7 +214,8 @@ class PrinterService {
     // termuat (valueOrNull), tanpa menunggu jaringan → aman offline.
     return EffectivePrinterConfig.resolve(
       user: _ref.read(printerSettingsProvider),
-      role: _ref.read(rolePrinterConfigProvider).asData?.value ??
+      role:
+          _ref.read(rolePrinterConfigProvider).asData?.value ??
           RolePrinterConfig.fallback,
       receipt: rs,
     );
@@ -199,11 +234,18 @@ class PrinterService {
     final logo = await _logoStruk(rs, eff.paperSize);
     final profile = await CapabilityProfile.load();
     final gen = Generator(eff.paperSize, profile);
-    final bytes = _buildReceipt(gen, s, sale, reprint: reprint, logo: logo, rs: rs);
+    final bytes = _buildReceipt(
+      gen,
+      s,
+      sale,
+      reprint: reprint,
+      logo: logo,
+      rs: rs,
+    );
     final copies = eff.copies;
     bool ok = true;
     for (var i = 0; i < copies; i++) {
-      final sent = await PrintBluetoothThermal.writeBytes(bytes);
+      final sent = await _kirim(bytes);
       ok = ok && sent;
     }
     return ok;
@@ -279,7 +321,7 @@ class PrinterService {
     }
     bytes.addAll(gen.feed(2));
     bytes.addAll(gen.cut());
-    return PrintBluetoothThermal.writeBytes(bytes);
+    return _kirim(bytes);
   }
 
   /// Cetak SATU tiket dapur berisi seluruh item pesanan ke printer Bluetooth
@@ -310,7 +352,7 @@ class PrinterService {
       items: cartItems.map(_cartItemToTicketItem).toList(),
     );
     if (!await connect(s.deviceMac)) return false;
-    return PrintBluetoothThermal.writeBytes(bytes);
+    return _kirim(bytes);
   }
 
   KitchenTicketItem _cartItemToTicketItem(CartItem c) => KitchenTicketItem(
@@ -428,7 +470,7 @@ class PrinterService {
     if (!await _ensureConnected()) return false;
     final profile = await CapabilityProfile.load();
     final gen = Generator(s.paperSize, profile);
-    return PrintBluetoothThermal.writeBytes(<int>[...gen.drawer()]);
+    return _kirim(<int>[...gen.drawer()]);
   }
 
   Future<bool> printShiftReport(Shift shift, List<Sale> sales) async {
@@ -589,7 +631,7 @@ class PrinterService {
       ...gen.cut(),
     ];
 
-    return PrintBluetoothThermal.writeBytes(bytes);
+    return _kirim(bytes);
   }
 
   List<int> _buildReceipt(

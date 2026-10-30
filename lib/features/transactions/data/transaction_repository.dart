@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import '../../../core/format.dart';
 import '../../../core/image_compress.dart';
 import '../../../core/network/base_api_service.dart';
 import '../../../core/network/dio_client.dart';
@@ -366,6 +367,8 @@ class TransactionRepository {
     // outlet — dikecualikan dari batas diskon kasir saat offline (sama
     // dengan server).
     double diskonResmi = 0,
+    // Jatuh tempo Bayar Nanti (hanya bila !isPaid). Null = hari ini.
+    DateTime? jatuhTempo,
     String? tableId,
     String? tableName,
     String? paymentProofUrl,
@@ -420,6 +423,8 @@ class TransactionRepository {
       // Σ(amount) == final_amount lalu menyimpan ke transaction_payments.
       if (payments != null && payments.isNotEmpty) 'payments': payments,
       'is_paid': isPaid,
+      if (!isPaid && jatuhTempo != null)
+        'jatuh_tempo': tanggalJatuhTempo(jatuhTempo),
       // Bukti pembayaran (foto QRIS scan / struk transfer) — opsional;
       // kalau cash atau user skip upload, kirim string kosong.
       'payment_proof_url': paymentProofUrl ?? '',

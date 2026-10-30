@@ -83,3 +83,28 @@ class RupiahInputFormatter extends TextInputFormatter {
     );
   }
 }
+
+/// Jatuh tempo → "YYYY-MM-DD" (format yang diterima server). MURNI.
+String tanggalJatuhTempo(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+/// Jatuh tempo untuk ditampilkan, mis. "5 Nov 2026". MURNI.
+String formatTanggalJatuhTempo(DateTime d) {
+  const bulan = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'Mei',
+    'Jun',
+    'Jul',
+    'Agu',
+    'Sep',
+    'Okt',
+    'Nov',
+    'Des',
+  ];
+  return '${d.day} ${bulan[d.month - 1]} ${d.year}';
+}

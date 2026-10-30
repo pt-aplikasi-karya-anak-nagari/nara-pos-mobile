@@ -153,6 +153,8 @@ class PaymentSheet extends HookConsumerWidget {
     // dari backend yang kemudian dikirim sebagai payment_proof_url.
     final proofPath = useState<String?>(null);
     final proofUrl = useState<String?>(null);
+    // Jatuh tempo Bayar Nanti. Null = hari ini (bawaan server).
+    final jatuhTempo = useState<DateTime?>(null);
     final uploadingProof = useState(false);
     // Guard anti double-tap saat checkout sedang diproses.
     final processing = useState(false);
@@ -422,6 +424,9 @@ class PaymentSheet extends HookConsumerWidget {
             serviceCharge: serviceCharge,
             total: total,
             promoCode: appliedPromo.value?.code,
+            jatuhTempo: !splitActive && selectedPM?.type == 'later'
+                ? jatuhTempo.value
+                : null,
             diskonResmi: promoDiscount + pointsDiscount,
             paymentMethod: method,
             cashAmount: splitActive
@@ -1606,6 +1611,14 @@ class PaymentSheet extends HookConsumerWidget {
                   ),
                 ],
               ],
+              // ── Jatuh tempo Bayar Nanti ──
+              if (!splitActive && selectedPM?.type == 'later') ...[
+                const Gap(20),
+                _PilihJatuhTempo(
+                  nilai: jatuhTempo.value,
+                  onUbah: (v) => jatuhTempo.value = v,
+                ),
+              ],
               // ── Upload bukti pembayaran (opsional, untuk metode non-cash) ──
               if (!splitActive &&
                   selectedPM != null &&
@@ -2102,6 +2115,74 @@ class KartuQris extends ConsumerWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Jatuh tempo tagihan Bayar Nanti. Kosong = hari ini. Pemilik melihat
+/// tagihan yang lewat jatuh tempo di halaman Piutang & mendapat pengingat.
+class _PilihJatuhTempo extends StatelessWidget {
+  const _PilihJatuhTempo({required this.nilai, required this.onUbah});
+
+  final DateTime? nilai;
+  final ValueChanged<DateTime?> onUbah;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = nilai == null ? 'Hari ini' : formatTanggalJatuhTempo(nilai!);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kDivider),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_outlined, size: 20, color: kTextMid),
+          const Gap(10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Jatuh tempo',
+                  style: TextStyle(fontSize: 12, color: kTextMid),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: kTextDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (nilai != null)
+            IconButton(
+              tooltip: 'Kembalikan ke hari ini',
+              onPressed: () => onUbah(null),
+              icon: const Icon(Icons.close, size: 18),
+            ),
+          TextButton(
+            onPressed: () async {
+              final kini = DateTime.now();
+              final hari = DateTime(kini.year, kini.month, kini.day);
+              final dipilih = await showDatePicker(
+                context: context,
+                initialDate: nilai ?? hari,
+                firstDate: hari,
+                // Sama dengan batas server (piutang.MaksHariJatuhTempo).
+                lastDate: hari.add(const Duration(days: 365)),
+                helpText: 'Jatuh tempo pembayaran',
+              );
+              if (dipilih != null) onUbah(dipilih);
+            },
+            child: const Text('Ubah'),
+          ),
         ],
       ),
     );
