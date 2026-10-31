@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:nara_pos_mobile/core/shared_prefs.dart';
 import 'package:nara_pos_mobile/features/antrian/data/antrian_service.dart';
+import 'package:nara_pos_mobile/features/antrian/data/pemanggil_suara.dart';
+import 'package:nara_pos_mobile/features/antrian/domain/suara_tts.dart';
 import 'package:nara_pos_mobile/features/antrian/domain/antrian.dart';
 import 'package:nara_pos_mobile/features/antrian/domain/kalimat_panggilan.dart';
 import 'package:nara_pos_mobile/features/antrian/ui/antrian_sheet.dart';
@@ -70,6 +72,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          pemanggilSuaraProvider.overrideWithValue(_SuaraPalsu(prefs)),
           ringkasanAntrianProvider.overrideWith(
             (ref) async => RingkasanAntrian.fromJson({
               'total': 9,
@@ -94,5 +97,27 @@ void main() {
     expect(find.text('Panggil berikutnya · 008'), findsOneWidget);
     expect(find.text('Rina'), findsOneWidget);
     expect(find.text('Panggil ulang'), findsOneWidget);
+    // Pilihan suara: otomatis (paling alami) sebagai bawaan.
+    await t.scrollUntilVisible(
+      find.text('Otomatis (paling alami)'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Otomatis (paling alami)'), findsOneWidget);
   });
+}
+
+/// Tanpa mesin TTS sungguhan di lingkungan tes.
+class _SuaraPalsu extends PemanggilSuara {
+  _SuaraPalsu(super.prefs);
+
+  @override
+  Future<List<SuaraTts>> daftarSuara() async => const [
+    SuaraTts(
+      nama: 'id-id-x-idc-network',
+      lokal: 'id-ID',
+      kualitas: 'very high',
+      butuhInternet: true,
+    ),
+  ];
 }

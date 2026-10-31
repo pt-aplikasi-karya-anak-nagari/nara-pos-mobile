@@ -532,6 +532,7 @@ class _PengaturanSuara extends StatelessWidget {
                 ),
               ],
             ),
+            if (aktif) const _PilihSuara(),
           ],
         ),
       ),
@@ -560,4 +561,67 @@ class _Galat extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Pilihan suara TTS: otomatis (paling alami) atau suara tertentu, dengan
+/// pratinjau saat dipilih.
+class _PilihSuara extends HookConsumerWidget {
+  const _PilihSuara();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final suara = ref.read(pemanggilSuaraProvider);
+    final daftar = useMemoized(suara.daftarSuara);
+    final snap = useFuture(daftar);
+    final pilihan = useState(suara.suaraPilihan);
+
+    if (!snap.hasData) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    }
+    final semua = snap.data!;
+    if (semua.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 4),
+        child: Text(
+          'Perangkat ini belum punya suara bahasa Indonesia, jadi suaranya '
+          'terdengar kaku. Pasang "Speech Services by Google" dari Play Store, '
+          'lalu di Pengaturan → Text-to-speech pilih mesin Google dan unduh '
+          'bahasa Indonesia.',
+          style: const TextStyle(fontSize: 12, color: kWarning),
+        ),
+      );
+    }
+    final ada = semua.any((s) => s.nama == pilihan.value);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: DropdownButtonFormField<String?>(
+        initialValue: ada ? pilihan.value : null,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Pilihan suara',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: [
+          const DropdownMenuItem<String?>(
+            value: null,
+            child: Text('Otomatis (paling alami)'),
+          ),
+          for (final (i, s) in semua.indexed)
+            DropdownMenuItem<String?>(
+              value: s.nama,
+              child: Text(s.label(i + 1), overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        onChanged: (v) {
+          pilihan.value = v;
+          suara.setSuaraPilihan(v);
+          suara.pratinjau(v);
+        },
+      ),
+    );
+  }
 }
