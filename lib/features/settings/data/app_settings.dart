@@ -47,6 +47,11 @@ class OutletAppSettings {
   final bool absenWajibFoto;
   final bool absenPerangkatTerdaftar;
 
+  /// Suara panggilan antrian diatur Pemilik: nyala/mati untuk seluruh outlet
+  /// dan kalimat yang diucapkan (lihat kalimat_panggilan.dart).
+  final bool antrianSuaraAktif;
+  final String antrianTeksPanggilan;
+
   const OutletAppSettings({
     this.requirePinRefund = false,
     this.requirePinVoid = false,
@@ -57,6 +62,8 @@ class OutletAppSettings {
     this.absenRadiusMeter = 0,
     this.absenWajibFoto = false,
     this.absenPerangkatTerdaftar = false,
+    this.antrianSuaraAktif = true,
+    this.antrianTeksPanggilan = '',
   });
 
   factory OutletAppSettings.fromJson(Map<String, dynamic> json) {
@@ -65,8 +72,9 @@ class OutletAppSettings {
       requirePinRefund: json['require_pin_refund'] as bool? ?? false,
       requirePinVoid: json['require_pin_void'] as bool? ?? false,
       // Backend mengirim num; toleran juga bila datang sebagai string.
-      maxDiscountPercent:
-          rawMax is num ? rawMax : num.tryParse('${rawMax ?? ''}') ?? 0,
+      maxDiscountPercent: rawMax is num
+          ? rawMax
+          : num.tryParse('${rawMax ?? ''}') ?? 0,
       maxOfflineHours: switch (json['max_offline_hours']) {
         final num n => n.toInt(),
         final Object? v => int.tryParse('${v ?? ''}') ?? 0,
@@ -81,6 +89,8 @@ class OutletAppSettings {
       absenWajibFoto: json['absen_wajib_foto'] as bool? ?? false,
       absenPerangkatTerdaftar:
           json['absen_perangkat_terdaftar'] as bool? ?? false,
+      antrianSuaraAktif: json['antrian_suara_aktif'] as bool? ?? true,
+      antrianTeksPanggilan: json['antrian_teks_panggilan']?.toString() ?? '',
     );
   }
 
@@ -88,16 +98,18 @@ class OutletAppSettings {
   /// app kasir hanya membaca app-settings (tidak ada layar edit di mobile),
   /// tapi field disertakan supaya nilai bertahan penuh bila nanti ditulis ulang.
   Map<String, dynamic> toJson() => {
-        'require_pin_refund': requirePinRefund,
-        'require_pin_void': requirePinVoid,
-        'max_discount_percent': maxDiscountPercent,
-        'max_offline_hours': maxOfflineHours,
-        'allow_offline_cashier_switch': allowOfflineCashierSwitch,
-        'allow_custom_items': allowCustomItems,
-        'absen_radius_meter': absenRadiusMeter,
-        'absen_wajib_foto': absenWajibFoto,
-        'absen_perangkat_terdaftar': absenPerangkatTerdaftar,
-      };
+    'require_pin_refund': requirePinRefund,
+    'require_pin_void': requirePinVoid,
+    'max_discount_percent': maxDiscountPercent,
+    'max_offline_hours': maxOfflineHours,
+    'allow_offline_cashier_switch': allowOfflineCashierSwitch,
+    'allow_custom_items': allowCustomItems,
+    'absen_radius_meter': absenRadiusMeter,
+    'absen_wajib_foto': absenWajibFoto,
+    'absen_perangkat_terdaftar': absenPerangkatTerdaftar,
+    'antrian_suara_aktif': antrianSuaraAktif,
+    'antrian_teks_panggilan': antrianTeksPanggilan,
+  };
 }
 
 /// Pengaturan aplikasi outlet aktif. Dipakai dialog refund/void untuk tahu
@@ -107,7 +119,9 @@ class OutletAppSettings {
 /// via `ref.read(outletAppSettingsProvider.future)` supaya nilai terjamin
 /// termuat sebelum dialog dibuka. Bila fetch gagal (mis. offline), callsite
 /// fallback ke penanganan error 403 dari backend.
-final outletAppSettingsProvider = FutureProvider<OutletAppSettings>((ref) async {
+final outletAppSettingsProvider = FutureProvider<OutletAppSettings>((
+  ref,
+) async {
   final outletId = ref.watch(activeOutletIdProvider);
   if (outletId == null) return const OutletAppSettings();
   // Disimpan untuk offline: batas diskon kasir dibutuhkan saat berjualan

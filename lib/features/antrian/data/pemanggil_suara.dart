@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/connectivity_service.dart';
 import '../../../core/shared_prefs.dart';
+import '../../settings/data/app_settings.dart';
 import '../domain/kalimat_panggilan.dart';
 import '../domain/suara_tts.dart';
 
@@ -28,8 +29,12 @@ import '../domain/suara_tts.dart';
 /// suara saling menimpa. Tak pernah melempar: kegagalan suara tak
 /// menggagalkan panggilan.
 class PemanggilSuara {
-  PemanggilSuara(this._prefs, {bool Function()? online})
-    : _online = online ?? (() => true);
+  PemanggilSuara(
+    this._prefs, {
+    bool Function()? online,
+    OutletAppSettings Function()? pengaturan,
+  }) : _online = online ?? (() => true),
+       _pengaturan = pengaturan ?? (() => const OutletAppSettings());
 
   static const _kunciAktif = 'antrian.suara.aktif';
   static const _kunciKecepatan = 'antrian.suara.kecepatan';
@@ -37,6 +42,9 @@ class PemanggilSuara {
 
   final SharedPreferences _prefs;
   final bool Function() _online;
+
+  /// Pengaturan outlet dari Pemilik (suara nyala/mati & kalimat panggilan).
+  final OutletAppSettings Function() _pengaturan;
 
   // Dibuat saat pertama dipakai: membuka panel saja tak menyentuh mesin
   // suara (dan panel bisa diuji tanpa perangkat audio).
@@ -49,7 +57,11 @@ class PemanggilSuara {
   List<SuaraTts> _suaraIndonesia = const [];
   String? _suaraTerpasang;
 
+  /// Suara di PERANGKAT INI (membisukan satu tablet saja).
   bool get aktif => _prefs.getBool(_kunciAktif) ?? true;
+
+  /// Pemilik menyalakan suara antrian untuk outlet ini.
+  bool get aktifDiOutlet => _pengaturan().antrianSuaraAktif;
   Future<void> setAktif(bool v) => _prefs.setBool(_kunciAktif, v);
 
   /// Kecepatan bicara 0.3 (pelan) … 0.6 (cepat). Bawaan 0.47 ≈ kecepatan
@@ -134,17 +146,41 @@ class PemanggilSuara {
     } catch (_) {}
   }
 
-  /// Bunyikan panggilan untuk [nomor]. [paksa] membunyikan walau suara
-  /// dimatikan (tombol "Uji suara").
-  Future<void> panggil(String nomor, {bool ulang = false, bool paksa = false}) {
-    if (!paksa && !aktif) return Future.value();
-    return _antre(() => _bunyikan(nomor, ulang: ulang));
+  /// Bunyikan panggilan untuk [nomor]. Diam bila Pemilik mematikan suara
+  /// antrian atau perangkat ini dibisukan; [paksa] tetap membunyikan
+  /// (tombol "Uji suara").
+  Future<void> panggil(
+    String nomor, {
+    bool ulang = false,
+    bool paksa = false,
+    String nama = '',
+    String meja = '',
+  }) {
+    if (!paksa && (!aktif || !aktifDiOutlet)) return Future.value();
+    final teks = susunPanggilan(
+      _pengaturan().antrianTeksPanggilan,
+      nomor,
+      nama: nama,
+      meja: meja,
+      ulang: ulang,
+    );
+    return _antre(() => _bunyikan(teks));
   }
 
   /// Dengarkan satu suara tertentu (pilihan suara di pengaturan); null =
   /// suara otomatis yang akan dipakai saat ini.
-  Future<void> pratinjau(String? namaSuara) =>
-      _antre(() => _bunyikan('001', suara: namaSuara, bel: false));
+  Future<void> pratinjau(String? namaSuara) => _antre(
+    () => _bunyikan(
+      susunPanggilan(
+        _pengaturan().antrianTeksPanggilan,
+        '001',
+        nama: 'Budi',
+        meja: '4',
+      ),
+      suara: namaSuara,
+      bel: false,
+    ),
+  );
 
   Future<void> _antre(Future<void> Function() kerja) {
     final giliran = _antrean.then((_) => kerja());
@@ -153,8 +189,7 @@ class PemanggilSuara {
   }
 
   Future<void> _bunyikan(
-    String nomor, {
-    bool ulang = false,
+    String kalimat, {
     String? suara,
     bool bel = true,
   }) async {
@@ -170,7 +205,7 @@ class PemanggilSuara {
     try {
       await _pasangSuara(paksaNama: suara);
       await _tts.setSpeechRate(kecepatan);
-      await _tts.speak(kalimatPanggilan(nomor, ulang: ulang));
+      await _tts.speak(kalimat);
     } catch (_) {}
   }
 
@@ -187,6 +222,8 @@ final pemanggilSuaraProvider = Provider<PemanggilSuara>((ref) {
   final p = PemanggilSuara(
     ref.watch(sharedPreferencesProvider),
     online: () => !ref.read(isOfflineProvider),
+    pengaturan: () =>
+        ref.read(outletAppSettingsProvider).value ?? const OutletAppSettings(),
   );
   ref.onDispose(p.berhenti);
   return p;

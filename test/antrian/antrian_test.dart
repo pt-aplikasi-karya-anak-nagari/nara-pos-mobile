@@ -18,13 +18,42 @@ void main() {
       expect(ejaNomor('3fa-012'), 'tiga, F, A, nol, satu, dua');
       expect(
         kalimatPanggilan('007'),
-        'Nomor antrian, nol, nol, tujuh. Silakan menuju kasir.',
+        'Nomor antrian nol, nol, tujuh. Silakan menuju kasir.',
       );
       expect(
         kalimatPanggilan('007', ulang: true),
-        startsWith('Panggilan ulang. Nomor antrian, nol, nol, tujuh.'),
+        'Panggilan ulang. Nomor antrian nol, nol, tujuh. Silakan menuju kasir.',
       );
     });
+
+    test('teks Pemilik dengan {nama} & {meja}', () {
+      const t = 'Nomor {nomor} atas nama {nama}, silakan ke meja {meja}.';
+      expect(
+        susunPanggilan(t, '012', nama: 'Rina', meja: '4'),
+        'Nomor nol, satu, dua atas nama Rina, silakan ke meja 4.',
+      );
+    });
+
+    test('bagian [ ] dilewati bila datanya kosong', () {
+      const t =
+          'Nomor {nomor}[ atas nama {nama}][, meja {meja}]. Pesanan siap.';
+      expect(
+        susunPanggilan(t, '007', nama: 'Budi'),
+        'Nomor nol, nol, tujuh atas nama Budi. Pesanan siap.',
+      );
+      expect(susunPanggilan(t, '007'), 'Nomor nol, nol, tujuh. Pesanan siap.');
+    });
+
+    test(
+      'penanda kosong di luar [ ] tak meninggalkan spasi/tanda baca janggal',
+      () {
+        expect(
+          susunPanggilan('Nomor {nomor} {nama}, silakan.', '001'),
+          'Nomor nol, nol, satu, silakan.',
+        );
+        expect(susunPanggilan('  ', '001'), kalimatPanggilan('001'));
+      },
+    );
   });
 
   test('ringkasan dibaca dari JSON server', () {

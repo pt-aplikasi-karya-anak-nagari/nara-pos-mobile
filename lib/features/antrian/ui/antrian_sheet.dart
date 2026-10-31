@@ -8,6 +8,7 @@ import '../../../core/format.dart';
 import '../../../core/outlet_scope.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
 import '../data/antrian_service.dart';
+import '../../settings/data/app_settings.dart';
 import '../data/pemanggil_suara.dart';
 import '../domain/antrian.dart';
 
@@ -31,6 +32,9 @@ class AntrianSheet extends HookConsumerWidget {
     final sibuk = useState<String?>(null); // id yang sedang dipanggil / 'next'
     final suaraAktif = useState(suara.aktif);
     final kecepatan = useState(suara.kecepatan);
+    // Pemilik bisa mematikan suara antrian untuk seluruh outlet.
+    final aktifDiOutlet =
+        ref.watch(outletAppSettingsProvider).value?.antrianSuaraAktif ?? true;
 
     Future<void> panggil({String? id}) async {
       final outletId = ref.read(activeOutletIdProvider);
@@ -43,7 +47,12 @@ class AntrianSheet extends HookConsumerWidget {
             : await api.panggil(outletId, id);
         ref.invalidate(ringkasanAntrianProvider);
         // Suara tak ditunggu: daftar langsung diperbarui selagi berbunyi.
-        suara.panggil(it.nomor, ulang: it.dipanggilKali > 1);
+        suara.panggil(
+          it.nomor,
+          ulang: it.dipanggilKali > 1,
+          nama: it.namaPelanggan,
+          meja: it.meja,
+        );
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -219,6 +228,21 @@ class AntrianSheet extends HookConsumerWidget {
                           ),
                         ],
                         const Gap(20),
+                        if (!aktifDiOutlet) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: kWarning.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'Suara antrian dimatikan Pemilik untuk outlet ini. '
+                              'Nyalakan di web: Pengaturan App → Suara antrian.',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          const Gap(8),
+                        ],
                         _PengaturanSuara(
                           aktif: suaraAktif.value,
                           kecepatan: kecepatan.value,
