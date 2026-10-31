@@ -40,9 +40,9 @@ void main() {
 
     test('berawalan kode perangkat & berurutan', () async {
       final n = buat();
-      expect(await n.berikutnya(), '3FA-1');
-      expect(await n.berikutnya(), '3FA-2');
-      expect(await n.berikutnya(), '3FA-3');
+      expect(await n.berikutnya(), '3FA-001');
+      expect(await n.berikutnya(), '3FA-002');
+      expect(await n.berikutnya(), '3FA-003');
     });
 
     test('kembali ke 1 di hari berikutnya', () async {
@@ -50,12 +50,19 @@ void main() {
       await n.berikutnya();
       await n.berikutnya();
       kini = DateTime(2026, 11, 1, 0, 5);
-      expect(await n.berikutnya(), '3FA-1');
+      expect(await n.berikutnya(), '3FA-001');
     });
 
     test('perangkat tanpa ID tetap mendapat nomor', () async {
-      expect(await buat(id: '').berikutnya(), 'OFF-1');
+      expect(await buat(id: '').berikutnya(), 'OFF-001');
     });
+  });
+
+  test('format tiga digit', () {
+    expect(formatNomorAntrian(1), '001');
+    expect(formatNomorAntrian(42), '042');
+    expect(formatNomorAntrian(999), '999');
+    expect(formatNomorAntrian(1000), '1000');
   });
 
   group('nomor antrian pada transaksi', () {
@@ -63,7 +70,7 @@ void main() {
         Sale.fromJson({'id': 'TX', 'payment_status': 'paid', ...isi});
 
     test('nomor tablet (offline) didahulukan, lalu nomor server', () {
-      expect(jual({'queue_no': 12}).nomorAntrian, '12');
+      expect(jual({'queue_no': 12}).nomorAntrian, '012');
       expect(jual({'queue_label': '3FA-4'}).nomorAntrian, '3FA-4');
       expect(
         jual({'queue_no': 12, 'queue_label': '3FA-4'}).nomorAntrian,
@@ -79,13 +86,13 @@ void main() {
         'queue_no': 7,
         'payment_status': 'paid',
       });
-      expect(s.nomorAntrian, '7');
+      expect(s.nomorAntrian, '007');
       final o = Sale.fromJson({
         'id': 'TX2',
-        'queue_label': '3FA-2',
+        'queue_label': '3FA-002',
         'payment_status': 'paid',
       });
-      expect(o.nomorAntrian, '3FA-2');
+      expect(o.nomorAntrian, '3FA-002');
     });
   });
 
@@ -106,7 +113,7 @@ void main() {
       ),
       items: const [KitchenTicketItem(qty: 1, name: 'Teh')],
     );
-    expect(_memuat(cetak('12'), 'ANTRIAN 12'), isTrue);
+    expect(_memuat(cetak('012'), 'ANTRIAN 012'), isTrue);
     expect(_memuat(cetak(null), 'ANTRIAN'), isFalse);
   });
 }

@@ -368,7 +368,7 @@ class _MenuOrderCard extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '#${order.queueNo}',
+                    '#${order.nomorAntrian}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,

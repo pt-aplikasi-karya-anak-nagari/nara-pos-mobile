@@ -56,7 +56,7 @@ final nomorStrukOfflineProvider = Provider<NomorStrukOffline>(
 );
 
 /// Nomor antrian untuk penjualan OFFLINE: `<3 karakter kode perangkat>-<urut>`,
-/// mis. `3FA-12`. Urutannya per perangkat dan kembali ke 1 setiap hari.
+/// mis. `3FA-012` (urut tiga digit, seperti nomor online). Urutannya per perangkat dan kembali ke 1 setiap hari.
 ///
 /// # KENAPA BUKAN NOMOR BIASA
 ///
@@ -96,7 +96,7 @@ class NomorAntrianOffline {
         : 1;
     await _prefs.setString(_kunciTanggal, hari);
     await _prefs.setInt(_kunciUrut, urut);
-    return '$_awalan-$urut';
+    return '$_awalan-${urut.toString().padLeft(3, '0')}';
   }
 }
 

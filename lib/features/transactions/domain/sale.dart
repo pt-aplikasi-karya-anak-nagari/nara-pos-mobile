@@ -80,7 +80,8 @@ class Sale {
   String? get nomorAntrian {
     final label = queueLabel?.trim() ?? '';
     if (label.isNotEmpty) return label;
-    return queueNo?.toString();
+    final no = queueNo;
+    return no == null ? null : formatNomorAntrian(no);
   }
 
   /// Catatan level-pesanan dari pelanggan QR ("alergi kacang untuk semua").
@@ -520,3 +521,7 @@ class SaleTender {
     amount: Sale._d(json['amount']),
   );
 }
+
+/// Nomor antrian tiga digit: 1 → "001", 42 → "042"; lebih dari 999 tetap
+/// utuh. Sama dengan transaction.FormatNomorAntrian di server. MURNI.
+String formatNomorAntrian(int n) => n.toString().padLeft(3, '0');
