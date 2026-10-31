@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Disematkan supaya hasil analyze sama dengan mesin pengembang.
+          # Naikkan bersamaan dengan Flutter di mesin lokal.
+          flutter-version: "3.47.9"
+          channel: stable
+          cache: true
+
+      - name: Pasang dependensi
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Tes
+        run: flutter test
