@@ -236,7 +236,7 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
                     ),
                     const Gap(4),
                     Text(
-                      '${invoice.planName} • ${formatShortDate(invoice.periodStart)} - ${formatShortDate(invoice.periodEnd)}',
+                      '${invoice.planName} ${invoice.billingCycle == 'yearly' ? 'Tahunan' : 'Bulanan'} • ${formatShortDate(invoice.periodStart)} - ${formatShortDate(invoice.periodEnd)}',
                       style: TextStyle(color: kTextMid, fontSize: 12),
                     ),
                   ],
