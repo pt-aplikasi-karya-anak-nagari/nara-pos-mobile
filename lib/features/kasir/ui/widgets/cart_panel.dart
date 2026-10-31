@@ -3,6 +3,7 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:sizer/sizer.dart';
+import '../../../antrian/ui/tombol_antrian.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/app_icons.dart';
 import '../../../../core/format.dart';
@@ -77,6 +78,8 @@ class CartPanel extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    // Antrian: nomor yang sedang dipanggil & jumlah menunggu.
+                    const Flexible(child: TombolAntrian()),
                   ],
                 ),
               ),
@@ -286,10 +289,8 @@ class CartPanel extends ConsumerWidget {
                                     vertical: 16,
                                   ),
                                   itemCount: cart.length,
-                                  separatorBuilder: (_, _) => Divider(
-                                    color: kDivider,
-                                    height: 20,
-                                  ),
+                                  separatorBuilder: (_, _) =>
+                                      Divider(color: kDivider, height: 20),
                                   itemBuilder: (_, i) =>
                                       _CartRow(index: i, item: cart[i]),
                                 ),

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../data/antrian_service.dart';
 import 'antrian_sheet.dart';
 
-/// Tombol ringkas di header kasir: nomor yang sedang dipanggil + jumlah yang
-/// menunggu. Ketuk untuk membuka panel antrian.
+/// Tombol ringkas di kepala panel "Pesanan": nomor yang sedang dipanggil +
+/// jumlah menunggu + total hari ini. Ketuk untuk membuka panel antrian.
 class TombolAntrian extends ConsumerWidget {
   const TombolAntrian({super.key});
 
@@ -19,42 +20,47 @@ class TombolAntrian extends ConsumerWidget {
       label: 'Antrian, sedang dipanggil $nomor, $menunggu menunggu',
       excludeSemantics: true,
       child: Material(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(14),
+        color: kPrimary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => bukaPanelAntrian(context),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.campaign_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
+                const Icon(Icons.campaign_rounded, color: kPrimary, size: 20),
                 const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Antrian $nomor',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Antrian $nomor',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: kPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '$menunggu menunggu · ${r?.total ?? 0} hari ini',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
+                      Text(
+                        '$menunggu menunggu · ${r?.total ?? 0} hari ini',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: kTextMid, fontSize: 10),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: kPrimary,
+                  size: 18,
                 ),
               ],
             ),
