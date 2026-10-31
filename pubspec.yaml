@@ -97,6 +97,7 @@ dependencies:
   cryptography: ^2.9.0
   geolocator: ^14.1.2
   flutter_tts: ^4.2.5
+  sentry_flutter: ^10.2.0
 
 dev_dependencies:
   flutter_test:
