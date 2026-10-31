@@ -68,12 +68,14 @@ class BillingRepository extends BaseApiService {
     String planCode, {
     String? renewalMode,
     String? voucherCode,
+    String billingCycle = 'monthly',
   }) async {
     try {
       final res = await dio.post<Map<String, dynamic>>(
         ApiEndpoint.billingCheckout(outletId),
         data: {
           'plan_code': planCode,
+          'billing_cycle': billingCycle,
           if (renewalMode != null && renewalMode.isNotEmpty)
             'renewal_mode': renewalMode,
           if (voucherCode != null && voucherCode.isNotEmpty)

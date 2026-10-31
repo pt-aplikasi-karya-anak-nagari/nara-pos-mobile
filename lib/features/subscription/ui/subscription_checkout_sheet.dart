@@ -40,12 +40,25 @@ class _SubscriptionCheckoutSheet extends ConsumerStatefulWidget {
 class _SubscriptionCheckoutSheetState
     extends ConsumerState<_SubscriptionCheckoutSheet> {
   String? _selectedCode;
+
+  /// Siklus tagihan pilihan owner: 'monthly' (30 hari) / 'yearly' (1 tahun).
+  String _siklus = siklusBulanan;
   bool _loading = false;
   bool _uploading = false;
 
   /// Hasil checkout — bila terisi, sheet beralih dari daftar paket ke
   /// instruksi transfer bank + tombol unggah bukti transfer.
   BillingCheckoutResult? _result;
+
+  /// Siklus yang benar-benar dikirim: tahunan hanya bila paketnya dijual
+  /// tahunan.
+  String _siklusUntuk(String planCode) {
+    final plans = ref.read(subscriptionPlansProvider).value ?? const [];
+    final plan = plans.where((p) => p.code == planCode).firstOrNull;
+    return _siklus == siklusTahunan && (plan?.tersediaTahunan ?? false)
+        ? siklusTahunan
+        : siklusBulanan;
+  }
 
   Future<void> _checkout(String planCode, {String? renewalMode}) async {
     final outletId = ref.read(activeOutletIdProvider);
@@ -57,7 +70,12 @@ class _SubscriptionCheckoutSheetState
     try {
       final result = await ref
           .read(billingRepositoryProvider)
-          .createCheckout(outletId, planCode, renewalMode: renewalMode);
+          .createCheckout(
+            outletId,
+            planCode,
+            renewalMode: renewalMode,
+            billingCycle: _siklusUntuk(planCode),
+          );
       if (!mounted) return;
       // Invoice pending dibuat → riwayat tagihan berubah.
       ref.invalidate(billingInvoicesProvider);
@@ -237,15 +255,32 @@ class _SubscriptionCheckoutSheetState
                         orElse: () => plans.first,
                       )
                       .code;
+              final adaTahunan = plans.any((p) => p.tersediaTahunan);
+              final hemat = plans.fold<int>(0, (maks, p) {
+                if (p.priceIdr <= 0 || !p.tersediaTahunan) return maks;
+                final persen = (p.hematTahunan * 100 / (p.priceIdr * 12))
+                    .round();
+                return persen > maks ? persen : maks;
+              });
               return ListView.separated(
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                itemCount: plans.length,
+                itemCount: plans.length + (adaTahunan ? 1 : 0),
                 separatorBuilder: (_, _) => const Gap(12),
                 itemBuilder: (context, i) {
-                  final plan = plans[i];
+                  if (adaTahunan && i == 0) {
+                    return _PemilihSiklus(
+                      siklus: _siklus,
+                      hematPersen: hemat,
+                      onUbah: _loading
+                          ? null
+                          : (s) => setState(() => _siklus = s),
+                    );
+                  }
+                  final plan = plans[adaTahunan ? i - 1 : i];
                   return _PlanCard(
                     plan: plan,
+                    siklus: _siklus,
                     selected: _selectedCode == plan.code,
                     isCurrent: currentSub?.planCode == plan.code,
                     onTap: _loading
@@ -457,14 +492,95 @@ class _SubscriptionCheckoutSheetState
   }
 }
 
+class _PemilihSiklus extends StatelessWidget {
+  final String siklus;
+  final int hematPersen;
+  final ValueChanged<String>? onUbah;
+
+  const _PemilihSiklus({
+    required this.siklus,
+    required this.hematPersen,
+    required this.onUbah,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget pilihan(String s) {
+      final aktif = siklus == s;
+      return Expanded(
+        child: InkWell(
+          key: ValueKey('siklus-$s'),
+          onTap: onUbah == null ? null : () => onUbah!(s),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: aktif ? kPrimary : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  labelSiklus(s),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: aktif ? Colors.white : kTextMid,
+                  ),
+                ),
+                if (s == siklusTahunan && hematPersen > 0) ...[
+                  const Gap(6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: aktif
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : kSuccess.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Hemat $hematPersen%',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: aktif ? Colors.white : kSuccess,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kDivider),
+      ),
+      child: Row(children: [pilihan(siklusBulanan), pilihan(siklusTahunan)]),
+    );
+  }
+}
+
 class _PlanCard extends StatelessWidget {
   final SubscriptionPlan plan;
+  final String siklus;
   final bool selected;
   final bool isCurrent;
   final VoidCallback? onTap;
 
   const _PlanCard({
     required this.plan,
+    required this.siklus,
     required this.selected,
     required this.isCurrent,
     required this.onTap,
@@ -472,6 +588,7 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tahunan = siklus == siklusTahunan && plan.tersediaTahunan;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -531,13 +648,40 @@ class _PlanCard extends StatelessWidget {
             ),
             const Gap(8),
             Text(
-              '${formatRupiah(plan.priceIdr)} / bulan',
+              tahunan
+                  ? '${formatRupiah(plan.priceYearlyIdr)} / tahun'
+                  : '${formatRupiah(plan.priceIdr)} / bulan',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: kPrimary,
               ),
             ),
+            if (tahunan) ...[
+              const Gap(2),
+              Text.rich(
+                TextSpan(
+                  text: 'Setara ${formatRupiah(plan.perBulanTahunan)} / bulan',
+                  children: [
+                    if (plan.hematTahunan > 0)
+                      TextSpan(
+                        text: ' · hemat ${formatRupiah(plan.hematTahunan)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: kSuccess,
+                        ),
+                      ),
+                  ],
+                ),
+                style: TextStyle(fontSize: 12, color: kTextMid),
+              ),
+            ] else if (siklus == siklusTahunan && plan.priceIdr > 0) ...[
+              const Gap(2),
+              Text(
+                'Paket ini hanya tersedia bulanan',
+                style: TextStyle(fontSize: 12, color: kTextMid),
+              ),
+            ],
             if (plan.description.isNotEmpty) ...[
               const Gap(6),
               Text(

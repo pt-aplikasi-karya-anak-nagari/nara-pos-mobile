@@ -21,7 +21,11 @@ class BillingInvoice {
   final DateTime? failedAt;
   final String? failureReason;
   final String? renewalMode;
+
+  /// 'monthly' / 'yearly' (invoice lama = bulanan).
+  final String billingCycle;
   final String? notes;
+
   /// Referensi transfer eksternal yang diisi owner saat mengunggah bukti
   /// (mis. no. referensi / berita transfer dari bank).
   final String? externalReference;
@@ -51,6 +55,7 @@ class BillingInvoice {
     this.failedAt,
     this.failureReason,
     this.renewalMode,
+    this.billingCycle = 'monthly',
     this.notes,
     this.externalReference,
     required this.createdAt,
@@ -107,6 +112,9 @@ class BillingInvoice {
       failedAt: parseNullableDate(json['failed_at']),
       failureReason: json['failure_reason']?.toString(),
       renewalMode: json['renewal_mode']?.toString(),
+      billingCycle: json['billing_cycle']?.toString() == 'yearly'
+          ? 'yearly'
+          : 'monthly',
       notes: json['notes']?.toString(),
       externalReference: json['external_reference']?.toString(),
       createdAt: parseDate(json['created_at']),

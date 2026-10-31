@@ -3,6 +3,9 @@ class SubscriptionPlan {
   final String name;
   final String description;
   final int priceIdr;
+
+  /// Harga satu tahun. 0 = paket tidak dijual tahunan.
+  final int priceYearlyIdr;
   final int tier;
   final List<String> features;
   final bool isHighlighted;
@@ -12,6 +15,7 @@ class SubscriptionPlan {
     required this.name,
     required this.description,
     required this.priceIdr,
+    this.priceYearlyIdr = 0,
     required this.tier,
     required this.features,
     required this.isHighlighted,
@@ -23,6 +27,7 @@ class SubscriptionPlan {
       name: json['name']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       priceIdr: (json['price_idr'] as num?)?.toInt() ?? 0,
+      priceYearlyIdr: (json['price_yearly_idr'] as num?)?.toInt() ?? 0,
       tier: (json['tier'] as num?)?.toInt() ?? 0,
       features: (json['features'] as List? ?? const [])
           .map((e) => e.toString())
@@ -30,7 +35,30 @@ class SubscriptionPlan {
       isHighlighted: json['is_highlighted'] as bool? ?? false,
     );
   }
+
+  bool get tersediaTahunan => priceYearlyIdr > 0;
+
+  /// Harga untuk [siklus] ('monthly' / 'yearly'); tahunan yang tak tersedia
+  /// jatuh ke harga bulanan.
+  int hargaSiklus(String siklus) =>
+      siklus == siklusTahunan && tersediaTahunan ? priceYearlyIdr : priceIdr;
+
+  /// Selisih 12× bulanan dengan harga tahunan (0 bila tak hemat).
+  int get hematTahunan {
+    if (!tersediaTahunan) return 0;
+    final h = priceIdr * 12 - priceYearlyIdr;
+    return h > 0 ? h : 0;
+  }
+
+  /// Setara per bulan bila bayar tahunan.
+  int get perBulanTahunan => (priceYearlyIdr / 12).round();
 }
+
+const siklusBulanan = 'monthly';
+const siklusTahunan = 'yearly';
+
+String labelSiklus(String? siklus) =>
+    siklus == siklusTahunan ? 'Tahunan' : 'Bulanan';
 
 class OutletSubscription {
   final String id;
@@ -42,6 +70,9 @@ class OutletSubscription {
   final DateTime startedAt;
   final DateTime expiresAt;
   final int priceIdrPaid;
+
+  /// 'monthly' / 'yearly' dari pembayaran terakhir (data lama = bulanan).
+  final String billingCycle;
   final int daysRemaining;
 
   /// Akhir masa tenggang (expires_at + tenggang). Null dari server lama.
@@ -62,6 +93,7 @@ class OutletSubscription {
     required this.startedAt,
     required this.expiresAt,
     required this.priceIdrPaid,
+    this.billingCycle = siklusBulanan,
     required this.daysRemaining,
     this.graceUntil,
     this.featureKeys = const [],
@@ -90,6 +122,9 @@ class OutletSubscription {
       startedAt: parseDate(json['started_at']),
       expiresAt: parseDate(json['expires_at']),
       priceIdrPaid: (json['price_idr_paid'] as num?)?.toInt() ?? 0,
+      billingCycle: json['billing_cycle']?.toString() == siklusTahunan
+          ? siklusTahunan
+          : siklusBulanan,
       daysRemaining: (json['days_remaining'] as num?)?.toInt() ?? 0,
       graceUntil: DateTime.tryParse(
         json['grace_until']?.toString() ?? '',
