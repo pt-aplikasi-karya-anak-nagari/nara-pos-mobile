@@ -556,12 +556,13 @@ class PaymentSheet extends HookConsumerWidget {
       // akan muncul, jadi beri konfirmasi tersendiri di sini.
       if (sale.pendingSync && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Tersimpan offline. Transaksi otomatis disinkronkan saat koneksi kembali.',
+              '${sale.nomorAntrian != null ? 'Nomor antrian ${sale.nomorAntrian}. ' : ''}'
+              'Tersimpan offline — otomatis disinkronkan saat koneksi kembali.',
             ),
             backgroundColor: kWarning,
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 6),
           ),
         );
       }

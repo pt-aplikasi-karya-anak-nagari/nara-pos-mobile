@@ -28,12 +28,16 @@ const kKitchenTicketTitle = 'PESANAN';
 
 class KitchenOrderMeta {
   final String orderNo;
+
+  /// Nomor antrian yang dipanggil ke pelanggan (dicetak besar). Null = tak ada.
+  final String? nomorAntrian;
   final String? tableLabel;
   final String orderType;
   final DateTime time;
 
   const KitchenOrderMeta({
     required this.orderNo,
+    this.nomorAntrian,
     this.tableLabel,
     required this.orderType,
     required this.time,
@@ -335,6 +339,7 @@ class PrinterService {
 
     final meta = KitchenOrderMeta(
       orderNo: sale.invoiceId.isNotEmpty ? sale.invoiceId : sale.id.toString(),
+      nomorAntrian: sale.nomorAntrian,
       tableLabel: sale.isDineIn ? sale.tablePositionDisplay : null,
       orderType: sale.orderType,
       time: sale.createdAt,
@@ -390,6 +395,20 @@ class PrinterService {
         ),
       ),
     );
+    // Nomor antrian besar — yang diteriakkan dapur saat pesanan siap.
+    if ((orderMeta.nomorAntrian ?? '').isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          _safe('ANTRIAN ${orderMeta.nomorAntrian}'),
+          styles: const PosStyles(
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size2,
+          ),
+        ),
+      );
+    }
     bytes.addAll(gen.hr());
 
     // Meta pesanan (mirror idiom PosColumn di _buildReceipt).
@@ -717,6 +736,30 @@ class PrinterService {
       );
     }
     bytes.addAll(gen.hr());
+
+    // Nomor antrian — dicetak besar supaya pelanggan mudah mencocokkan saat
+    // dipanggil.
+    final antrian = sale.nomorAntrian;
+    if (antrian != null && antrian.isNotEmpty) {
+      bytes.addAll(
+        gen.text(
+          'Nomor Antrian',
+          styles: const PosStyles(align: PosAlign.center),
+        ),
+      );
+      bytes.addAll(
+        gen.text(
+          _safe(antrian),
+          styles: const PosStyles(
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size3,
+            width: PosTextSize.size3,
+          ),
+        ),
+      );
+      bytes.addAll(gen.hr());
+    }
 
     if (showTxId) {
       bytes.addAll(

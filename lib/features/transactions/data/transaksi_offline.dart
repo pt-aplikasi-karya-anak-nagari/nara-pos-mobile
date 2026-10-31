@@ -52,6 +52,7 @@ Sale saleDariAntrian(PendingSale ps, {bool gagal = false}) {
     invoiceId: teks(p['offline_ref']).isEmpty
         ? 'OFFLINE'
         : teks(p['offline_ref']),
+    queueLabel: teks(p['queue_label']).isEmpty ? null : teks(p['queue_label']),
     isPaid: p['is_paid'] != false,
     paymentStatus: p['is_paid'] == false ? 'unpaid' : 'paid',
     cashierRemoteId: teks(p['cashier_id']),

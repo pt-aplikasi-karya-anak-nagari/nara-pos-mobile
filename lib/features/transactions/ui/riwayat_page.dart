@@ -734,6 +734,9 @@ class _SaleTile extends StatelessWidget {
                   Text(
                     () {
                       final parts = <String>[];
+                      if (sale.nomorAntrian != null) {
+                        parts.add('Antrian ${sale.nomorAntrian}');
+                      }
                       if (sale.customerName.isNotEmpty &&
                           sale.invoiceId.isNotEmpty) {
                         parts.add('#${sale.invoiceId}');

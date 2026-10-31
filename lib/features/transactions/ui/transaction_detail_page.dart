@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:gap/gap.dart';
 import 'package:skeletonizer/skeletonizer.dart';
+import '../../kasir/ui/widgets/kartu_nomor_antrian.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/butuh_online.dart';
 import '../../../core/app_icons.dart';
@@ -1109,6 +1110,10 @@ class _ReceiptCard extends ConsumerWidget {
                 'Struk Transaksi',
                 style: TextStyle(fontSize: 12, color: kTextMid),
               ),
+              if (sale.nomorAntrian != null) ...[
+                const Gap(12),
+                KartuNomorAntrian(nomor: sale.nomorAntrian!),
+              ],
               const Gap(10),
               Container(
                 padding: const EdgeInsets.symmetric(

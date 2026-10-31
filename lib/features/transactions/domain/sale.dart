@@ -65,10 +65,23 @@ class Sale {
   /// pending | received | preparing | delivering | completed.
   String fulfillmentStatus;
 
-  /// Nomor antrian harian QR self-order (queue_no). Null untuk transaksi
-  /// non-menu atau pesanan QR yang belum diberi antrian (mis. belum lunas &
-  /// belum dikonfirmasi).
+  /// Nomor antrian harian dari server (queue_no) — untuk SEMUA transaksi:
+  /// kasir saat dibuat, pesanan QR saat lunas & dikonfirmasi. Null untuk
+  /// penjualan offline (lihat [queueLabel]) atau pesanan QR yang belum masuk
+  /// antrian.
   int? queueNo;
+
+  /// Nomor antrian sementara dari tablet untuk penjualan OFFLINE, mis.
+  /// "3FA-12" (lihat NomorAntrianOffline). Tercetak di struk pelanggan.
+  String? queueLabel;
+
+  /// Nomor antrian untuk ditampilkan & dicetak: nomor tablet (offline) atau
+  /// nomor server. Null bila belum ada.
+  String? get nomorAntrian {
+    final label = queueLabel?.trim() ?? '';
+    if (label.isNotEmpty) return label;
+    return queueNo?.toString();
+  }
 
   /// Catatan level-pesanan dari pelanggan QR ("alergi kacang untuk semua").
   String? note;
@@ -164,6 +177,7 @@ class Sale {
     this.confirmedAt,
     this.fulfillmentStatus = 'pending',
     this.queueNo,
+    this.queueLabel,
     this.note,
     this.isRefunded = false,
     this.isPartiallyRefunded = false,
@@ -399,6 +413,7 @@ class Sale {
       confirmedAt: confirmedAt,
       fulfillmentStatus: json['fulfillment_status']?.toString() ?? 'pending',
       queueNo: (json['queue_no'] as num?)?.toInt(),
+      queueLabel: json['queue_label']?.toString(),
       note: json['note']?.toString(),
       // Backend juga set `payment_status = 'refunded'` di endpoint refund
       // baru (lihat repository.Refund). Cek both supaya kompat data lama

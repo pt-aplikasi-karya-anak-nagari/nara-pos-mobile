@@ -42,6 +42,7 @@ import '../scan_trigger.dart';
 import 'widgets/baris_produk.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
+import 'widgets/kartu_nomor_antrian.dart';
 import 'widgets/header_aksi_kasir.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
@@ -379,6 +380,10 @@ class KasirPage extends HookConsumerWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: kTextMid),
               ),
+              if (sale.nomorAntrian != null) ...[
+                const Gap(16),
+                KartuNomorAntrian(nomor: sale.nomorAntrian!),
+              ],
               const Gap(24),
               Container(
                 padding: const EdgeInsets.symmetric(
