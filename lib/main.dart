@@ -19,6 +19,7 @@ import 'core/config/app_config.dart';
 import 'core/format.dart';
 import 'core/notifications.dart';
 import 'core/offline/sinkron_latar.dart';
+import 'core/pantau.dart';
 import 'core/shared_prefs.dart';
 import 'features/notifications/data/notification_history.dart';
 import 'features/notifications/domain/app_notification.dart';
@@ -77,6 +78,8 @@ Future<void> main() async {
   // crash diam yang menyisakan layar putih (native splash) selamanya.
   runZonedGuarded(_bootstrap, (error, stack) {
     debugPrint('[NARA] Uncaught zone error: $error\n$stack');
+    // Dikirim ke Sentry bila dikonfigurasi (lihat core/pantau.dart).
+    Pantau.lapor(error, stack);
   });
 }
 
@@ -101,6 +104,11 @@ Future<void> _bootstrap() async {
     return true; // ditangani — jangan sampai jadi crash tak tertangani.
   };
   ErrorWidget.builder = (details) => _FallbackErrorWidget(details: details);
+
+  // Sentry dipasang SETELAH penangan di atas: ia membungkusnya dan tetap
+  // meneruskan ke sana. No-op tanpa --dart-define=SENTRY_DSN. Gagal init tak
+  // memblokir startup.
+  await Pantau.mulai();
 
   try {
     AppConfig.assertValid();
