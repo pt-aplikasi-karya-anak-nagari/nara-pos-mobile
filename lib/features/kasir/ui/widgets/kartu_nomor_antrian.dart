@@ -84,7 +84,7 @@ class InfoAntrianHariIni extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final r = ref.watch(ringkasanAntrianProvider).value;
-    if (r == null || r.total == 0) return const SizedBox.shrink();
+    if (r == null || !r.aktif || r.total == 0) return const SizedBox.shrink();
     return Text(
       'Total antrian hari ini ${r.total} · ${r.menunggu} menunggu',
       textAlign: TextAlign.center,

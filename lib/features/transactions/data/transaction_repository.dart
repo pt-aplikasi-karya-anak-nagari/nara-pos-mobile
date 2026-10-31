@@ -549,10 +549,11 @@ class TransactionRepository {
       final nomorStruk = await _ref
           .read(nomorStrukOfflineProvider)
           .berikutnya();
-      // Nomor antrian sementara tablet (server tak bisa ditanya saat offline).
-      final nomorAntrian = await _ref
-          .read(nomorAntrianOfflineProvider)
-          .berikutnya();
+      // Nomor antrian sementara tablet (server tak bisa ditanya saat offline)
+      // — hanya bila Pemilik memakai fitur antrian di outlet ini.
+      final nomorAntrian = pengaturan.antrianAktif
+          ? await _ref.read(nomorAntrianOfflineProvider).berikutnya()
+          : null;
       final kasirId = _ref.read(authProvider).user?.remoteId ?? '';
       final dataOffline = <String, dynamic>{
         ...checkoutData,
@@ -560,7 +561,7 @@ class TransactionRepository {
         'device_id': DeviceIdentity.current.id,
         'is_offline': true,
         'offline_ref': nomorStruk,
-        'queue_label': nomorAntrian,
+        'queue_label': ?nomorAntrian,
         if (kasirId.isNotEmpty) 'cashier_id': kasirId,
         // Jam tablet terdeteksi dimundurkan: penanda untuk ditinjau Pemilik.
         if (jamMundur) 'jam_mundur': true,

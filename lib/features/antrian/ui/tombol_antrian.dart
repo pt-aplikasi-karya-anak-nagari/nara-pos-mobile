@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../app/theme.dart';
+import '../../settings/data/app_settings.dart';
 import '../data/antrian_service.dart';
 import 'antrian_sheet.dart';
 
@@ -12,7 +13,11 @@ class TombolAntrian extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Pemilik mematikan fitur antrian → tombolnya tak ditampilkan.
+    final aktif =
+        ref.watch(outletAppSettingsProvider).value?.antrianAktif ?? true;
     final r = ref.watch(ringkasanAntrianProvider).value;
+    if (!aktif || r?.aktif == false) return const SizedBox.shrink();
     final nomor = r?.sedangDipanggil?.nomor ?? '—';
     final menunggu = r?.menunggu ?? 0;
     return Semantics(

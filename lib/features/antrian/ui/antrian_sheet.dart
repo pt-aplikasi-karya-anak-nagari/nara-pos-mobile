@@ -237,7 +237,7 @@ class AntrianSheet extends HookConsumerWidget {
                             ),
                             child: const Text(
                               'Suara antrian dimatikan Pemilik untuk outlet ini. '
-                              'Nyalakan di web: Pengaturan App → Suara antrian.',
+                              'Nyalakan di web: Pengaturan App → Antrian.',
                               style: TextStyle(fontSize: 12),
                             ),
                           ),

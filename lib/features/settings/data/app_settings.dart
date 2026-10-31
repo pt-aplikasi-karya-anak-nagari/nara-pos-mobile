@@ -50,6 +50,9 @@ class OutletAppSettings {
   /// Suara panggilan antrian diatur Pemilik: nyala/mati untuk seluruh outlet
   /// dan kalimat yang diucapkan (lihat kalimat_panggilan.dart).
   final bool antrianSuaraAktif;
+
+  /// Fitur nomor antrian dipakai outlet ini (Pemilik bisa mematikannya).
+  final bool antrianAktif;
   final String antrianTeksPanggilan;
 
   const OutletAppSettings({
@@ -63,6 +66,7 @@ class OutletAppSettings {
     this.absenWajibFoto = false,
     this.absenPerangkatTerdaftar = false,
     this.antrianSuaraAktif = true,
+    this.antrianAktif = true,
     this.antrianTeksPanggilan = '',
   });
 
@@ -90,6 +94,7 @@ class OutletAppSettings {
       absenPerangkatTerdaftar:
           json['absen_perangkat_terdaftar'] as bool? ?? false,
       antrianSuaraAktif: json['antrian_suara_aktif'] as bool? ?? true,
+      antrianAktif: json['antrian_aktif'] as bool? ?? true,
       antrianTeksPanggilan: json['antrian_teks_panggilan']?.toString() ?? '',
     );
   }
@@ -108,6 +113,7 @@ class OutletAppSettings {
     'absen_wajib_foto': absenWajibFoto,
     'absen_perangkat_terdaftar': absenPerangkatTerdaftar,
     'antrian_suara_aktif': antrianSuaraAktif,
+    'antrian_aktif': antrianAktif,
     'antrian_teks_panggilan': antrianTeksPanggilan,
   };
 }

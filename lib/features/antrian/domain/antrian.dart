@@ -46,6 +46,7 @@ class ItemAntrian {
 /// Keadaan antrian outlet hari ini.
 class RingkasanAntrian {
   const RingkasanAntrian({
+    this.aktif = true,
     this.total = 0,
     this.menunggu = 0,
     this.dipanggil = 0,
@@ -55,6 +56,8 @@ class RingkasanAntrian {
     this.riwayatPanggil = const [],
   });
 
+  /// Fitur antrian dinyalakan Pemilik.
+  final bool aktif;
   final int total;
   final int menunggu;
   final int dipanggil;
@@ -69,6 +72,7 @@ class RingkasanAntrian {
     List<ItemAntrian> daftar(Object? v) =>
         v is List ? [for (final e in v) ?item(e)] : const [];
     return RingkasanAntrian(
+      aktif: j['aktif'] as bool? ?? true,
       total: (j['total'] as num?)?.toInt() ?? 0,
       menunggu: (j['menunggu'] as num?)?.toInt() ?? 0,
       dipanggil: (j['dipanggil'] as num?)?.toInt() ?? 0,
