@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../../app/theme.dart';
+import '../../../antrian/data/antrian_service.dart';
 
 /// Nomor antrian besar setelah pembayaran — yang dipanggil kasir/dapur saat
 /// pesanan siap. Dipakai dialog sukses & detail transaksi.
@@ -71,6 +73,22 @@ class KartuNomorAntrian extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Total antrian hari ini · menunggu" di bawah nomor antrian (dialog sukses).
+class InfoAntrianHariIni extends ConsumerWidget {
+  const InfoAntrianHariIni({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final r = ref.watch(ringkasanAntrianProvider).value;
+    if (r == null || r.total == 0) return const SizedBox.shrink();
+    return Text(
+      'Total antrian hari ini ${r.total} · ${r.menunggu} menunggu',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 12, color: kTextMid),
     );
   }
 }

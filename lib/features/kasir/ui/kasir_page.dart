@@ -43,6 +43,7 @@ import 'widgets/baris_produk.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/cart_sheet.dart';
 import 'widgets/kartu_nomor_antrian.dart';
+import '../../antrian/ui/tombol_antrian.dart';
 import 'widgets/header_aksi_kasir.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
@@ -383,6 +384,8 @@ class KasirPage extends HookConsumerWidget {
               if (sale.nomorAntrian != null) ...[
                 const Gap(16),
                 KartuNomorAntrian(nomor: sale.nomorAntrian!),
+                const Gap(8),
+                const InfoAntrianHariIni(),
               ],
               const Gap(24),
               Container(
@@ -1352,6 +1355,8 @@ class _Header extends HookConsumerWidget {
                     ],
                   ),
                   const Spacer(),
+                  // Antrian: nomor yang sedang dipanggil & jumlah menunggu.
+                  const TombolAntrian(),
                 ],
               ),
             ),

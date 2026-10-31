@@ -18,6 +18,7 @@ import '../../../../core/i18n.dart';
 import '../../../../core/notifications.dart';
 import '../../../user/data/auth_service.dart';
 import '../../../../core/outlet_scope.dart';
+import '../../../antrian/data/antrian_service.dart';
 import '../../../printer/data/printer_service.dart';
 import '../../../printer/data/printer_settings.dart';
 import '../../../printer/data/role_printer_config_repository.dart';
@@ -497,6 +498,8 @@ class PaymentSheet extends HookConsumerWidget {
       // Refresh laporan & dashboard agar revenue + produk terlaris terupdate.
       ref.invalidate(salesFutureProvider);
       ref.invalidate(activeShiftProvider);
+      // Nomor antrian baru → total & jumlah menunggu di header ikut berubah.
+      ref.invalidate(ringkasanAntrianProvider);
 
       // Refresh list meja & area: backend baru saja menandai meja
       // (kalau dine-in) jadi occupied, perubahan ini perlu tercermin di

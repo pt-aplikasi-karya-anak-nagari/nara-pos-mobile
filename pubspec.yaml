@@ -96,6 +96,7 @@ dependencies:
   workmanager: ^0.10.10
   cryptography: ^2.9.0
   geolocator: ^14.1.2
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
