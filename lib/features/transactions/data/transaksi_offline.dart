@@ -94,6 +94,7 @@ Sale saleDariAntrian(PendingSale ps, {bool gagal = false}) {
             qty: bulat(it['quantity']),
             note: teks(it['note']),
             modifiersLabel: teks(s['modifiers_label']),
+            modifiers: AddOnStruk.dariJson(s['modifiers']),
             bundleItems: IsiPaket.dariJson(s['bundle_items']),
           );
         }(),

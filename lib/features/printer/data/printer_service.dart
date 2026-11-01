@@ -855,8 +855,27 @@ class PrinterService {
           ? it.productName
           : '${it.productName} (${it.variant})';
       bytes.addAll(gen.text(_safe(line), styles: const PosStyles(bold: true)));
-      // C4: add-on/topping di bawah nama produk.
-      if (it.modifiersLabel.isNotEmpty) {
+      // Rincian harga per unit: ukuran/varian lalu tiap topping, supaya
+      // pelanggan tahu asal harga satuannya ("2 x 31.000" di bawahnya).
+      final rincian = it.rincianHarga;
+      if (rincian.isNotEmpty) {
+        for (final r in rincian) {
+          bytes.addAll(
+            gen.row([
+              PosColumn(
+                text: _safe(r.tambahan ? '  + ${r.label}' : '  ${r.label}'),
+                width: 8,
+              ),
+              PosColumn(
+                text: r.tambahan && r.harga <= 0 ? '' : _fmtShort(r.harga),
+                width: 4,
+                styles: const PosStyles(align: PosAlign.right),
+              ),
+            ]),
+          );
+        }
+      } else if (it.modifiersLabel.isNotEmpty) {
+        // Data lama tanpa harga add-on: cukup namanya.
         bytes.addAll(
           gen.text(
             _safe('  + ${it.modifiersLabel}'),
