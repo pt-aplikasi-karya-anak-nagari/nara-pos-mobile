@@ -13,7 +13,10 @@ class PosTableApiService extends BaseApiService {
     return response;
   }
 
-  Future<dynamic> createPosTable(String outletId, Map<String, dynamic> data) async {
+  Future<dynamic> createPosTable(
+    String outletId,
+    Map<String, dynamic> data,
+  ) async {
     final response = await post<Map<String, dynamic>>(
       '/outlets/$outletId/postables',
       data: data,

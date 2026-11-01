@@ -122,11 +122,7 @@ class _GroupCard extends ConsumerWidget {
                   if (group.tables.isNotEmpty)
                     IconButton(
                       onPressed: () => _printAreaQr(context, ref, group),
-                      icon: Icon(
-                        Icons.qr_code_2,
-                        color: kTextMid,
-                        size: 20,
-                      ),
+                      icon: Icon(Icons.qr_code_2, color: kTextMid, size: 20),
                       tooltip: 'Cetak QR semua meja',
                     ),
                   IconButton(
@@ -136,11 +132,7 @@ class _GroupCard extends ConsumerWidget {
                       group.outletRemoteId,
                       group: group,
                     ),
-                    icon: Icon(
-                      Icons.edit_outlined,
-                      color: kTextMid,
-                      size: 20,
-                    ),
+                    icon: Icon(Icons.edit_outlined, color: kTextMid, size: 20),
                     tooltip: 'Edit Area',
                   ),
                   IconButton(
@@ -150,10 +142,7 @@ class _GroupCard extends ConsumerWidget {
                       groupId: group.id,
                       outletId: group.outletRemoteId ?? '',
                     ),
-                    icon: const Icon(
-                      Icons.add_circle_outline,
-                      color: kPrimary,
-                    ),
+                    icon: const Icon(Icons.add_circle_outline, color: kPrimary),
                     tooltip: 'Tambah Meja',
                   ),
                 ],
@@ -226,6 +215,7 @@ class _GroupCard extends ConsumerWidget {
 class _TableTile extends StatelessWidget {
   final PosTable table;
   final bool isReadOnly;
+
   /// Callback ketika user tap ikon QR di tile (mode manajemen).
   /// Null → ikon tidak muncul (mode kasir / disabled).
   final VoidCallback? onQrTap;
@@ -252,9 +242,7 @@ class _TableTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isReadOnly && isOccupied
-            ? kDanger.withValues(alpha: 0.04)
-            : kBg,
+        color: isReadOnly && isOccupied ? kDanger.withValues(alpha: 0.04) : kBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isReadOnly && isOccupied
@@ -326,11 +314,7 @@ class _TableTile extends StatelessWidget {
                       message: 'Buat QR Menu',
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        child: Icon(
-                          Icons.qr_code_2,
-                          size: 18,
-                          color: kPrimary,
-                        ),
+                        child: Icon(Icons.qr_code_2, size: 18, color: kPrimary),
                       ),
                     ),
                   ),
@@ -386,9 +370,9 @@ Future<void> _printAreaQr(
   TableGroup group,
 ) async {
   if (group.tables.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tidak ada meja di area ini')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Tidak ada meja di area ini')));
     return;
   }
   final outletName = _resolveOutletName(ref, group.outletRemoteId);

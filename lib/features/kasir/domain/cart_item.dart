@@ -18,12 +18,12 @@ class CartModifier {
   });
 
   Map<String, dynamic> toCheckoutJson() => {
-        'group_id': groupId,
-        'group_name': groupName,
-        'option_id': optionId,
-        'name': name,
-        'price': price,
-      };
+    'group_id': groupId,
+    'group_name': groupName,
+    'option_id': optionId,
+    'name': name,
+    'price': price,
+  };
 
   /// Kebalikan toCheckoutJson — dipakai memulihkan add-on dari draft.
   ///
@@ -31,12 +31,12 @@ class CartModifier {
   /// bentuk berbeda untuk hal yang sama membuat keduanya menyimpang diam-diam,
   /// dan yang menyimpang di sini adalah harga.
   factory CartModifier.fromJson(Map<String, dynamic> json) => CartModifier(
-        groupId: json['group_id'] as String? ?? '',
-        groupName: json['group_name'] as String? ?? '',
-        optionId: json['option_id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        price: (json['price'] as num? ?? 0).toDouble(),
-      );
+    groupId: json['group_id'] as String? ?? '',
+    groupName: json['group_name'] as String? ?? '',
+    optionId: json['option_id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    price: (json['price'] as num? ?? 0).toDouble(),
+  );
 }
 
 class CartItem {
@@ -99,8 +99,7 @@ class CartItem {
   }
 
   /// C4: total harga add-on per unit.
-  double get modifiersTotal =>
-      modifiers.fold(0.0, (s, m) => s + m.price);
+  double get modifiersTotal => modifiers.fold(0.0, (s, m) => s + m.price);
 
   /// C4: kunci stabil pilihan modifier (option id terurut) untuk membedakan
   /// baris keranjang — item sama tapi topping beda = baris beda.
@@ -236,21 +235,20 @@ class CartItem {
     String? note,
     String? manualDiscountType,
     double? manualDiscountValue,
-  }) =>
-      CartItem(
-        product,
-        qty ?? this.qty,
-        variantId: variantId,
-        variantName: variantName,
-        variantPrice: variantPrice,
-        variantDiscountType: variantDiscountType,
-        variantDiscountValue: variantDiscountValue,
-        variantDiscountName: variantDiscountName,
-        note: note ?? this.note,
-        manualDiscountType: manualDiscountType ?? this.manualDiscountType,
-        manualDiscountValue: manualDiscountValue ?? this.manualDiscountValue,
-        modifiers: modifiers,
-      );
+  }) => CartItem(
+    product,
+    qty ?? this.qty,
+    variantId: variantId,
+    variantName: variantName,
+    variantPrice: variantPrice,
+    variantDiscountType: variantDiscountType,
+    variantDiscountValue: variantDiscountValue,
+    variantDiscountName: variantDiscountName,
+    note: note ?? this.note,
+    manualDiscountType: manualDiscountType ?? this.manualDiscountType,
+    manualDiscountValue: manualDiscountValue ?? this.manualDiscountValue,
+    modifiers: modifiers,
+  );
 
   bool sameVariantAs(Product p, String? vId) {
     // For custom products (id is 0 or null)

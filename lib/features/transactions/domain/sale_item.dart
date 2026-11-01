@@ -1,3 +1,4 @@
+import '../../products/domain/product.dart' show IsiPaket;
 import 'sale.dart';
 
 class SaleItem {
@@ -23,6 +24,12 @@ class SaleItem {
   // C4: label add-on/topping ("Boba, Less Sugar") untuk struk & riwayat.
   final String modifiersLabel;
 
+  /// Isi paket per SATU paket (kosong untuk produk biasa).
+  final List<IsiPaket> bundleItems;
+
+  /// "2× Nasi, 4× Ayam" — isi untuk SELURUH qty baris ini.
+  String get bundleLabel => IsiPaket.label(bundleItems, kali: qty);
+
   Sale? sale;
 
   SaleItem({
@@ -41,6 +48,7 @@ class SaleItem {
     this.refundedQty = 0,
     this.note = '',
     this.modifiersLabel = '',
+    this.bundleItems = const [],
   });
 
   /// Sisa qty yang masih bisa diretur (quantity - refunded_qty). Clamp ke 0
@@ -97,6 +105,7 @@ class SaleItem {
           : int.tryParse(json['refunded_qty']?.toString() ?? '0') ?? 0,
       note: json['note']?.toString() ?? '',
       modifiersLabel: modifiersLabelFrom(json['modifiers']),
+      bundleItems: IsiPaket.dariJson(json['bundle_items']),
     )..id = json['id']?.toString() ?? '';
   }
 

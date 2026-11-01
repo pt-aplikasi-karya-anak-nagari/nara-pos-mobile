@@ -219,7 +219,10 @@ class PaymentSheet extends HookConsumerWidget {
 
     // E7: agregat split. splitActive → mode split (abaikan single-method).
     final splitActive = splitTenders.value.isNotEmpty;
-    final splitPaid = splitTenders.value.fold<double>(0, (s, t) => s + t.amount);
+    final splitPaid = splitTenders.value.fold<double>(
+      0,
+      (s, t) => s + t.amount,
+    );
     final splitRemaining = total - splitPaid;
     final splitCashPaid = splitTenders.value
         .where((t) => t.type == 'cash')
@@ -227,8 +230,7 @@ class PaymentSheet extends HookConsumerWidget {
 
     // E10: mode PPN inklusif → PPN sudah termasuk di harga (label "termasuk"
     // supaya kasir paham PPN tidak ditambah di atas subtotal).
-    final taxInclusive =
-        ref.watch(activeOutletProvider)?.taxInclusive ?? false;
+    final taxInclusive = ref.watch(activeOutletProvider)?.taxInclusive ?? false;
 
     // E5: tier & pengali poin pelanggan aktif (untuk badge di checkout).
     final custTier = activeCustomer?.membershipLevel ?? 'Regular';
@@ -331,9 +333,9 @@ class PaymentSheet extends HookConsumerWidget {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal upload bukti: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Gagal upload bukti: $e')));
         }
       }
     }
@@ -381,8 +383,9 @@ class PaymentSheet extends HookConsumerWidget {
                 : splitTenders.value.first.method)
           : selectedPM!.name;
       final isPaid = splitActive ? true : selectedPM!.type != 'later';
-      final isCashPayment =
-          splitActive ? splitCashPaid > 0 : selectedPM!.type == 'cash';
+      final isCashPayment = splitActive
+          ? splitCashPaid > 0
+          : selectedPM!.type == 'cash';
 
       final currentUser = ref.read(authProvider).user;
       // Untuk owner: outlet aktif yang dipilih lewat outlet-picker.
@@ -402,174 +405,178 @@ class PaymentSheet extends HookConsumerWidget {
       final awardedPoints = (basePoints * custTierMult).round();
       processing.value = true;
       try {
-      // B1c: diskon melampaui batas kasir → backend menolak checkout (400,
-      // pesan mengandung "melebihi batas"). Bungkus panggilan checkout dalam
-      // loop retry: bila ditolak karena batas, minta PIN otorisasi manajer
-      // (dialog mengikuti pola PIN void/refund B1a) lalu ulangi checkout dengan
-      // `override_pin`. Diskon di bawah batas tidak pernah memicu dialog.
-      Sale? saleResult;
-      String? overridePin;
-      while (saleResult == null) {
-        try {
-          saleResult = await ref
-              .read(transactionRepositoryProvider)
-              .saveFromCart(
-            cart: cart,
-            subtotal: subtotal,
-            originalSubtotal: originalSubtotal,
-            tax: tax,
-            // discountTotal mencakup diskon item + promo + tukar poin supaya
-            // laporan mencerminkan seluruh potongan. total (final_amount) sudah
-            // dikurangi promo & poin di atas.
-            discountTotal: discountTotal + promoDiscount + pointsDiscount,
-            serviceCharge: serviceCharge,
-            total: total,
-            promoCode: appliedPromo.value?.code,
-            jatuhTempo: !splitActive && selectedPM?.type == 'later'
-                ? jatuhTempo.value
-                : null,
-            diskonResmi: promoDiscount + pointsDiscount,
-            paymentMethod: method,
-            cashAmount: splitActive
-                ? splitCashPaid
-                : (selectedPM!.type == 'cash' ? cashAmount.value : 0),
-            // Mode split: kembalian tak berlaku (amount = porsi tagihan).
-            changeAmount: splitActive
-                ? 0
-                : (selectedPM!.type == 'cash' && change > 0 ? change : 0),
-            // E7: rincian tender untuk backend (transaction_payments).
-            payments: splitActive
-                ? splitTenders.value
-                      .map((t) => {
-                        'payment_method': t.method,
-                        // Kirim type supaya backend deteksi porsi tunai andal
-                        // (tak bergantung nama metode).
-                        'payment_type': t.type,
-                        'amount': t.amount,
-                      })
-                      .toList()
-                : null,
-            customerName: customerNameController.text.trim(),
-            orderType: activeOrderType?.name ?? 'Dine In',
-            cashierId: currentUser?.remoteId ?? '',
-            cashierName: currentUser?.name ?? '',
-            outletRemoteId: outlet?.remoteId,
-            outletName: outlet?.name ?? '',
-            isPaid: isPaid,
-            customerId: activeCustomer?.id,
-            // base ke backend (backend mem-boost sesuai tier); awarded (boosted)
-            // untuk Sale/struk lokal supaya cocok dengan poin yang diberikan.
-            pointsEarned: basePoints,
-            displayPointsEarned: awardedPoints,
-            pointsUsed: pointsToRedeem,
-            tableId: activeTable?.id,
-            tableName: activeTable?.name,
-            paymentProofUrl: proofUrl.value,
-            overridePin: overridePin,
-          );
-        } catch (e) {
-          final msg = e.toString().replaceAll('Exception: ', '');
-          // Hanya error "diskon melebihi batas" yang boleh dilewati via PIN
-          // manajer. Error lain (stok habis, shift tak aktif, dll) diteruskan
-          // ke penanganan di bawah supaya tampil apa adanya ke kasir.
-          if (!msg.contains('melebihi batas') || !context.mounted) rethrow;
-          final pin = await _promptManagerPin(context, errorText: msg);
-          // Dibatalkan → keluar tanpa error; keranjang dipertahankan agar kasir
-          // bisa menyesuaikan diskon atau mencoba lagi.
-          if (pin == null) return;
-          overridePin = pin;
-          // Ulangi checkout dengan override_pin. Bila PIN salah, backend
-          // membalas pesan "melebihi batas" lagi → dialog dibuka ulang.
+        // B1c: diskon melampaui batas kasir → backend menolak checkout (400,
+        // pesan mengandung "melebihi batas"). Bungkus panggilan checkout dalam
+        // loop retry: bila ditolak karena batas, minta PIN otorisasi manajer
+        // (dialog mengikuti pola PIN void/refund B1a) lalu ulangi checkout dengan
+        // `override_pin`. Diskon di bawah batas tidak pernah memicu dialog.
+        Sale? saleResult;
+        String? overridePin;
+        while (saleResult == null) {
+          try {
+            saleResult = await ref
+                .read(transactionRepositoryProvider)
+                .saveFromCart(
+                  cart: cart,
+                  subtotal: subtotal,
+                  originalSubtotal: originalSubtotal,
+                  tax: tax,
+                  // discountTotal mencakup diskon item + promo + tukar poin supaya
+                  // laporan mencerminkan seluruh potongan. total (final_amount) sudah
+                  // dikurangi promo & poin di atas.
+                  discountTotal: discountTotal + promoDiscount + pointsDiscount,
+                  serviceCharge: serviceCharge,
+                  total: total,
+                  promoCode: appliedPromo.value?.code,
+                  jatuhTempo: !splitActive && selectedPM?.type == 'later'
+                      ? jatuhTempo.value
+                      : null,
+                  diskonResmi: promoDiscount + pointsDiscount,
+                  paymentMethod: method,
+                  cashAmount: splitActive
+                      ? splitCashPaid
+                      : (selectedPM!.type == 'cash' ? cashAmount.value : 0),
+                  // Mode split: kembalian tak berlaku (amount = porsi tagihan).
+                  changeAmount: splitActive
+                      ? 0
+                      : (selectedPM!.type == 'cash' && change > 0 ? change : 0),
+                  // E7: rincian tender untuk backend (transaction_payments).
+                  payments: splitActive
+                      ? splitTenders.value
+                            .map(
+                              (t) => {
+                                'payment_method': t.method,
+                                // Kirim type supaya backend deteksi porsi tunai andal
+                                // (tak bergantung nama metode).
+                                'payment_type': t.type,
+                                'amount': t.amount,
+                              },
+                            )
+                            .toList()
+                      : null,
+                  customerName: customerNameController.text.trim(),
+                  orderType: activeOrderType?.name ?? 'Dine In',
+                  cashierId: currentUser?.remoteId ?? '',
+                  cashierName: currentUser?.name ?? '',
+                  outletRemoteId: outlet?.remoteId,
+                  outletName: outlet?.name ?? '',
+                  isPaid: isPaid,
+                  customerId: activeCustomer?.id,
+                  // base ke backend (backend mem-boost sesuai tier); awarded (boosted)
+                  // untuk Sale/struk lokal supaya cocok dengan poin yang diberikan.
+                  pointsEarned: basePoints,
+                  displayPointsEarned: awardedPoints,
+                  pointsUsed: pointsToRedeem,
+                  tableId: activeTable?.id,
+                  tableName: activeTable?.name,
+                  paymentProofUrl: proofUrl.value,
+                  overridePin: overridePin,
+                );
+          } catch (e) {
+            final msg = e.toString().replaceAll('Exception: ', '');
+            // Hanya error "diskon melebihi batas" yang boleh dilewati via PIN
+            // manajer. Error lain (stok habis, shift tak aktif, dll) diteruskan
+            // ke penanganan di bawah supaya tampil apa adanya ke kasir.
+            if (!msg.contains('melebihi batas') || !context.mounted) rethrow;
+            final pin = await _promptManagerPin(context, errorText: msg);
+            // Dibatalkan → keluar tanpa error; keranjang dipertahankan agar kasir
+            // bisa menyesuaikan diskon atau mencoba lagi.
+            if (pin == null) return;
+            overridePin = pin;
+            // Ulangi checkout dengan override_pin. Bila PIN salah, backend
+            // membalas pesan "melebihi batas" lagi → dialog dibuka ulang.
+          }
         }
-      }
-      final sale = saleResult;
+        final sale = saleResult;
 
-      // Status meja kini diupdate otomatis oleh TransactionRepository.saveFromCart
+        // Status meja kini diupdate otomatis oleh TransactionRepository.saveFromCart
 
-      // Refresh cache yang terkait pelanggan agar poin, analisa, dan riwayat
-      // pembelian di halaman detail pelanggan langsung sinkron.
-      final customerId = activeCustomer?.id;
-      if (customerId != null && customerId.isNotEmpty) {
-        ref.invalidate(customerDetailProvider(customerId));
-        ref.invalidate(customerSalesProvider(customerId));
-        ref.invalidate(customersFutureProvider);
-      }
+        // Refresh cache yang terkait pelanggan agar poin, analisa, dan riwayat
+        // pembelian di halaman detail pelanggan langsung sinkron.
+        final customerId = activeCustomer?.id;
+        if (customerId != null && customerId.isNotEmpty) {
+          ref.invalidate(customerDetailProvider(customerId));
+          ref.invalidate(customerSalesProvider(customerId));
+          ref.invalidate(customersFutureProvider);
+        }
 
-      // Refresh laporan & dashboard agar revenue + produk terlaris terupdate.
-      ref.invalidate(salesFutureProvider);
-      ref.invalidate(activeShiftProvider);
-      // Nomor antrian baru → total & jumlah menunggu di header ikut berubah.
-      ref.invalidate(ringkasanAntrianProvider);
+        // Refresh laporan & dashboard agar revenue + produk terlaris terupdate.
+        ref.invalidate(salesFutureProvider);
+        ref.invalidate(activeShiftProvider);
+        // Nomor antrian baru → total & jumlah menunggu di header ikut berubah.
+        ref.invalidate(ringkasanAntrianProvider);
 
-      // Refresh list meja & area: backend baru saja menandai meja
-      // (kalau dine-in) jadi occupied, perubahan ini perlu tercermin di
-      // selektor meja & manajemen meja tanpa harus restart.
-      //
-      // Invalidate seluruh family `activeTableTransactionsProvider` (tanpa
-      // argumen) supaya tidak cuma cache untuk activeTable yang ter-flush;
-      // kalau ada dialog detail untuk meja LAIN yang masih hidup di tree
-      // (jarang, tapi mungkin via split bill), mereka juga ikut refresh.
-      if (activeTable != null) {
-        ref.invalidate(tablesFutureProvider);
-        ref.invalidate(tableGroupsFutureProvider);
-      }
-      ref.invalidate(activeTableTransactionsProvider);
+        // Refresh list meja & area: backend baru saja menandai meja
+        // (kalau dine-in) jadi occupied, perubahan ini perlu tercermin di
+        // selektor meja & manajemen meja tanpa harus restart.
+        //
+        // Invalidate seluruh family `activeTableTransactionsProvider` (tanpa
+        // argumen) supaya tidak cuma cache untuk activeTable yang ter-flush;
+        // kalau ada dialog detail untuk meja LAIN yang masih hidup di tree
+        // (jarang, tapi mungkin via split bill), mereka juga ikut refresh.
+        if (activeTable != null) {
+          ref.invalidate(tablesFutureProvider);
+          ref.invalidate(tableGroupsFutureProvider);
+        }
+        ref.invalidate(activeTableTransactionsProvider);
 
-      ref.read(cartProvider.notifier).clear();
-      ref.read(activeCustomerProvider.notifier).set(null);
-      ref.read(activeTableProvider.notifier).set(null);
-      await ref
-          .read(notificationServiceProvider)
-          .showTransactionSuccess(
-            saleId: sale.id,
-            invoiceId: sale.invoiceId,
-            total: total,
-            paymentMethod: method,
-            customerName: customerNameController.text.trim(),
-            isPaid: isPaid,
-          );
-      final printerSettings = ref.read(printerSettingsProvider);
-      // Gate auto-print pakai nilai EFEKTIF (override user → default role).
-      // hasDevice tetap per-user (printer terpasang milik user ini). SINKRON:
-      // membaca nilai yang sudah termuat (di-pra-muat di layar kasir), tak
-      // menunggu jaringan → offline → default role hardcoded (auto-print jalan).
-      final effectivePrinter = ref.read(effectivePrinterConfigProvider);
-      if (effectivePrinter.autoPrint && printerSettings.hasDevice) {
-        await ref.read(printerServiceProvider).printReceipt(sale);
-      }
-      // Cetak otomatis satu tiket dapur. `cart` di-snapshot di awal confirmPay
-      // (sebelum keranjang di-clear di atas). Gated toggle terpisah; perilaku
-      // lama tak berubah saat toggle mati.
-      // Tiket dapur ikut fitur Kitchen Display (bisa dimatikan untuk tipe
-      // outlet, mis. Retail). Daftar kosong = belum termuat → fail-open.
-      final fiturOutlet = ref.read(outletFeatureKeysProvider);
-      final dapurBerlaku =
-          fiturOutlet.isEmpty || fiturOutlet.contains('kitchen_display');
-      if (effectivePrinter.autoPrintKitchen &&
-          printerSettings.hasDevice &&
-          dapurBerlaku) {
-        await ref.read(printerServiceProvider).printKitchenTickets(sale, cart);
-      }
-      // Buka laci kas otomatis bila ada porsi tunai. No-op aman bila
-      // printer/laci tidak terpasang.
-      if (isCashPayment) {
-        await ref.read(printerServiceProvider).openCashDrawer();
-      }
-      // Transaksi offline: dialog sukses (yang fetch detail backend) tidak
-      // akan muncul, jadi beri konfirmasi tersendiri di sini.
-      if (sale.pendingSync && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${sale.nomorAntrian != null ? 'Nomor antrian ${sale.nomorAntrian}. ' : ''}'
-              'Tersimpan offline — otomatis disinkronkan saat koneksi kembali.',
+        ref.read(cartProvider.notifier).clear();
+        ref.read(activeCustomerProvider.notifier).set(null);
+        ref.read(activeTableProvider.notifier).set(null);
+        await ref
+            .read(notificationServiceProvider)
+            .showTransactionSuccess(
+              saleId: sale.id,
+              invoiceId: sale.invoiceId,
+              total: total,
+              paymentMethod: method,
+              customerName: customerNameController.text.trim(),
+              isPaid: isPaid,
+            );
+        final printerSettings = ref.read(printerSettingsProvider);
+        // Gate auto-print pakai nilai EFEKTIF (override user → default role).
+        // hasDevice tetap per-user (printer terpasang milik user ini). SINKRON:
+        // membaca nilai yang sudah termuat (di-pra-muat di layar kasir), tak
+        // menunggu jaringan → offline → default role hardcoded (auto-print jalan).
+        final effectivePrinter = ref.read(effectivePrinterConfigProvider);
+        if (effectivePrinter.autoPrint && printerSettings.hasDevice) {
+          await ref.read(printerServiceProvider).printReceipt(sale);
+        }
+        // Cetak otomatis satu tiket dapur. `cart` di-snapshot di awal confirmPay
+        // (sebelum keranjang di-clear di atas). Gated toggle terpisah; perilaku
+        // lama tak berubah saat toggle mati.
+        // Tiket dapur ikut fitur Kitchen Display (bisa dimatikan untuk tipe
+        // outlet, mis. Retail). Daftar kosong = belum termuat → fail-open.
+        final fiturOutlet = ref.read(outletFeatureKeysProvider);
+        final dapurBerlaku =
+            fiturOutlet.isEmpty || fiturOutlet.contains('kitchen_display');
+        if (effectivePrinter.autoPrintKitchen &&
+            printerSettings.hasDevice &&
+            dapurBerlaku) {
+          await ref
+              .read(printerServiceProvider)
+              .printKitchenTickets(sale, cart);
+        }
+        // Buka laci kas otomatis bila ada porsi tunai. No-op aman bila
+        // printer/laci tidak terpasang.
+        if (isCashPayment) {
+          await ref.read(printerServiceProvider).openCashDrawer();
+        }
+        // Transaksi offline: dialog sukses (yang fetch detail backend) tidak
+        // akan muncul, jadi beri konfirmasi tersendiri di sini.
+        if (sale.pendingSync && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${sale.nomorAntrian != null ? 'Nomor antrian ${sale.nomorAntrian}. ' : ''}'
+                'Tersimpan offline — otomatis disinkronkan saat koneksi kembali.',
+              ),
+              backgroundColor: kWarning,
+              duration: const Duration(seconds: 6),
             ),
-            backgroundColor: kWarning,
-            duration: const Duration(seconds: 6),
-          ),
-        );
-      }
-      onPaid(sale.id);
+          );
+        }
+        onPaid(sale.id);
       } catch (e) {
         // Error checkout online nyata (4xx/5xx: stok habis, shift tak aktif,
         // produk dihapus, dll). Error offline sudah ditangani saveFromCart
@@ -600,148 +607,149 @@ class PaymentSheet extends HookConsumerWidget {
         text: remaining > 0 ? formatRupiah(remaining) : '',
       );
       var amountVal = remaining;
-      final result = await tampilkanSheetBawah<
-        ({String method, String type, double amount})
-      >(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (ctx) {
-          return StatefulBuilder(
-            builder: (ctx, setModalState) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tambah Pembayaran',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: kTextDark,
-                      ),
+      final result =
+          await tampilkanSheetBawah<
+            ({String method, String type, double amount})
+          >(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.white,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            builder: (ctx) {
+              return StatefulBuilder(
+                builder: (ctx, setModalState) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
                     ),
-                    const Gap(4),
-                    Text(
-                      'Sisa tagihan: ${formatRupiah(remaining)}',
-                      style: TextStyle(color: kTextMid, fontSize: 12),
-                    ),
-                    const Gap(16),
-                    Text(
-                      'Metode',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: kTextDark,
-                      ),
-                    ),
-                    const Gap(8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: methods.map((m) {
-                        final active = m.name == chosen.name;
-                        return GestureDetector(
-                          onTap: () => setModalState(() => chosen = m),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 9,
-                            ),
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? kPrimary.withValues(alpha: 0.1)
-                                  : kBg,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: active ? kPrimary : kDivider,
-                              ),
-                            ),
-                            child: Text(
-                              m.name,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: active ? kPrimary : kTextDark,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const Gap(16),
-                    Text(
-                      'Nominal',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: kTextDark,
-                      ),
-                    ),
-                    const Gap(8),
-                    TextField(
-                      controller: amountCtrl,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [RupiahInputFormatter()],
-                      autofocus: false,
-                      onChanged: (v) =>
-                          amountVal = parseRupiahInput(v).toDouble(),
-                      decoration: InputDecoration(
-                        hintText: 'Rp 0',
-                        filled: true,
-                        fillColor: kBg,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const Gap(16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (amountVal <= 0) return;
-                          Navigator.pop(ctx, (
-                            method: chosen.name,
-                            type: chosen.type,
-                            amount: amountVal,
-                          ));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kPrimary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Tambah',
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tambah Pembayaran',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: kTextDark,
                           ),
                         ),
-                      ),
+                        const Gap(4),
+                        Text(
+                          'Sisa tagihan: ${formatRupiah(remaining)}',
+                          style: TextStyle(color: kTextMid, fontSize: 12),
+                        ),
+                        const Gap(16),
+                        Text(
+                          'Metode',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: kTextDark,
+                          ),
+                        ),
+                        const Gap(8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: methods.map((m) {
+                            final active = m.name == chosen.name;
+                            return GestureDetector(
+                              onTap: () => setModalState(() => chosen = m),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: active
+                                      ? kPrimary.withValues(alpha: 0.1)
+                                      : kBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: active ? kPrimary : kDivider,
+                                  ),
+                                ),
+                                child: Text(
+                                  m.name,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: active ? kPrimary : kTextDark,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const Gap(16),
+                        Text(
+                          'Nominal',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: kTextDark,
+                          ),
+                        ),
+                        const Gap(8),
+                        TextField(
+                          controller: amountCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [RupiahInputFormatter()],
+                          autofocus: false,
+                          onChanged: (v) =>
+                              amountVal = parseRupiahInput(v).toDouble(),
+                          decoration: InputDecoration(
+                            hintText: 'Rp 0',
+                            filled: true,
+                            fillColor: kBg,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const Gap(16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (amountVal <= 0) return;
+                              Navigator.pop(ctx, (
+                                method: chosen.name,
+                                type: chosen.type,
+                                amount: amountVal,
+                              ));
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: kPrimary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'Tambah',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           );
-        },
-      );
       if (result != null && result.amount > 0) {
         splitTenders.value = [...splitTenders.value, result];
       }
@@ -1189,66 +1197,65 @@ class PaymentSheet extends HookConsumerWidget {
               ],
               const Gap(18),
               if (!splitActive) ...[
-              Text(
-                "Tipe Pembayaran",
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: kTextDark,
+                Text(
+                  "Tipe Pembayaran",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: kTextDark,
+                  ),
                 ),
-              ),
-              const Gap(8),
+                const Gap(8),
 
-              Row(
-                children: List.generate(allMethods.length, (i) {
-                  final active = selectedIndex.value == i;
-                  final m = allMethods[i];
-                  final color = _getColor(m.type);
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => selectedIndex.value = i,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        margin: EdgeInsets.only(
-                          right: i < allMethods.length - 1 ? 8 : 0,
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: active ? color.withValues(alpha: 0.1) : kBg,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: active ? color : Colors.transparent,
+                Row(
+                  children: List.generate(allMethods.length, (i) {
+                    final active = selectedIndex.value == i;
+                    final m = allMethods[i];
+                    final color = _getColor(m.type);
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => selectedIndex.value = i,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: EdgeInsets.only(
+                            right: i < allMethods.length - 1 ? 8 : 0,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: active ? color.withValues(alpha: 0.1) : kBg,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: active ? color : Colors.transparent,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              HugeIcon(
+                                icon: _getPMIcon(m.type),
+                                color: active ? color : kTextMid,
+                                size: 22,
+                              ),
+                              const Gap(4),
+                              Text(
+                                m.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: active ? color : kTextMid,
+                                  fontWeight: active
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Column(
-                          children: [
-                            HugeIcon(
-                              icon: _getPMIcon(m.type),
-                              color: active ? color : kTextMid,
-                              size: 22,
-                            ),
-                            const Gap(4),
-                            Text(
-                              m.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: active ? color : kTextMid,
-                                fontWeight: active
-                                    ? FontWeight.w700
-                                    : FontWeight.w400,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
-                    ),
-                  );
-                }),
-              ),
+                    );
+                  }),
+                ),
               ], // ── akhir grid single-method (disembunyikan saat split) ──
-
               // ── E7: Split / multi-tender payment ──
               if (total > 0) ...[
                 const Gap(14),
@@ -1268,8 +1275,11 @@ class PaymentSheet extends HookConsumerWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.call_split_rounded,
-                              color: kPrimary, size: 18),
+                          Icon(
+                            Icons.call_split_rounded,
+                            color: kPrimary,
+                            size: 18,
+                          ),
                           const Gap(8),
                           Text(
                             'Bagi jadi beberapa metode (Split)',
@@ -1345,8 +1355,7 @@ class PaymentSheet extends HookConsumerWidget {
                           const Gap(6),
                           GestureDetector(
                             onTap: () {
-                              final next = [...splitTenders.value]
-                                ..removeAt(i);
+                              final next = [...splitTenders.value]..removeAt(i);
                               splitTenders.value = next;
                             },
                             child: Icon(
@@ -1393,7 +1402,9 @@ class PaymentSheet extends HookConsumerWidget {
                         Text(
                           splitRemaining.abs() < 0.5
                               ? 'Lunas'
-                              : (splitRemaining > 0 ? 'Sisa tagihan' : 'Kelebihan'),
+                              : (splitRemaining > 0
+                                    ? 'Sisa tagihan'
+                                    : 'Kelebihan'),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: kTextDark,
@@ -1422,10 +1433,7 @@ class PaymentSheet extends HookConsumerWidget {
                     selectedPM.qrData!.isNotEmpty) ...[
                   const Gap(20),
                   Center(
-                    child: KartuQris(
-                      metode: selectedPM,
-                      nominal: total,
-                    ),
+                    child: KartuQris(metode: selectedPM, nominal: total),
                   ),
                 ] else if (selectedPM.type == 'transfer' &&
                     selectedPM.accountNumber != null) ...[
@@ -1932,11 +1940,7 @@ class _PaymentProofPicker extends StatelessWidget {
                       onTap: uploading ? null : onClear,
                       child: const Padding(
                         padding: EdgeInsets.all(6),
-                        child: Icon(
-                          Icons.close,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        child: Icon(Icons.close, size: 14, color: Colors.white),
                       ),
                     ),
                   ),
@@ -2048,7 +2052,9 @@ class KartuQris extends ConsumerWidget {
       child: Column(
         children: [
           Text(
-            terkunci ? 'Scan & Bayar — nominal sudah terisi' : 'Scan QRIS untuk Bayar',
+            terkunci
+                ? 'Scan & Bayar — nominal sudah terisi'
+                : 'Scan QRIS untuk Bayar',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 13,
@@ -2101,7 +2107,11 @@ class KartuQris extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  HugeIcon(icon: AppIcons.alertCircle, size: 14, color: kWarning),
+                  HugeIcon(
+                    icon: AppIcons.alertCircle,
+                    size: 14,
+                    color: kWarning,
+                  ),
                   const Gap(6),
                   Flexible(
                     child: Text(

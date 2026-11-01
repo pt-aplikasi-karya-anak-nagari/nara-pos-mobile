@@ -9,6 +9,7 @@ import '../../../../core/app_icons.dart';
 import '../../../../core/format.dart';
 import '../../../../core/product_image.dart';
 import '../../domain/cart_item.dart';
+import '../../../products/domain/product.dart' show IsiPaket;
 import '../../../drafts/providers.dart';
 import '../../../settings/data/tax_settings.dart';
 import '../../providers.dart';
@@ -547,6 +548,15 @@ class _CartRow extends ConsumerWidget {
                           color: kPrimary,
                         ),
                       ),
+                    ),
+                  ],
+                  if (item.product.bundleItems.isNotEmpty) ...[
+                    const Gap(2),
+                    Text(
+                      'Isi: ${IsiPaket.label(item.product.bundleItems, kali: item.qty)}',
+                      style: TextStyle(fontSize: 10, color: kTextMid),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   if (item.modifiers.isNotEmpty) ...[

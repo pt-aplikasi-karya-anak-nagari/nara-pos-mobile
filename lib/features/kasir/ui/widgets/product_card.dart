@@ -722,6 +722,20 @@ class ProductCard extends HookConsumerWidget {
                           maxLines: 5,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (product.isBundle &&
+                            product.bundleItems.isNotEmpty) ...[
+                          const Gap(1),
+                          Text(
+                            'Paket: ${product.bundleLabel}',
+                            style: TextStyle(
+                              fontSize: kategoriSize,
+                              color: kTextMid,
+                              height: 1.15,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                         if (mainCategory == 'Semua' &&
                             product.categoryName != null) ...[
                           const Gap(1),

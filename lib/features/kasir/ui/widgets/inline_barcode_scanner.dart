@@ -202,7 +202,10 @@ class _InlineBarcodeScannerState extends ConsumerState<InlineBarcodeScanner> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const HugeIcon(
-                  icon: AppIcons.qrCode, color: Colors.white, size: 16),
+                icon: AppIcons.qrCode,
+                color: Colors.white,
+                size: 16,
+              ),
               const SizedBox(width: 8),
               Text(
                 ref.t('scanner.hint'),

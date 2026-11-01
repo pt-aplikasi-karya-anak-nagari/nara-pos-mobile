@@ -13,7 +13,10 @@ class TableGroupApiService extends BaseApiService {
     return response;
   }
 
-  Future<dynamic> createTableGroup(String outletId, Map<String, dynamic> data) async {
+  Future<dynamic> createTableGroup(
+    String outletId,
+    Map<String, dynamic> data,
+  ) async {
     final response = await post<Map<String, dynamic>>(
       '/outlets/$outletId/tablegroups',
       data: data,

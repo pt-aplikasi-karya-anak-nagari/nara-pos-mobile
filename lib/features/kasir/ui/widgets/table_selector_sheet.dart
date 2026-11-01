@@ -203,9 +203,7 @@ class _TableTile extends ConsumerWidget {
         border: Border.all(
           color: isSelected
               ? kPrimary
-              : (isOccupied
-                    ? kDanger.withValues(alpha: 0.3)
-                    : kDivider),
+              : (isOccupied ? kDanger.withValues(alpha: 0.3) : kDivider),
         ),
       ),
       padding: const EdgeInsets.all(8),
@@ -225,10 +223,14 @@ class _TableTile extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  isOccupied ? 'Terisi · Tap detail' : '${table.capacity} Kursi',
+                  isOccupied
+                      ? 'Terisi · Tap detail'
+                      : '${table.capacity} Kursi',
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: isOccupied ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isOccupied
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: isSelected
                         ? Colors.white.withValues(alpha: 0.8)
                         : (isOccupied ? kDanger : kTextMid),

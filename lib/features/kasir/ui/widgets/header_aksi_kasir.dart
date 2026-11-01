@@ -36,6 +36,7 @@ import '../../../drafts/providers.dart';
 class HeaderAksiKasir extends ConsumerWidget {
   final VoidCallback onScan;
   final VoidCallback onCustomOrder;
+
   /// Null = tombol Meja tak ditampilkan (fitur Meja tak berlaku untuk tipe
   /// outlet / paket ini).
   final VoidCallback? onMeja;

@@ -1385,7 +1385,8 @@ class _Header extends HookConsumerWidget {
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
                               maxWidth: context.isTablet ? 1100 : 500,
-                              maxHeight: MediaQuery.of(context).size.height * 0.85,
+                              maxHeight:
+                                  MediaQuery.of(context).size.height * 0.85,
                             ),
                             child: const TableManagementPage(isReadOnly: true),
                           ),

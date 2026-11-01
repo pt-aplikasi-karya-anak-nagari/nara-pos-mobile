@@ -65,11 +65,7 @@ class CustomerSelector extends ConsumerWidget {
                 child: Icon(Icons.close, size: 18, color: kTextMid),
               )
             else
-              HugeIcon(
-                icon: AppIcons.chevronRight,
-                size: 18,
-                color: kTextMid,
-              ),
+              HugeIcon(icon: AppIcons.chevronRight, size: 18, color: kTextMid),
           ],
         ),
       ),
@@ -239,10 +235,7 @@ class _CustomerPickerContent extends HookConsumerWidget {
                                 c.address,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: kTextMid,
-                                ),
+                                style: TextStyle(fontSize: 11, color: kTextMid),
                               ),
                             ],
                           ],

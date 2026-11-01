@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../core/offline/offline_sync_service.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../../core/outlet_scope.dart';
+import '../../products/domain/product.dart' show IsiPaket;
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
 
@@ -93,6 +94,7 @@ Sale saleDariAntrian(PendingSale ps, {bool gagal = false}) {
             qty: bulat(it['quantity']),
             note: teks(it['note']),
             modifiersLabel: teks(s['modifiers_label']),
+            bundleItems: IsiPaket.dariJson(s['bundle_items']),
           );
         }(),
   ];

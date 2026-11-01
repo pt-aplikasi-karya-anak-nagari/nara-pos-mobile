@@ -82,9 +82,9 @@ class MiniPaymentSheet extends HookConsumerWidget {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal upload bukti: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Gagal upload bukti: $e')));
         }
       }
     }
@@ -198,8 +198,7 @@ class MiniPaymentSheet extends HookConsumerWidget {
             height: 52,
             child: ElevatedButton(
               onPressed:
-                  (!uploading.value &&
-                      (!isCash || cashAmount.value >= total))
+                  (!uploading.value && (!isCash || cashAmount.value >= total))
                   ? () => Navigator.pop(context, (
                       method: selectedMethod.value,
                       cash: cashAmount.value,
@@ -297,11 +296,7 @@ class _ProofPicker extends StatelessWidget {
                       onTap: uploading ? null : onClear,
                       child: const Padding(
                         padding: EdgeInsets.all(6),
-                        child: Icon(
-                          Icons.close,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        child: Icon(Icons.close, size: 14, color: Colors.white),
                       ),
                     ),
                   ),

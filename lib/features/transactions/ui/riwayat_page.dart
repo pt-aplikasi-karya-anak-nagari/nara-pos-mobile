@@ -300,9 +300,7 @@ class _TransactionList extends ConsumerWidget {
                         selectedColor: kPrimary,
                         backgroundColor: kBg,
                         showCheckmark: false,
-                        side: BorderSide(
-                          color: selected ? kPrimary : kDivider,
-                        ),
+                        side: BorderSide(color: selected ? kPrimary : kDivider),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),

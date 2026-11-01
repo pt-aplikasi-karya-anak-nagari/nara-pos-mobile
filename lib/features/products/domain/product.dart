@@ -1,4 +1,5 @@
 import '../../../core/format.dart';
+
 class Product {
   String? remoteId;
   String name;
@@ -61,6 +62,18 @@ class Product {
   String version;
   List<ProductVariant> variants;
 
+  /// Produk paket/bundling (mis. "Paket Hemat = Nasi + Ayam + Es Teh").
+  /// Paket tak punya stok sendiri — server mengirim sisanya lewat
+  /// [availablePortions] (isi yang paling sedikit tersisa) dan memotong stok
+  /// tiap isinya saat terjual.
+  bool isBundle;
+
+  /// Isi paket, per SATU paket. Kosong untuk produk biasa.
+  List<IsiPaket> bundleItems;
+
+  /// "1× Nasi, 2× Ayam, 1× Es Teh" — kosong untuk produk biasa.
+  String get bundleLabel => IsiPaket.label(bundleItems);
+
   /// Stok yang BENAR-BENAR bisa dijual.
   ///
   /// Untuk produk bervarian, yang dijual adalah variannya dan stok hidup di
@@ -104,6 +117,8 @@ class Product {
     this.outletRemoteId,
     this.variants = const [],
     this.version = '',
+    this.isBundle = false,
+    this.bundleItems = const [],
   });
 
   bool get hasDiscount => discountType != 'none' && discountValue > 0;
@@ -138,6 +153,8 @@ class Product {
     String? outletRemoteId,
     List<ProductVariant>? variants,
     String? version,
+    bool? isBundle,
+    List<IsiPaket>? bundleItems,
   }) {
     return Product(
       remoteId: remoteId ?? this.remoteId,
@@ -168,6 +185,8 @@ class Product {
       outletRemoteId: outletRemoteId ?? this.outletRemoteId,
       variants: variants ?? this.variants,
       version: version ?? this.version,
+      isBundle: isBundle ?? this.isBundle,
+      bundleItems: bundleItems ?? this.bundleItems,
     );
   }
 
@@ -222,6 +241,8 @@ class Product {
           .map((v) => ProductVariant.fromJson(v))
           .toList(),
       version: json['version'] as String? ?? '',
+      isBundle: json['is_bundle'] as bool? ?? false,
+      bundleItems: IsiPaket.dariJson(json['bundle_items']),
     );
   }
 
@@ -229,35 +250,37 @@ class Product {
   /// untuk cache produk offline (SQLite). Round-trip key-nya sengaja
   /// dibuat persis sama dengan fromJson.
   Map<String, dynamic> toJson() => {
-        'id': remoteId,
-        'name': name,
-        'description': description,
-        'price': price,
-        'stock': stock,
-        'low_stock_threshold': lowStockThreshold,
-        'stock_unit': stockUnit,
-        'sold': sold,
-        'category': categoryName,
-        'category_id': categoryId,
-        'sku': sku,
-        'barcode': barcode,
-        'emoji': emoji,
-        'image_url': imageUrl,
-        'is_available': isAvailable,
-        'track_stock': trackStock,
-        'available_portions': availablePortions,
-        'is_in_stock': isInStock,
-        'is_low_stock': isLowStock,
-        'manual_out_of_stock': manualOutOfStock,
-        'oos_reason': oosReason,
-        'is_taxable': isTaxable,
-        'discount_type': discountType,
-        'discount_value': discountValue,
-        'discount_name': discountName,
-        'outlet_id': outletRemoteId,
-        'variants': variants.map((v) => v.toJson()).toList(),
-        'version': version,
-      };
+    'id': remoteId,
+    'name': name,
+    'description': description,
+    'price': price,
+    'stock': stock,
+    'low_stock_threshold': lowStockThreshold,
+    'stock_unit': stockUnit,
+    'sold': sold,
+    'category': categoryName,
+    'category_id': categoryId,
+    'sku': sku,
+    'barcode': barcode,
+    'emoji': emoji,
+    'image_url': imageUrl,
+    'is_available': isAvailable,
+    'track_stock': trackStock,
+    'available_portions': availablePortions,
+    'is_in_stock': isInStock,
+    'is_low_stock': isLowStock,
+    'manual_out_of_stock': manualOutOfStock,
+    'oos_reason': oosReason,
+    'is_taxable': isTaxable,
+    'discount_type': discountType,
+    'discount_value': discountValue,
+    'discount_name': discountName,
+    'outlet_id': outletRemoteId,
+    'variants': variants.map((v) => v.toJson()).toList(),
+    'version': version,
+    'is_bundle': isBundle,
+    'bundle_items': bundleItems.map((k) => k.toJson()).toList(),
+  };
 
   double get discountedPrice {
     if (discountType == 'fixed') {
@@ -316,16 +339,16 @@ class ProductVariant {
   bool get hasDiscount => discountType != 'none' && discountValue > 0;
 
   Map<String, dynamic> toJson() => {
-        'id': remoteId,
-        'product_id': productId,
-        'name': name,
-        'sku': sku,
-        'price': price,
-        'stock': stock,
-        'discount_type': discountType,
-        'discount_value': discountValue,
-        'discount_name': discountName,
-      };
+    'id': remoteId,
+    'product_id': productId,
+    'name': name,
+    'sku': sku,
+    'price': price,
+    'stock': stock,
+    'discount_type': discountType,
+    'discount_value': discountValue,
+    'discount_name': discountName,
+  };
 
   double get discountedPrice {
     if (discountType == 'fixed') {
@@ -342,4 +365,52 @@ class ProductVariant {
     if (discountType == 'percent') return '${discountValue.toInt()}%';
     return '';
   }
+}
+
+/// Satu isi paket: produk (+ varian) dan jumlahnya per SATU paket.
+class IsiPaket {
+  final String productId;
+  final String name;
+  final String variantName;
+  final int qty;
+
+  const IsiPaket({
+    required this.productId,
+    required this.name,
+    this.variantName = '',
+    required this.qty,
+  });
+
+  factory IsiPaket.fromJson(Map<String, dynamic> json) => IsiPaket(
+    productId: json['product_id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    variantName: json['variant_name']?.toString() ?? '',
+    qty: (json['qty'] as num?)?.toInt() ?? 1,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'product_id': productId,
+    'name': name,
+    if (variantName.isNotEmpty) 'variant_name': variantName,
+    'qty': qty,
+  };
+
+  /// Daftar isi dari JSON backend; aman untuk null / bentuk yang tak dikenal.
+  static List<IsiPaket> dariJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((m) => IsiPaket.fromJson(Map<String, dynamic>.from(m)))
+        .where((k) => k.name.isNotEmpty)
+        .toList();
+  }
+
+  /// "1× Nasi, 2× Kopi (Large)". [kali] = jumlah paket (isi dikalikan).
+  static String label(List<IsiPaket> isi, {int kali = 1}) => isi
+      .map(
+        (k) =>
+            '${k.qty * kali}× ${k.name}'
+            '${k.variantName.isNotEmpty ? ' (${k.variantName})' : ''}',
+      )
+      .join(', ');
 }

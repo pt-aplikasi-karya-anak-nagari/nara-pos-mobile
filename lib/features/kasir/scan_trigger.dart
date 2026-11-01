@@ -10,5 +10,6 @@ class ScanTriggerNotifier extends Notifier<int> {
   void trigger() => state++;
 }
 
-final scanTriggerProvider =
-    NotifierProvider<ScanTriggerNotifier, int>(ScanTriggerNotifier.new);
+final scanTriggerProvider = NotifierProvider<ScanTriggerNotifier, int>(
+  ScanTriggerNotifier.new,
+);

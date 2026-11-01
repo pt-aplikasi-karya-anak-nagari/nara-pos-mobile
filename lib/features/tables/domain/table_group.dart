@@ -9,22 +9,26 @@ class TableGroup {
 
   String? outletRemoteId;
 
-  TableGroup({this.id = '', required this.name, this.order = 0, this.outletRemoteId});
+  TableGroup({
+    this.id = '',
+    required this.name,
+    this.order = 0,
+    this.outletRemoteId,
+  });
 
   factory TableGroup.fromJson(Map<String, dynamic> json) {
     return TableGroup(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
-      order: json['sort_order'] is int ? json['sort_order'] : int.tryParse(json['sort_order']?.toString() ?? '0') ?? 0,
+      order: json['sort_order'] is int
+          ? json['sort_order']
+          : int.tryParse(json['sort_order']?.toString() ?? '0') ?? 0,
       outletRemoteId: json['outlet_id']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'sort_order': order,
-    };
+    return {'name': name, 'sort_order': order};
   }
 
   /// Serialisasi setia-fromJson untuk cache offline (EntityCache). Menyertakan
