@@ -30,6 +30,11 @@ class Outlet {
   // Default false supaya outlet existing tidak otomatis ekspos angka.
   bool showSoldCount;
 
+  /// Jenis outlet dari server (outlet_types): id & nama ("F&B", "Retail",
+  /// "Service"). Menentukan fitur yang ditampilkan — lihat core/jenis_usaha.
+  int typeId;
+  String typeName;
+
   // Daftar staff (admin, kasir, atau owner lain) yang ditugaskan ke outlet ini
   List<OutletStaff> staffMembers = [];
 
@@ -48,6 +53,8 @@ class Outlet {
     this.taxName = 'PPN',
     this.serviceChargeName = 'Service Charge',
     this.showSoldCount = false,
+    this.typeId = 0,
+    this.typeName = '',
   });
 
   factory Outlet.fromJson(Map<String, dynamic> json) {
@@ -77,6 +84,8 @@ class Outlet {
               ? json['service_charge_name'] as String
               : 'Service Charge',
       showSoldCount: json['show_sold_count'] as bool? ?? false,
+      typeId: (json['type_id'] as num?)?.toInt() ?? 0,
+      typeName: json['type_name'] as String? ?? '',
     )..staffMembers = (json['employees'] as List? ?? [])
         .map((e) => OutletStaff.fromJson(e))
         .toList();
@@ -100,6 +109,8 @@ class Outlet {
       'tax_name': taxName,
       'service_charge_name': serviceChargeName,
       'show_sold_count': showSoldCount,
+      'type_id': typeId,
+      'type_name': typeName,
     };
   }
 

@@ -13,6 +13,7 @@ import '../../../products/domain/product.dart' show IsiPaket;
 import '../../../drafts/providers.dart';
 import '../../../settings/data/tax_settings.dart';
 import '../../providers.dart';
+import '../../../../core/jenis_usaha.dart';
 import 'empty_states.dart';
 import 'customer_selector.dart';
 import 'line_discount_sheet.dart';
@@ -39,8 +40,11 @@ class CartPanel extends ConsumerWidget {
     final pesananMeja = ref.watch(menuOrdersProvider).asData?.value;
     final notifier = ref.read(cartProvider.notifier);
 
+    // Tab pesanan scan meja hanya untuk usaha yang memakai QR meja (F&B);
+    // toko ritel & usaha jasa cukup satu keranjang tanpa tab.
+    final pakaiQr = ref.fiturTampil('qr_self_order');
     return DefaultTabController(
-      length: 2,
+      length: pakaiQr ? 2 : 1,
       child: Container(
         color: kCard,
         child: SafeArea(
@@ -86,62 +90,63 @@ class CartPanel extends ConsumerWidget {
               ),
               Gap(16),
               // ── TabBar ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: kBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: TabBar(
-                    indicator: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
+              if (pakaiQr)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: kBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: TabBar(
+                      indicator: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      labelColor: kPrimary,
+                      unselectedLabelColor: kTextMid,
+                      labelStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      padding: const EdgeInsets.all(4),
+                      dividerColor: Colors.transparent,
+                      tabs: [
+                        // Keranjang: jumlah PRODUK (bukan total qty).
+                        //
+                        // Chip "N Produk / M Qty" di kepala panel dicabut setelah
+                        // lencana ini ada — dua tempat yang menghitung hal yang
+                        // sama membuat mata kasir harus memilih mana yang
+                        // dipercaya, dan kepala panel adalah tempat yang lebih
+                        // mudah terlewat daripada tab yang sedang ia sentuh.
+                        TabBerlencana(
+                          label: 'Langsung di Kasir',
+                          jumlah: cart.length,
+                        ),
+                        // menuOrdersProvider sudah menyaring lewat
+                        // pesananMejaPerluDitangani, jadi panjangnya memang
+                        // jumlah yang menunggu ditangani.
+                        TabBerlencana(
+                          label: 'Pesanan dari Scan Meja',
+                          jumlah: pesananMeja?.length,
                         ),
                       ],
                     ),
-                    labelColor: kPrimary,
-                    unselectedLabelColor: kTextMid,
-                    labelStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    padding: const EdgeInsets.all(4),
-                    dividerColor: Colors.transparent,
-                    tabs: [
-                      // Keranjang: jumlah PRODUK (bukan total qty).
-                      //
-                      // Chip "N Produk / M Qty" di kepala panel dicabut setelah
-                      // lencana ini ada — dua tempat yang menghitung hal yang
-                      // sama membuat mata kasir harus memilih mana yang
-                      // dipercaya, dan kepala panel adalah tempat yang lebih
-                      // mudah terlewat daripada tab yang sedang ia sentuh.
-                      TabBerlencana(
-                        label: 'Langsung di Kasir',
-                        jumlah: cart.length,
-                      ),
-                      // menuOrdersProvider sudah menyaring lewat
-                      // pesananMejaPerluDitangani, jadi panjangnya memang
-                      // jumlah yang menunggu ditangani.
-                      TabBerlencana(
-                        label: 'Pesanan dari Scan Meja',
-                        jumlah: pesananMeja?.length,
-                      ),
-                    ],
                   ),
                 ),
-              ),
               const Gap(8),
               Expanded(
                 child: TabBarView(
@@ -410,7 +415,7 @@ class CartPanel extends ConsumerWidget {
                       ],
                     ),
                     // Tab 2: Pesanan dari QR menu (source=menu_qr, unpaid).
-                    const MenuOrdersTab(),
+                    if (pakaiQr) const MenuOrdersTab(),
                   ],
                 ),
               ),

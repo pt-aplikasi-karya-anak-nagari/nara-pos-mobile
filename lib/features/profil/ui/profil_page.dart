@@ -9,6 +9,7 @@ import '../../../app/theme.dart';
 import '../../../app/theme_mode_provider.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/i18n.dart';
+import '../../../core/jenis_usaha.dart';
 import '../../../core/responsive.dart';
 import '../../access_rights/data/access_rights_repository.dart';
 import '../../attendance/ui/attendance_page.dart';
@@ -109,6 +110,263 @@ class ProfilPage extends HookConsumerWidget {
             large: 32,
           );
 
+    final jenis = ref.jenisUsaha;
+
+    List<Widget> grupKatalog() => [
+      // Katalog: Menu (F&B) / Layanan (jasa) / Produk (retail).
+      if ((ref.hasPermission(Permission.manageProducts) &&
+              (ref.hasFeature('product_management') ||
+                  ref.fiturTampil('modifiers'))) ||
+          (ref.hasPermission(Permission.manageCategories) &&
+              ref.hasFeature('product_management'))) ...[
+        _SectionHeader(label: isEn ? 'Products' : jenis.judulGrupKatalog),
+        if (ref.hasPermission(Permission.manageProducts) &&
+            ref.hasFeature('product_management'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'products',
+              icon: AppIcons.inventory,
+              label: isEn
+                  ? ref.t('profile.products')
+                  : 'Manajemen ${jenis.sebutanKatalog}',
+              onTap: () => handleTap('products', AppRoutes.products),
+            ),
+            selected: selectedMenu == 'products',
+          ),
+        if (ref.hasPermission(Permission.manageCategories) &&
+            ref.hasFeature('product_management'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'categories',
+              icon: AppIcons.barChart,
+              label: isEn
+                  ? ref.t('profile.categories')
+                  : 'Kategori ${jenis.sebutanKatalog}',
+              onTap: () => handleTap('categories', AppRoutes.categories),
+            ),
+            selected: selectedMenu == 'categories',
+          ),
+        // Modifier & Add-on — kelola grup add-on (padanan menu web
+        // /dashboard/modifiers). Push langsung agar konsisten di
+        // phone & tablet tanpa panel detail khusus.
+        if (ref.hasPermission(Permission.manageProducts) &&
+            ref.fiturTampil('modifiers'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'modifiers',
+              icon: AppIcons.discount,
+              label: isEn ? 'Modifiers & Add-ons' : jenis.sebutanModifier,
+              onTap: () => context.push(AppRoutes.modifiers),
+            ),
+            selected: selectedMenu == 'modifiers',
+          ),
+        // Bahan Baku & Resep (B1) — akses sama dengan kelola produk.
+        if (ref.hasPermission(Permission.manageProducts) &&
+            ref.fiturTampil('recipe_bom'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'recipes',
+              icon: AppIcons.inventory,
+              label: 'Bahan Baku & Resep',
+              onTap: () => handleTap('recipes', AppRoutes.recipes),
+            ),
+            selected: selectedMenu == 'recipes',
+          ),
+        const Gap(16),
+      ],
+    ];
+
+    List<Widget> grupOps() => [
+      // Operasional: meja & tipe pesanan hanya untuk usaha yang memakainya.
+      if (role.canManageOutlets ||
+          ref.hasPermission(Permission.managePrinter) ||
+          ref.hasPermission(Permission.manageTax)) ...[
+        _SectionHeader(
+          label: isEn ? ref.t('profile.group_ops') : jenis.judulGrupOperasional,
+        ),
+        if (role.canManageOutlets)
+          _Tile(
+            spec: _TileSpec(
+              id: 'outlets',
+              icon: AppIcons.storefront,
+              label: isManagement
+                  ? 'Pengaturan Outlet'
+                  : ref.t('profile.outlets'),
+              onTap: () {
+                if (isManagement) {
+                  final outletId = ref.read(activeOutletIdProvider);
+                  if (outletId != null) {
+                    handleTap(
+                      'outlets',
+                      AppRoutes.outletsEdit.replaceAll(':id', outletId),
+                    );
+                  } else {
+                    handleTap('outlets', AppRoutes.outlets);
+                  }
+                } else {
+                  handleTap('outlets', AppRoutes.outlets);
+                }
+              },
+            ),
+            selected: selectedMenu == 'outlets',
+          ),
+        if (ref.hasPermission(Permission.manageTax) &&
+            ref.fiturTampil('order_types'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'order_types',
+              icon: AppIcons.task,
+              label: ref.t('profile.order_types'),
+              onTap: () => handleTap('order_types', AppRoutes.orderTypes),
+            ),
+            selected: selectedMenu == 'order_types',
+          ),
+        if (ref.fiturTampil('table_management'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'tables',
+              icon: AppIcons.storefront,
+              label: ref.t('profile.tables'),
+              onTap: () => handleTap('tables', AppRoutes.tables),
+            ),
+            selected: selectedMenu == 'tables',
+          ),
+        if (ref.hasPermission(Permission.managePrinter))
+          _Tile(
+            spec: _TileSpec(
+              id: 'printer',
+              icon: AppIcons.printer,
+              label: ref.t('profile.print'),
+              onTap: () => handleTap('printer', AppRoutes.printer),
+            ),
+            selected: selectedMenu == 'printer',
+          ),
+        if (isManagement && ref.hasFeature('shift_management'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'shift_history',
+              icon: AppIcons.time,
+              label: ref.t('profile.shifts'),
+              onTap: () => handleTap('shift_history', '/profil/shift-history'),
+            ),
+            selected: selectedMenu == 'shift_history',
+          ),
+        if (isManagement && ref.hasFeature('payment_methods'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'payment_methods',
+              icon: AppIcons.money,
+              label: ref.t('profile.payments'),
+              onTap: () =>
+                  handleTap('payment_methods', '/profil/payment-methods'),
+            ),
+            selected: selectedMenu == 'payment_methods',
+          ),
+        const Gap(16),
+      ],
+    ];
+
+    List<Widget> grupStok() => [
+      // Stok & gudang.
+      if (ref.hasPermission(Permission.manageProducts) &&
+          (ref.hasFeature('inventory_tracking') ||
+              ref.fiturTampil('stock_transfer'))) ...[
+        _SectionHeader(label: isEn ? 'Stock & Warehouse' : 'Stok & Gudang'),
+        // Inventori produk (C1) — cek/restock stok dari HP.
+        if (ref.hasPermission(Permission.manageProducts) &&
+            ref.hasFeature('inventory_tracking'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'inventory',
+              icon: AppIcons.inventory,
+              label: 'Inventori',
+              onTap: () => handleTap('inventory', AppRoutes.inventory),
+            ),
+            selected: selectedMenu == 'inventory',
+          ),
+        // Transfer stok antar-outlet (B2) — server mengunci dengan
+        // fitur stock_transfer; tak relevan untuk usaha jasa.
+        if (ref.hasPermission(Permission.manageProducts) &&
+            ref.fiturTampil('stock_transfer'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'stock_transfer',
+              icon: AppIcons.storefront,
+              label: 'Transfer Stok',
+              onTap: () => handleTap('stock_transfer', AppRoutes.stockTransfer),
+            ),
+            selected: selectedMenu == 'stock_transfer',
+          ),
+        const Gap(16),
+      ],
+    ];
+
+    List<Widget> grupKaryawan() => [
+      // Group 3: Karyawan & Hak Akses
+      if ((role.canManageEmployees && ref.hasFeature('employee_management')) ||
+          (isManagement && ref.hasFeature('rbac_permissions'))) ...[
+        _SectionHeader(label: ref.t('profile.group_users')),
+        if (role.canManageEmployees && ref.hasFeature('employee_management'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'employees',
+              icon: AppIcons.person,
+              label: ref.t('profile.users'),
+              onTap: () => handleTap('employees', AppRoutes.employees),
+            ),
+            selected: selectedMenu == 'employees',
+          ),
+        if (isManagement && ref.hasFeature('rbac_permissions'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'access_rights',
+              icon: AppIcons.accessRights,
+              label: ref.t('profile.access_rights'),
+              onTap: () => handleTap('access_rights', AppRoutes.accessRights),
+            ),
+            selected: selectedMenu == 'access_rights',
+          ),
+        const Gap(16),
+      ],
+    ];
+
+    List<Widget> grupCrm() => [
+      // Group 4: CRM & Pelanggan
+      if (isManagement) ...[
+        _SectionHeader(label: ref.t('profile.group_crm')),
+        if (ref.hasFeature('customer_crm'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'customers',
+              icon: AppIcons.person,
+              label: ref.t('profile.customers'),
+              onTap: () => handleTap('customers', AppRoutes.customers),
+            ),
+            selected: selectedMenu == 'customers',
+          ),
+        if (ref.hasFeature('loyalty_program'))
+          _Tile(
+            spec: _TileSpec(
+              id: 'loyalty_settings',
+              icon: AppIcons.favorite,
+              label: ref.t('profile.loyalty'),
+              onTap: () => handleTap('loyalty_settings', AppRoutes.loyalty),
+            ),
+            selected: selectedMenu == 'loyalty_settings',
+          ),
+        _Tile(
+          spec: _TileSpec(
+            id: 'billing',
+            icon: AppIcons.receiptLong,
+            label: 'Billing History',
+            onTap: () => handleTap('billing', AppRoutes.billing),
+          ),
+          selected: selectedMenu == 'billing',
+        ),
+        const Gap(16),
+      ],
+    ];
+
     Widget buildMenuPane() {
       return ListView(
         padding: EdgeInsets.symmetric(horizontal: horizontalPad, vertical: 0),
@@ -128,6 +386,10 @@ class ProfilPage extends HookConsumerWidget {
                       : role.label,
                   outletName: outletName,
                 ),
+                if (jenis != JenisUsaha.umum) ...[
+                  const Gap(10),
+                  _ChipJenisUsaha(jenis: jenis, isEn: isEn),
+                ],
                 const Gap(12),
                 // Info langganan ditampilkan HANYA di halaman profil ini —
                 // bukan sebagai banner global di semua halaman. removePadding
@@ -143,212 +405,39 @@ class ProfilPage extends HookConsumerWidget {
                 ),
                 const Gap(24),
 
-                // Group 1: Produk & Inventori
-                if ((ref.hasPermission(Permission.manageProducts) &&
-                        (ref.hasFeature('product_management') ||
-                            ref.hasFeature('modifiers'))) ||
-                    (ref.hasPermission(Permission.manageCategories) &&
-                        ref.hasFeature('product_management'))) ...[
-                  _SectionHeader(label: ref.t('profile.group_products')),
-                  if (ref.hasPermission(Permission.manageProducts) &&
-                      ref.hasFeature('product_management'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'products',
-                        icon: AppIcons.inventory,
-                        label: ref.t('profile.products'),
-                        onTap: () => handleTap('products', AppRoutes.products),
-                      ),
-                      selected: selectedMenu == 'products',
-                    ),
-                  if (ref.hasPermission(Permission.manageCategories) &&
-                      ref.hasFeature('product_management'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'categories',
-                        icon: AppIcons.barChart,
-                        label: ref.t('profile.categories'),
-                        onTap: () =>
-                            handleTap('categories', AppRoutes.categories),
-                      ),
-                      selected: selectedMenu == 'categories',
-                    ),
-                  // Modifier & Add-on — kelola grup add-on (padanan menu web
-                  // /dashboard/modifiers). Push langsung agar konsisten di
-                  // phone & tablet tanpa panel detail khusus.
-                  if (ref.hasPermission(Permission.manageProducts) &&
-                      ref.hasFeature('modifiers'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'modifiers',
-                        icon: AppIcons.discount,
-                        label: 'Modifier & Add-on',
-                        onTap: () => context.push(AppRoutes.modifiers),
-                      ),
-                      selected: selectedMenu == 'modifiers',
-                    ),
-                  const Gap(16),
-                ],
-
-                // Group 2: Operasional Toko
-                if (role.canManageOutlets ||
-                    ref.hasPermission(Permission.managePrinter) ||
-                    ref.hasPermission(Permission.manageTax)) ...[
-                  _SectionHeader(label: ref.t('profile.group_ops')),
-                  if (role.canManageOutlets)
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'outlets',
-                        icon: AppIcons.storefront,
-                        label: isManagement
-                            ? 'Pengaturan Outlet'
-                            : ref.t('profile.outlets'),
-                        onTap: () {
-                          if (isManagement) {
-                            final outletId = ref.read(activeOutletIdProvider);
-                            if (outletId != null) {
-                              handleTap(
-                                'outlets',
-                                AppRoutes.outletsEdit.replaceAll(
-                                  ':id',
-                                  outletId,
-                                ),
-                              );
-                            } else {
-                              handleTap('outlets', AppRoutes.outlets);
-                            }
-                          } else {
-                            handleTap('outlets', AppRoutes.outlets);
-                          }
-                        },
-                      ),
-                      selected: selectedMenu == 'outlets',
-                    ),
-                  if (ref.hasPermission(Permission.manageTax))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'order_types',
-                        icon: AppIcons.task,
-                        label: ref.t('profile.order_types'),
-                        onTap: () =>
-                            handleTap('order_types', AppRoutes.orderTypes),
-                      ),
-                      selected: selectedMenu == 'order_types',
-                    ),
-                  if (ref.hasFeature('table_management'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'tables',
-                        icon: AppIcons.storefront,
-                        label: ref.t('profile.tables'),
-                        onTap: () => handleTap('tables', AppRoutes.tables),
-                      ),
-                      selected: selectedMenu == 'tables',
-                    ),
-                  if (ref.hasPermission(Permission.managePrinter))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'printer',
-                        icon: AppIcons.printer,
-                        label: ref.t('profile.print'),
-                        onTap: () => handleTap('printer', AppRoutes.printer),
-                      ),
-                      selected: selectedMenu == 'printer',
-                    ),
-                  if (isManagement && ref.hasFeature('shift_management'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'shift_history',
-                        icon: AppIcons.time,
-                        label: ref.t('profile.shifts'),
-                        onTap: () =>
-                            handleTap('shift_history', '/profil/shift-history'),
-                      ),
-                      selected: selectedMenu == 'shift_history',
-                    ),
-                  if (isManagement && ref.hasFeature('payment_methods'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'payment_methods',
-                        icon: AppIcons.money,
-                        label: ref.t('profile.payments'),
-                        onTap: () => handleTap(
-                          'payment_methods',
-                          '/profil/payment-methods',
-                        ),
-                      ),
-                      selected: selectedMenu == 'payment_methods',
-                    ),
-                  const Gap(16),
-                ],
-
-                // Group 3: Karyawan & Hak Akses
-                if ((role.canManageEmployees &&
-                        ref.hasFeature('employee_management')) ||
-                    (isManagement && ref.hasFeature('rbac_permissions'))) ...[
-                  _SectionHeader(label: ref.t('profile.group_users')),
-                  if (role.canManageEmployees &&
-                      ref.hasFeature('employee_management'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'employees',
-                        icon: AppIcons.person,
-                        label: ref.t('profile.users'),
-                        onTap: () =>
-                            handleTap('employees', AppRoutes.employees),
-                      ),
-                      selected: selectedMenu == 'employees',
-                    ),
-                  if (isManagement && ref.hasFeature('rbac_permissions'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'access_rights',
-                        icon: AppIcons.accessRights,
-                        label: ref.t('profile.access_rights'),
-                        onTap: () =>
-                            handleTap('access_rights', AppRoutes.accessRights),
-                      ),
-                      selected: selectedMenu == 'access_rights',
-                    ),
-                  const Gap(16),
-                ],
-
-                // Group 4: CRM & Pelanggan
-                if (isManagement) ...[
-                  _SectionHeader(label: ref.t('profile.group_crm')),
-                  if (ref.hasFeature('customer_crm'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'customers',
-                        icon: AppIcons.person,
-                        label: ref.t('profile.customers'),
-                        onTap: () =>
-                            handleTap('customers', AppRoutes.customers),
-                      ),
-                      selected: selectedMenu == 'customers',
-                    ),
-                  if (ref.hasFeature('loyalty_program'))
-                    _Tile(
-                      spec: _TileSpec(
-                        id: 'loyalty_settings',
-                        icon: AppIcons.favorite,
-                        label: ref.t('profile.loyalty'),
-                        onTap: () =>
-                            handleTap('loyalty_settings', AppRoutes.loyalty),
-                      ),
-                      selected: selectedMenu == 'loyalty_settings',
-                    ),
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'billing',
-                      icon: AppIcons.receiptLong,
-                      label: 'Billing History',
-                      onTap: () => handleTap('billing', AppRoutes.billing),
-                    ),
-                    selected: selectedMenu == 'billing',
-                  ),
-                  const Gap(16),
-                ],
+                // Urutan grup mengikuti jenis usaha outlet (lihat core/jenis_usaha):
+                // retail mendahulukan stok, jasa mendahulukan pelanggan.
+                for (final grup in switch (jenis) {
+                  JenisUsaha.fnb => [
+                    grupKatalog,
+                    grupOps,
+                    grupStok,
+                    grupKaryawan,
+                    grupCrm,
+                  ],
+                  JenisUsaha.retail => [
+                    grupKatalog,
+                    grupStok,
+                    grupOps,
+                    grupKaryawan,
+                    grupCrm,
+                  ],
+                  JenisUsaha.jasa => [
+                    grupKatalog,
+                    grupOps,
+                    grupCrm,
+                    grupKaryawan,
+                    grupStok,
+                  ],
+                  JenisUsaha.umum => [
+                    grupKatalog,
+                    grupStok,
+                    grupOps,
+                    grupKaryawan,
+                    grupCrm,
+                  ],
+                })
+                  ...grup(),
 
                 // Group 5: Pengaturan Aplikasi
                 _SectionHeader(label: ref.t('profile.group_app')),
@@ -363,18 +452,6 @@ class ProfilPage extends HookConsumerWidget {
                     ),
                     selected: selectedMenu == 'tax',
                   ),
-                // Bahan Baku & Resep (B1) — akses sama dengan kelola produk.
-                if (ref.hasPermission(Permission.manageProducts) &&
-                    ref.hasFeature('recipe_bom'))
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'recipes',
-                      icon: AppIcons.inventory,
-                      label: 'Bahan Baku & Resep',
-                      onTap: () => handleTap('recipes', AppRoutes.recipes),
-                    ),
-                    selected: selectedMenu == 'recipes',
-                  ),
                 // Pengeluaran (C2) — parity dengan web; akses lihat laporan.
                 if (ref.hasPermission(Permission.viewReports))
                   _Tile(
@@ -385,34 +462,6 @@ class ProfilPage extends HookConsumerWidget {
                       onTap: () => handleTap('expenses', AppRoutes.expenses),
                     ),
                     selected: selectedMenu == 'expenses',
-                  ),
-                // Inventori produk (C1) — cek/restock stok dari HP.
-                if (ref.hasPermission(Permission.manageProducts) &&
-                    ref.hasFeature('inventory_tracking'))
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'inventory',
-                      icon: AppIcons.inventory,
-                      label: 'Inventori',
-                      onTap: () => handleTap('inventory', AppRoutes.inventory),
-                    ),
-                    selected: selectedMenu == 'inventory',
-                  ),
-                // Transfer stok bahan baku antar-outlet (B2). Akses sama dengan
-                // Inventori — kelola produk + fitur inventory_tracking.
-                if (ref.hasPermission(Permission.manageProducts) &&
-                    ref.hasFeature('inventory_tracking'))
-                  _Tile(
-                    spec: _TileSpec(
-                      id: 'stock_transfer',
-                      icon: AppIcons.storefront,
-                      label: 'Transfer Stok',
-                      onTap: () => handleTap(
-                        'stock_transfer',
-                        AppRoutes.stockTransfer,
-                      ),
-                    ),
-                    selected: selectedMenu == 'stock_transfer',
                   ),
                 // Tampilan card produk (toggle "Terjual: N"). Akses sama
                 // dengan tax — owner / admin outlet.
@@ -473,7 +522,8 @@ class ProfilPage extends HookConsumerWidget {
                       id: 'attendance',
                       icon: AppIcons.time,
                       label: 'Absensi',
-                      onTap: () => handleTap('attendance', AppRoutes.attendance),
+                      onTap: () =>
+                          handleTap('attendance', AppRoutes.attendance),
                     ),
                     selected: selectedMenu == 'attendance',
                   ),
@@ -991,6 +1041,49 @@ class _LanguageTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Keterangan kecil bahwa menu disusun untuk jenis usaha outlet ini, supaya
+/// pemilik tahu kenapa menu meja/dapur (atau stok) tak muncul.
+class _ChipJenisUsaha extends StatelessWidget {
+  final JenisUsaha jenis;
+  final bool isEn;
+  const _ChipJenisUsaha({required this.jenis, required this.isEn});
+
+  @override
+  Widget build(BuildContext context) {
+    final ikon = switch (jenis) {
+      JenisUsaha.fnb => Icons.restaurant_outlined,
+      JenisUsaha.jasa => Icons.content_cut_outlined,
+      _ => Icons.storefront_outlined,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: kPrimary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kPrimary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Icon(ikon, size: 18, color: kPrimary),
+          const Gap(8),
+          Expanded(
+            child: Text(
+              isEn
+                  ? 'Menu arranged for ${jenis.nama} businesses'
+                  : 'Menu disusun untuk usaha ${jenis.nama}',
+              style: TextStyle(
+                fontSize: 12,
+                color: kTextDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
