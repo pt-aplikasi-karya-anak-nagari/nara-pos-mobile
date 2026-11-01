@@ -204,6 +204,20 @@ class TransactionApiService extends BaseApiService {
     );
   }
 
+  /// Split bill per item: pindahkan [items] ({item_id, qty}) dari tagihan
+  /// belum lunas ke tagihan baru. Respons: {source, split}.
+  Future<Map<String, dynamic>> pisahTagihan(
+    String transactionId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    return await post<Map<String, dynamic>>(
+      '/transactions/$transactionId/split',
+      data: {'items': items},
+      converter: (res) =>
+          res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{},
+    );
+  }
+
   /// Pelunasan "Bayar Nanti" yang dilakukan saat offline (dari antrian).
   /// Hanya [data]['transaction_ids'] yang dilunasi; idempoten per client_ref.
   Future<Map<String, dynamic>> lunasiOffline(
@@ -586,6 +600,10 @@ class TransactionRepository {
                 'variant': item.variantName,
                 'original_price': item.basePrice,
                 'modifiers_label': item.modifiersLabel,
+                if (item.product.bundleItems.isNotEmpty)
+                  'bundle_items': [
+                    for (final k in item.product.bundleItems) k.toJson(),
+                  ],
               },
           ],
         },
@@ -669,6 +687,7 @@ class TransactionRepository {
               qty: item.qty,
               note: item.note,
               modifiersLabel: item.modifiersLabel,
+              bundleItems: item.product.bundleItems,
             ),
           )
           .toList();
@@ -833,6 +852,21 @@ class TransactionRepository {
       paymentProofUrl: paymentProofUrl,
     );
     return Sale.fromJson(res);
+  }
+
+  /// Split bill per item. [qtyPerItem] = id baris → jumlah yang dipisah.
+  /// Mengembalikan tagihan BARU (belum lunas) berisi item terpilih; tagihan
+  /// asal tetap menunggu sisanya. Butuh koneksi — tak ada versi offline.
+  Future<Sale> pisahTagihan(String saleId, Map<String, int> qtyPerItem) async {
+    final res = await apiService.pisahTagihan(saleId, [
+      for (final e in qtyPerItem.entries)
+        if (e.value > 0) {'item_id': e.key, 'qty': e.value},
+    ]);
+    final baru = res['split'];
+    if (baru is! Map) {
+      throw Exception('Respons pisah bill tidak dikenali');
+    }
+    return Sale.fromJson(Map<String, dynamic>.from(baru));
   }
 
   /// Open bill: tutup meja sekali bayar — lunasi semua ronde tab meja dalam SATU

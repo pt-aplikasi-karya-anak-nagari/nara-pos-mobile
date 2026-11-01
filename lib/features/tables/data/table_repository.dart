@@ -106,7 +106,7 @@ class TableRepository {
 final tableRepositoryProvider = Provider<TableRepository>((ref) {
   return TableRepository(
     ref.watch(posTableApiServiceProvider),
-    ref.watch(tableGroupApiServiceProvider)
+    ref.watch(tableGroupApiServiceProvider),
   );
 });
 

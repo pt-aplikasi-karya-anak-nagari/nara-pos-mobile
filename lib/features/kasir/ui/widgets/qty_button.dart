@@ -33,9 +33,7 @@ class QtyButton extends StatelessWidget {
         child: HugeIcon(
           icon: icon,
           size: 14,
-          color: primary
-              ? Colors.white
-              : (enabled ? kTextDark : kTextMid),
+          color: primary ? Colors.white : (enabled ? kTextDark : kTextMid),
         ),
       ),
     );

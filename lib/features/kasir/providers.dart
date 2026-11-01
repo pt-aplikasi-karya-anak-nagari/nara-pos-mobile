@@ -172,8 +172,7 @@ class CartNotifier extends Notifier<List<CartItem>> {
   }
 
   /// Hapus diskon manual pada baris [index].
-  void clearLineDiscount(int index) =>
-      setLineDiscount(index, 'none', 0);
+  void clearLineDiscount(int index) => setLineDiscount(index, 'none', 0);
 
   void clear() => state = const [];
 
@@ -189,8 +188,10 @@ final cartProvider = NotifierProvider<CartNotifier, List<CartItem>>(
 // kasir (selalu bilangan bulat) dan tidak menumpuk pecahan saat di-SUM
 // untuk perhitungan ekspektasi kas di shift.
 final subtotalProvider = Provider<double>(
-  (ref) =>
-      ref.watch(cartProvider).fold(0.0, (s, c) => s + c.subtotal).roundToDouble(),
+  (ref) => ref
+      .watch(cartProvider)
+      .fold(0.0, (s, c) => s + c.subtotal)
+      .roundToDouble(),
 );
 // Subtotal HANYA dari baris yang kena pajak (item non-pajak dikecualikan).
 // Menjadi basis pajak agar preview kasir cocok persis dengan pajak yang
@@ -209,8 +210,10 @@ final originalSubtotalProvider = Provider<double>(
       .roundToDouble(),
 );
 final discountTotalProvider = Provider<double>(
-  (ref) =>
-      ref.watch(cartProvider).fold(0.0, (s, c) => s + c.lineDiscount).roundToDouble(),
+  (ref) => ref
+      .watch(cartProvider)
+      .fold(0.0, (s, c) => s + c.lineDiscount)
+      .roundToDouble(),
 );
 // Rincian pajak/biaya lewat Outlet.computeTaxBreakdown — SATU sumber kebenaran
 // yang menangani mode tax-INCLUSIVE (harga produk sudah termasuk PPN): PPN
@@ -219,18 +222,28 @@ final discountTotalProvider = Provider<double>(
 // perhitungan lama (subtotal + SC + PPN). Basis = subtotal cart (setelah diskon
 // per item). Sebelumnya provider ini selalu menambah PPN di atas → salah untuk
 // outlet tax-inclusive (dobel-charge PPN).
-final _taxBreakdownProvider = Provider<
-    ({double subtotal, double serviceCharge, double tax, double grandTotal})>((ref) {
-  final subtotal = ref.watch(subtotalProvider);
-  final taxableSubtotal = ref.watch(taxableSubtotalProvider);
-  final outlet = ref.watch(activeOutletProvider);
-  if (outlet == null) {
-    return (subtotal: subtotal, serviceCharge: 0.0, tax: 0.0, grandTotal: subtotal);
-  }
-  // Pajak dihitung HANYA dari taxableSubtotal (item non-pajak dikecualikan),
-  // service charge tetap dari subtotal penuh — sama seperti server.
-  return outlet.computeTaxBreakdown(subtotal, taxableSubtotal: taxableSubtotal);
-});
+final _taxBreakdownProvider =
+    Provider<
+      ({double subtotal, double serviceCharge, double tax, double grandTotal})
+    >((ref) {
+      final subtotal = ref.watch(subtotalProvider);
+      final taxableSubtotal = ref.watch(taxableSubtotalProvider);
+      final outlet = ref.watch(activeOutletProvider);
+      if (outlet == null) {
+        return (
+          subtotal: subtotal,
+          serviceCharge: 0.0,
+          tax: 0.0,
+          grandTotal: subtotal,
+        );
+      }
+      // Pajak dihitung HANYA dari taxableSubtotal (item non-pajak dikecualikan),
+      // service charge tetap dari subtotal penuh — sama seperti server.
+      return outlet.computeTaxBreakdown(
+        subtotal,
+        taxableSubtotal: taxableSubtotal,
+      );
+    });
 
 final serviceChargeProvider = Provider<double>(
   (ref) => ref.watch(_taxBreakdownProvider).serviceCharge.roundToDouble(),
@@ -255,7 +268,6 @@ final qtyProvider = Provider.family<int, String?>((ref, productId) {
       .where((c) => c.product.remoteId == productId)
       .fold(0, (s, c) => s + c.qty);
 });
-
 
 final selectedMainCategoryProvider = StateProvider<String>((ref) => 'Semua');
 
@@ -355,8 +367,10 @@ class ProductAvailabilityOverrides
 }
 
 final productAvailabilityOverridesProvider =
-    NotifierProvider<ProductAvailabilityOverrides,
-        Map<String, ProductAvailability>>(ProductAvailabilityOverrides.new);
+    NotifierProvider<
+      ProductAvailabilityOverrides,
+      Map<String, ProductAvailability>
+    >(ProductAvailabilityOverrides.new);
 
 // ─── Grid Density ─────────────────────────────────────────────────────────────
 /// Menyesuaikan jumlah kolom grid produk (-1, 0, +1, dsb dari default).

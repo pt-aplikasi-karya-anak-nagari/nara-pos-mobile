@@ -19,6 +19,7 @@ import '../../../transactions/domain/sale.dart';
 import '../../../transactions/ui/widgets/mini_payment_sheet.dart';
 import '../../data/table_repository.dart';
 import '../../domain/pos_table.dart';
+import 'pisah_bill_sheet.dart';
 import '../../../../shared/widgets/sheet_bawah.dart';
 
 /// Dialog detail meja: tampilkan status, durasi live, dan rincian
@@ -379,7 +380,44 @@ class _SaleCard extends ConsumerWidget {
     required this.tableId,
   });
 
-  Future<void> _payNow(BuildContext context, WidgetRef ref) async {
+  Future<void> _payNow(BuildContext context, WidgetRef ref) =>
+      _bayar(context, ref, sale);
+
+  /// Split bill per item: kasir memilih item → server memindahkannya ke
+  /// tagihan baru → tagihan baru langsung dibayar. Bila pembayaran
+  /// dibatalkan, tagihan pecahan tetap ada di meja sebagai ronde terpisah.
+  Future<void> _pisah(BuildContext context, WidgetRef ref) async {
+    if (tolakSaatOffline(context, ref, 'Pisah bill')) return;
+    final pilihan = await tampilkanSheetBawah<Map<String, int>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => PisahBillSheet(sale: sale),
+    );
+    if (pilihan == null || pilihan.isEmpty || !context.mounted) return;
+
+    final Sale baru;
+    try {
+      baru = await ref
+          .read(transactionRepositoryProvider)
+          .pisahTagihan(sale.id, pilihan);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memisah bill: $e'),
+            backgroundColor: kDanger,
+          ),
+        );
+      }
+      return;
+    }
+    ref.invalidate(activeTableTransactionsProvider(tableId));
+    if (!context.mounted) return;
+    await _bayar(context, ref, baru);
+  }
+
+  Future<void> _bayar(BuildContext context, WidgetRef ref, Sale sale) async {
     // Tetap bisa saat offline: pelunasan masuk antrian (pelunasan_offline).
     final result =
         await tampilkanSheetBawah<
@@ -731,6 +769,14 @@ class _SaleCard extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (it.bundleItems.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 30, top: 2),
+                        child: Text(
+                          'Isi: ${it.bundleLabel}',
+                          style: TextStyle(fontSize: 11, color: kTextMid),
+                        ),
+                      ),
                     if (it.note.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(left: 30, top: 2),
@@ -792,6 +838,33 @@ class _SaleCard extends ConsumerWidget {
                   ),
                 ),
               ),
+              // Pisah bill hanya masuk akal bila ada lebih dari satu unit.
+              if (!sale.pendingSync &&
+                  sale.items.fold<int>(0, (n, it) => n + it.qty) > 1) ...[
+                const Gap(8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 36,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pisah(context, ref),
+                    icon: const Icon(Icons.call_split, size: 16),
+                    label: const Text(
+                      'Pisah bill',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kPrimary,
+                      side: BorderSide(color: kPrimary.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               const Gap(8),
               SizedBox(
                 width: double.infinity,

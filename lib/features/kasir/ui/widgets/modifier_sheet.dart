@@ -73,26 +73,29 @@ class _ModifierSheetState extends State<ModifierSheet> {
     for (final g in widget.groups) {
       for (final o in g.options) {
         if (_selected[g.id]!.contains(o.id)) {
-          out.add(CartModifier(
-            groupId: g.id,
-            groupName: g.name,
-            optionId: o.id,
-            name: o.name,
-            price: o.price,
-          ));
+          out.add(
+            CartModifier(
+              groupId: g.id,
+              groupName: g.name,
+              optionId: o.id,
+              name: o.name,
+              price: o.price,
+            ),
+          );
         }
       }
     }
     return out;
   }
 
-  double get _addOnTotal =>
-      _build().fold<double>(0, (s, m) => s + m.price);
+  double get _addOnTotal => _build().fold<double>(0, (s, m) => s + m.price);
 
   String _rule(ModifierGroup g) {
     if (g.singleChoice) return g.required ? 'Pilih 1 · wajib' : 'Pilih 1';
     final maxTxt = g.maxSelect == 0 ? 'bebas' : 'maks ${g.maxSelect}';
-    return g.required ? 'Pilih ${g.minSelect}–$maxTxt · wajib' : 'Pilih s/d $maxTxt';
+    return g.required
+        ? 'Pilih ${g.minSelect}–$maxTxt · wajib'
+        : 'Pilih s/d $maxTxt';
   }
 
   @override
@@ -199,7 +202,9 @@ class _ModifierSheetState extends State<ModifierSheet> {
                               vertical: 11,
                             ),
                             decoration: BoxDecoration(
-                              color: on ? kPrimary.withValues(alpha: 0.08) : kBg,
+                              color: on
+                                  ? kPrimary.withValues(alpha: 0.08)
+                                  : kBg,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: on ? kPrimary : kDivider,
@@ -210,11 +215,11 @@ class _ModifierSheetState extends State<ModifierSheet> {
                                 Icon(
                                   g.singleChoice
                                       ? (on
-                                          ? Icons.radio_button_checked
-                                          : Icons.radio_button_unchecked)
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_unchecked)
                                       : (on
-                                          ? Icons.check_box
-                                          : Icons.check_box_outline_blank),
+                                            ? Icons.check_box
+                                            : Icons.check_box_outline_blank),
                                   size: 18,
                                   color: on ? kPrimary : kTextMid,
                                 ),
@@ -224,8 +229,9 @@ class _ModifierSheetState extends State<ModifierSheet> {
                                     o.name,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      fontWeight:
-                                          on ? FontWeight.w700 : FontWeight.w500,
+                                      fontWeight: on
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
                                       color: kTextDark,
                                     ),
                                   ),

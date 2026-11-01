@@ -864,6 +864,15 @@ class PrinterService {
           ),
         );
       }
+      // Isi paket di bawah nama paket ("  isi: 2x Nasi, 4x Ayam").
+      if (it.bundleItems.isNotEmpty) {
+        bytes.addAll(
+          gen.text(
+            _safe('  isi: ${it.bundleLabel.replaceAll('×', 'x')}'),
+            styles: const PosStyles(),
+          ),
+        );
+      }
       if (it.discountAmount > 0) {
         bytes.addAll(
           gen.row([
