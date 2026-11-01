@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../core/connectivity_service.dart';
 import '../../../core/outlet_scope.dart';
 import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/jam_offline.dart';
 import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/offline/shift_outbox.dart';
 import '../../transactions/data/transaction_repository.dart';
@@ -201,6 +202,9 @@ class ActiveShiftNotifier extends AsyncNotifier<Shift?> {
     String clientRef,
     DateTime occurredAt,
   ) async {
+    // Jam perangkat diubah → tahan: waktu kejadian offline diambil dari jam
+    // perangkat (lihat core/offline/jam_terpercaya.dart).
+    await pastikanJamWajar(ref.read(jamOfflineProvider));
     final localShiftId = 'localshift_${DateTime.now().microsecondsSinceEpoch}';
     final shift = Shift(
       startTime: occurredAt,
@@ -286,6 +290,9 @@ class ActiveShiftNotifier extends AsyncNotifier<Shift?> {
     String clientRef,
     DateTime occurredAt,
   ) async {
+    // Jam perangkat diubah → tahan: waktu kejadian offline diambil dari jam
+    // perangkat (lihat core/offline/jam_terpercaya.dart).
+    await pastikanJamWajar(ref.read(jamOfflineProvider));
     await _activeShiftCache.replaceAll(outletId, []);
     final outbox = ref.read(shiftOutboxProvider);
     String? dependsOn;

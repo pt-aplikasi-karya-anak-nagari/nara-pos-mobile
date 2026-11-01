@@ -172,13 +172,19 @@ final dioProvider = Provider<Dio>((ref) {
 void _catatTersambung(Ref ref, [String? headerDate]) {
   try {
     final jam = ref.read(jamOfflineProvider);
-    unawaited(jam.catatOnline().catchError((_) {}));
-    // Jam server: acuan masa berlaku langganan saat offline yang tak
-    // terpengaruh jam tablet.
+    // Jam server (header Date) adalah kebenaran: titik jam terpercaya untuk
+    // mendeteksi jam perangkat yang diubah saat offline, dan acuan masa
+    // berlaku langganan. Tanpa header, jatuh ke jam perangkat.
+    DateTime? server;
     if (headerDate != null) {
       try {
-        unawaited(jam.catatJamServer(HttpDate.parse(headerDate)).catchError((_) {}));
+        server = HttpDate.parse(headerDate);
       } catch (_) {}
+    }
+    if (server != null) {
+      unawaited(jam.catatKontakServer(server).catchError((_) {}));
+    } else {
+      unawaited(jam.catatOnline().catchError((_) {}));
     }
   } catch (_) {}
 }

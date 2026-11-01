@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/connectivity_service.dart';
+import '../../../core/offline/jam_offline.dart';
 import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/offline/shift_outbox.dart';
 import '../../../core/outlet_scope.dart';
@@ -160,6 +161,8 @@ class PelunasanOffline {
     final total = tagihan.fold<double>(0, (s, t) => s + t.total);
     final tunai = tunaiDari(metode)(paymentMethod);
 
+    // Jam perangkat diubah → tahan: waktu pelunasan diambil dari jam perangkat.
+    await pastikanJamWajar(ref.read(jamOfflineProvider));
     final outbox = ref.read(shiftOutboxProvider);
     final localShift = shift.localShiftId;
     await outbox.enqueueOp(

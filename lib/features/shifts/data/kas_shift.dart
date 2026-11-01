@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/connectivity_service.dart';
 import '../../../core/offline/entity_cache.dart';
+import '../../../core/offline/jam_offline.dart';
 import '../../../core/offline/offline_sync_service.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../../core/offline/shift_outbox.dart';
@@ -274,6 +275,8 @@ Future<bool> catatKas(
   }
   final outletId = shift.outletRemoteId ?? ref.read(activeOutletIdProvider);
   if (outletId == null || outletId.isEmpty) throw 'Outlet aktif belum dipilih';
+  // Jam perangkat diubah → tahan: waktu kejadian offline dari jam perangkat.
+  await pastikanJamWajar(ref.read(jamOfflineProvider));
   final outbox = ref.read(shiftOutboxProvider);
   final localShift = shift.localShiftId;
   await outbox.enqueueOp(
