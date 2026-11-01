@@ -1432,6 +1432,12 @@ class _ReceiptCard extends ConsumerWidget {
                             ),
                           ],
                         ),
+                      // Rincian harga per unit: ukuran/varian + tiap topping.
+                      if (sale.items[i].rincianHarga.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 2),
+                          child: _RincianHarga(item: sale.items[i]),
+                        ),
                       Text(
                         '${sale.items[i].qty} × ${formatRupiah(sale.items[i].price)}',
                         style: TextStyle(fontSize: 11, color: kTextMid),
@@ -1880,6 +1886,43 @@ class _StepperButton extends StatelessWidget {
           child: Icon(icon, size: 18, color: enabled ? kPrimary : kTextLight),
         ),
       ),
+    );
+  }
+}
+
+/// Rincian harga satu baris: "Large  Rp 22.000", "+ Boba  Rp 5.000".
+/// Harga per unit; total baris tetap di "qty × harga" di bawahnya.
+class _RincianHarga extends StatelessWidget {
+  final SaleItem item;
+  const _RincianHarga({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final gaya = TextStyle(fontSize: 11, color: kTextMid, height: 1.35);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final r in item.rincianHarga)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  r.tambahan ? '+ ${r.label}' : r.label,
+                  style: gaya,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (!r.tambahan || r.harga > 0)
+                Text(
+                  formatRupiah(r.harga),
+                  style: gaya.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+            ],
+          ),
+      ],
     );
   }
 }

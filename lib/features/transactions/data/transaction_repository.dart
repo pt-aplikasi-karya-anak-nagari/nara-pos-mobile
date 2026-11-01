@@ -615,8 +615,14 @@ class TransactionRepository {
                 'product_name': item.product.name,
                 'emoji': item.product.emoji,
                 'variant': item.variantName,
-                'original_price': item.basePrice,
+                // Sama dengan server: harga asal per unit MEMUAT add-on.
+                'original_price': item.basePrice + item.modifiersTotal,
                 'modifiers_label': item.modifiersLabel,
+                if (item.modifiers.isNotEmpty)
+                  'modifiers': [
+                    for (final m in item.modifiers)
+                      {'name': m.name, 'price': m.price},
+                  ],
                 if (item.product.bundleItems.isNotEmpty)
                   'bundle_items': [
                     for (final k in item.product.bundleItems) k.toJson(),
@@ -700,10 +706,14 @@ class TransactionRepository {
               productEmoji: item.product.emoji,
               variant: item.variantName,
               price: item.effectivePrice,
-              originalPrice: item.basePrice,
+              originalPrice: item.basePrice + item.modifiersTotal,
               qty: item.qty,
               note: item.note,
               modifiersLabel: item.modifiersLabel,
+              modifiers: [
+                for (final m in item.modifiers)
+                  AddOnStruk(name: m.name, price: m.price),
+              ],
               bundleItems: item.product.bundleItems,
             ),
           )

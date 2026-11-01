@@ -24,6 +24,10 @@ class SaleItem {
   // C4: label add-on/topping ("Boba, Less Sugar") untuk struk & riwayat.
   final String modifiersLabel;
 
+  /// Add-on/topping beserta harga per unit — untuk rincian harga di struk &
+  /// riwayat. Kosong untuk baris tanpa add-on (atau data lama).
+  final List<AddOnStruk> modifiers;
+
   /// Isi paket per SATU paket (kosong untuk produk biasa).
   final List<IsiPaket> bundleItems;
 
@@ -48,8 +52,36 @@ class SaleItem {
     this.refundedQty = 0,
     this.note = '',
     this.modifiersLabel = '',
+    this.modifiers = const [],
     this.bundleItems = const [],
   });
+
+  /// Σ harga add-on per unit.
+  double get totalAddOn => modifiers.fold(0.0, (s, m) => s + m.price);
+
+  /// Harga satu unit SEBELUM add-on & diskon: harga ukuran/varian yang
+  /// dipilih, atau harga produk. originalPrice memuat add-on (sama dengan
+  /// server), jadi add-on dikurangkan; data tanpa originalPrice memakai price.
+  double get hargaDasar {
+    final asal = originalPrice > 0 ? originalPrice : price;
+    final d = asal - totalAddOn;
+    return d < 0 ? 0 : d;
+  }
+
+  /// Rincian harga per unit: ukuran/varian (atau "Harga") lalu tiap add-on.
+  /// Kosong bila baris tanpa varian & add-on — tak perlu dirinci.
+  List<({String label, double harga, bool tambahan})> get rincianHarga {
+    if (variant.trim().isEmpty && modifiers.isEmpty) return const [];
+    return [
+      (
+        label: variant.trim().isEmpty ? 'Harga' : variant.trim(),
+        harga: hargaDasar,
+        tambahan: false,
+      ),
+      for (final m in modifiers)
+        (label: m.name, harga: m.price, tambahan: true),
+    ];
+  }
 
   /// Sisa qty yang masih bisa diretur (quantity - refunded_qty). Clamp ke 0
   /// supaya tidak pernah negatif walau data backend tak konsisten.
@@ -105,6 +137,7 @@ class SaleItem {
           : int.tryParse(json['refunded_qty']?.toString() ?? '0') ?? 0,
       note: json['note']?.toString() ?? '',
       modifiersLabel: modifiersLabelFrom(json['modifiers']),
+      modifiers: AddOnStruk.dariJson(json['modifiers']),
       bundleItems: IsiPaket.dariJson(json['bundle_items']),
     )..id = json['id']?.toString() ?? '';
   }
@@ -115,5 +148,29 @@ class SaleItem {
       'quantity': qty,
       if (note.isNotEmpty) 'note': note,
     };
+  }
+}
+
+/// Satu add-on/topping pada baris penjualan: nama & harga per unit.
+class AddOnStruk {
+  final String name;
+  final double price;
+  const AddOnStruk({required this.name, required this.price});
+
+  Map<String, dynamic> toJson() => {'name': name, 'price': price};
+
+  /// Dari JSON modifier server (`[{name, price, …}]`). Aman untuk null.
+  static List<AddOnStruk> dariJson(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (m) => AddOnStruk(
+            name: m['name']?.toString() ?? '',
+            price: (m['price'] as num?)?.toDouble() ?? 0,
+          ),
+        )
+        .where((m) => m.name.isNotEmpty)
+        .toList();
   }
 }
