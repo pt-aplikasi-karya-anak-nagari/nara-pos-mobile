@@ -862,12 +862,13 @@ class PrinterService {
         for (final r in rincian) {
           bytes.addAll(
             gen.row([
+              PosColumn(text: _safe('  ${r.label}'), width: 8),
               PosColumn(
-                text: _safe(r.tambahan ? '  + ${r.label}' : '  ${r.label}'),
-                width: 8,
-              ),
-              PosColumn(
-                text: r.tambahan && r.harga <= 0 ? '' : _fmtShort(r.harga),
+                text: !r.tambahan
+                    ? _fmtShort(r.harga)
+                    : r.harga > 0
+                    ? '+${_fmtShort(r.harga)}'
+                    : 'gratis',
                 width: 4,
                 styles: const PosStyles(align: PosAlign.right),
               ),

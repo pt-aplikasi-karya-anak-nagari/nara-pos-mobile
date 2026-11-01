@@ -632,7 +632,11 @@ class TransactionRepository {
                 if (item.modifiers.isNotEmpty)
                   'modifiers': [
                     for (final m in item.modifiers)
-                      {'name': m.name, 'price': m.price},
+                      {
+                        'name': m.name,
+                        'price': m.price,
+                        'group_name': m.groupName,
+                      },
                   ],
                 if (item.product.bundleItems.isNotEmpty)
                   'bundle_items': [
@@ -723,7 +727,7 @@ class TransactionRepository {
               modifiersLabel: item.modifiersLabel,
               modifiers: [
                 for (final m in item.modifiers)
-                  AddOnStruk(name: m.name, price: m.price),
+                  AddOnStruk(name: m.name, price: m.price, group: m.groupName),
               ],
               bundleItems: item.product.bundleItems,
             ),

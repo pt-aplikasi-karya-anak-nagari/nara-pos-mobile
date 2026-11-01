@@ -1389,6 +1389,7 @@ class _ReceiptCard extends ConsumerWidget {
                 child: Divider(color: kDivider, height: 1),
               ),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ProductImage(
                   name: sale.items[i].productName,
@@ -1431,12 +1432,6 @@ class _ReceiptCard extends ConsumerWidget {
                               ),
                             ),
                           ],
-                        ),
-                      // Rincian harga per unit: ukuran/varian + tiap topping.
-                      if (sale.items[i].rincianHarga.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2, bottom: 2),
-                          child: _RincianHarga(item: sale.items[i]),
                         ),
                       Text(
                         '${sale.items[i].qty} × ${formatRupiah(sale.items[i].price)}',
@@ -1494,6 +1489,7 @@ class _ReceiptCard extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   formatRupiah(sale.items[i].subtotal),
                   style: TextStyle(
@@ -1504,6 +1500,13 @@ class _ReceiptCard extends ConsumerWidget {
                 ),
               ],
             ),
+            // Rincian harga per item — kotak sendiri sejajar nama item, supaya
+            // nominalnya tak berdesakan dengan total baris di kanan.
+            if (sale.items[i].rincianHarga.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 46, top: 8),
+                child: _RincianHarga(item: sale.items[i]),
+              ),
           ],
           const Gap(14),
           Divider(color: kDivider, height: 1),
@@ -1890,39 +1893,83 @@ class _StepperButton extends StatelessWidget {
   }
 }
 
-/// Rincian harga satu baris: "Large  Rp 22.000", "+ Boba  Rp 5.000".
-/// Harga per unit; total baris tetap di "qty × harga" di bawahnya.
+/// Rincian harga satu item, dalam kotak tipis:
+///
+///   Harga dasar                 Rp 12.000
+///   Ukuran: Large              + Rp 7.000
+///   Topping: Boba              + Rp 3.000
+///   ─────────────────────────────────────
+///   Harga per item              Rp 22.000
+///
+/// Semua nominal per SATU item; total baris tetap di kanan atas.
 class _RincianHarga extends StatelessWidget {
   final SaleItem item;
   const _RincianHarga({required this.item});
 
+  Widget _baris(
+    String label,
+    String nilai, {
+    bool tebal = false,
+    Color? warna,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: tebal ? kTextDark : kTextMid,
+                fontWeight: tebal ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            nilai,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: warna ?? (tebal ? kTextDark : kTextMid),
+              fontWeight: tebal ? FontWeight.w600 : FontWeight.w500,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final gaya = TextStyle(fontSize: 11, color: kTextMid, height: 1.35);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final r in item.rincianHarga)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  r.tambahan ? '+ ${r.label}' : r.label,
-                  style: gaya,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (!r.tambahan || r.harga > 0)
-                Text(
-                  formatRupiah(r.harga),
-                  style: gaya.copyWith(
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-            ],
+    final rincian = item.rincianHarga;
+    final perItem = rincian.fold<double>(0, (s, r) => s + r.harga);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      decoration: BoxDecoration(
+        color: kBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          for (final r in rincian)
+            _baris(
+              r.label,
+              r.tambahan
+                  ? (r.harga > 0 ? '+ ${formatRupiah(r.harga)}' : 'Gratis')
+                  : formatRupiah(r.harga),
+              warna: r.tambahan && r.harga > 0 ? kPrimary : null,
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Divider(height: 1, color: kDivider),
           ),
-      ],
+          _baris('Harga per item', formatRupiah(perItem), tebal: true),
+        ],
+      ),
     );
   }
 }

@@ -68,18 +68,21 @@ class SaleItem {
     return d < 0 ? 0 : d;
   }
 
-  /// Rincian harga per unit: ukuran/varian (atau "Harga") lalu tiap add-on.
+  /// Rincian harga per unit: harga dasar (dengan nama varian bila ada) lalu
+  /// tiap add-on berlabel grupnya ("Ukuran: Large", "Topping: Boba").
   /// Kosong bila baris tanpa varian & add-on — tak perlu dirinci.
   List<({String label, double harga, bool tambahan})> get rincianHarga {
     if (variant.trim().isEmpty && modifiers.isEmpty) return const [];
     return [
       (
-        label: variant.trim().isEmpty ? 'Harga' : variant.trim(),
+        label: variant.trim().isEmpty
+            ? 'Harga dasar'
+            : 'Harga dasar (${variant.trim()})',
         harga: hargaDasar,
         tambahan: false,
       ),
       for (final m in modifiers)
-        (label: m.name, harga: m.price, tambahan: true),
+        (label: m.label, harga: m.price, tambahan: true),
     ];
   }
 
@@ -155,9 +158,19 @@ class SaleItem {
 class AddOnStruk {
   final String name;
   final double price;
-  const AddOnStruk({required this.name, required this.price});
 
-  Map<String, dynamic> toJson() => {'name': name, 'price': price};
+  /// Nama grup add-on ("Ukuran", "Topping", "Gula"). Kosong untuk data lama.
+  final String group;
+  const AddOnStruk({required this.name, required this.price, this.group = ''});
+
+  /// "Ukuran: Large" — atau nama saja bila grupnya tak diketahui.
+  String get label => group.trim().isEmpty ? name : '${group.trim()}: $name';
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'price': price,
+    if (group.isNotEmpty) 'group_name': group,
+  };
 
   /// Dari JSON modifier server (`[{name, price, …}]`). Aman untuk null.
   static List<AddOnStruk> dariJson(dynamic raw) {
@@ -168,6 +181,7 @@ class AddOnStruk {
           (m) => AddOnStruk(
             name: m['name']?.toString() ?? '',
             price: (m['price'] as num?)?.toDouble() ?? 0,
+            group: m['group_name']?.toString() ?? '',
           ),
         )
         .where((m) => m.name.isNotEmpty)
