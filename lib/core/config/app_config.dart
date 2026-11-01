@@ -12,7 +12,7 @@ class AppConfig {
 
   /// Host backend tanpa trailing slash (mis. `https://api.example.com`).
   /// Ganti IP/host ini bila alamat server berubah.
-  static const String apiHost = 'http://192.168.1.25:3001';
+  static const String apiHost = 'http://10.186.235.87:3001';
 
   /// Path versi API, mis. `/api/v1`.
   static const String apiBasePath = '/api/v1';
