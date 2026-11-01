@@ -512,22 +512,19 @@ class BilahBawah extends ConsumerWidget {
       position: DecorationPosition.foreground,
       child: Container(
         decoration: BoxDecoration(color: kCard),
-        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        padding: const EdgeInsets.only(top: 6, bottom: 4),
         child: SafeArea(
           top: false,
           child: SizedBox(
-            height: 58,
+            height: 60,
             child: Row(
               children: [
                 for (var i = 0; i < items.length; i++)
                   Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: _TombolNav(
-                        item: items[i],
-                        aktif: i == aktif,
-                        onTap: () => onTap(i),
-                      ),
+                    child: _TombolNav(
+                      item: items[i],
+                      aktif: i == aktif,
+                      onTap: () => onTap(i),
                     ),
                   ),
               ],
@@ -568,39 +565,48 @@ class _TombolNav extends ConsumerWidget {
         key: ValueKey('nav-${item.labelKey}'),
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            color: aktif ? kPrimary.withValues(alpha: 0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedScale(
-                scale: aktif ? 1.1 : 1.0,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-                child: _NavIconWithBadge(item: item, active: aktif),
+        // Gaya Material 3: sorotan berupa pil kecil di belakang IKON saja,
+        // label selalu di bawah. Sorotan selebar sel membuat tombol tepi
+        // tampak menempel ke tepi layar dan lebarnya berubah-ubah per layar.
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              width: 56,
+              height: 30,
+              decoration: BoxDecoration(
+                color: aktif
+                    ? kPrimary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
               ),
-              const Gap(3),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: aktif ? FontWeight.w700 : FontWeight.w400,
-                  color: aktif ? kPrimary : kTextMid,
-                ),
-                child: Text(
-                  ref.t(item.labelKey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              alignment: Alignment.center,
+              child: _NavIconWithBadge(item: item, active: aktif),
+            ),
+            const Gap(4),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              // Turunkan dari tema supaya font aplikasi (Poppins) ikut —
+              // TextStyle polos di sini mengganti DefaultTextStyle seluruhnya
+              // dan jatuh ke font bawaan platform.
+              style:
+                  (Theme.of(context).textTheme.labelSmall ?? const TextStyle())
+                      .copyWith(
+                        fontSize: 11,
+                        fontWeight: aktif ? FontWeight.w700 : FontWeight.w500,
+                        color: aktif ? kPrimary : kTextMid,
+                        letterSpacing: 0,
+                      ),
+              child: Text(
+                ref.t(item.labelKey),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

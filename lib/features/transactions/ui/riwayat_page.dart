@@ -16,6 +16,7 @@ import '../data/transaction_repository.dart';
 import '../data/transaksi_offline.dart';
 import '../domain/sale.dart';
 import 'transaction_detail_page.dart';
+import 'widgets/riwayat_komponen.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../../core/outlet_scope.dart';
@@ -138,9 +139,11 @@ class RiwayatPage extends HookConsumerWidget {
     );
 
     if (!isTablet) {
+      // top: false — header putih riwayat sendiri yang mengisi area status
+      // bar, supaya tak ada pita latar di atas judul.
       return Scaffold(
         backgroundColor: Colors.transparent,
-        body: SafeArea(child: list),
+        body: SafeArea(top: false, child: list),
       );
     }
 
@@ -241,133 +244,119 @@ class _TransactionList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final atasStatusBar = isTablet ? 0.0 : MediaQuery.paddingOf(context).top;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          color: Colors.white,
-          padding: EdgeInsets.fromLTRB(20, isTablet ? 24 : 16, 20, 16),
+          color: kCard,
+          padding: EdgeInsets.fromLTRB(
+            20,
+            atasStatusBar + (isTablet ? 24 : 12),
+            12,
+            12,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                ref.t('history.title'),
-                style: TextStyle(
-                  fontSize: isTablet ? 24 : 18,
-                  fontWeight: isTablet ? FontWeight.w800 : FontWeight.w700,
-                  color: kTextDark,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ref.t('history.title'),
+                      style: TextStyle(
+                        fontSize: isTablet ? 24 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: kTextDark,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  // Filter tanggal: ikon ringkas di kanan judul; titik biru
+                  // menandai rentang aktif (rentangnya tampil sebagai chip).
+                  ValueListenableBuilder<DateTime?>(
+                    valueListenable: dateFrom,
+                    builder: (context, from, _) => IconButton(
+                      tooltip: 'Pilih tanggal',
+                      onPressed: () => _pickDateRange(context),
+                      icon: Badge(
+                        isLabelVisible: from != null,
+                        smallSize: 8,
+                        backgroundColor: kPrimary,
+                        child: Icon(
+                          Icons.calendar_month_outlined,
+                          color: from != null ? kPrimary : kTextMid,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const Gap(8),
-              TextField(
-                onChanged: (v) => query.value = v,
-                style: const TextStyle(fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Cari invoice atau pelanggan...',
-                  hintStyle: TextStyle(color: kTextLight),
-                  prefixIcon: Icon(Icons.search, size: 20, color: kTextMid),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  filled: true,
-                  fillColor: kBg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  height: 44,
+                  child: TextField(
+                    onChanged: (v) => query.value = v,
+                    style: TextStyle(fontSize: 14, color: kTextDark),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Cari invoice atau pelanggan',
+                      hintStyle: TextStyle(color: kTextLight, fontSize: 14),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        size: 20,
+                        color: kTextMid,
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      filled: true,
+                      fillColor: kBg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
               ),
               const Gap(10),
-              // Filter status transaksi.
+              // Filter status + chip rentang tanggal aktif, satu baris gulir.
               ValueListenableBuilder<String>(
                 valueListenable: statusFilter,
-                builder: (context, status, _) => SizedBox(
-                  height: 34,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _statusOptions.length,
-                    separatorBuilder: (_, _) => const Gap(8),
-                    itemBuilder: (context, i) {
-                      final opt = _statusOptions[i];
-                      final selected = status == opt.value;
-                      return ChoiceChip(
-                        label: Text(opt.label),
-                        selected: selected,
-                        onSelected: (_) => statusFilter.value = opt.value,
-                        labelStyle: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: selected ? Colors.white : kTextMid,
-                        ),
-                        selectedColor: kPrimary,
-                        backgroundColor: kBg,
-                        showCheckmark: false,
-                        side: BorderSide(color: selected ? kPrimary : kDivider),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const Gap(8),
-              // Filter rentang tanggal.
-              ValueListenableBuilder<DateTime?>(
-                valueListenable: dateFrom,
-                builder: (context, from, _) => ValueListenableBuilder<DateTime?>(
-                  valueListenable: dateTo,
-                  builder: (context, to, _) {
-                    final hasRange = from != null && to != null;
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => _pickDateRange(context),
-                            icon: Icon(
-                              Icons.calendar_today_rounded,
-                              size: 16,
-                              color: kTextMid,
+                builder: (context, status, _) => ValueListenableBuilder<DateTime?>(
+                  valueListenable: dateFrom,
+                  builder: (context, from, _) {
+                    final to = dateTo.value;
+                    final rentang = from != null && to != null;
+                    return SizedBox(
+                      height: 32,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          if (rentang) ...[
+                            _ChipFilter(
+                              label:
+                                  '${formatShortDate(from)} – ${formatShortDate(to)}',
+                              aktif: true,
+                              ikon: Icons.close_rounded,
+                              onTap: () {
+                                dateFrom.value = null;
+                                dateTo.value = null;
+                              },
                             ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: kTextDark,
-                              side: BorderSide(color: kDivider),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              alignment: Alignment.centerLeft,
+                            const Gap(8),
+                          ],
+                          for (final opt in _statusOptions) ...[
+                            _ChipFilter(
+                              label: opt.label,
+                              aktif: status == opt.value,
+                              onTap: () => statusFilter.value = opt.value,
                             ),
-                            label: Text(
-                              hasRange
-                                  ? '${formatShortDate(from)} — ${formatShortDate(to)}'
-                                  : 'Semua tanggal',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: hasRange ? kTextDark : kTextMid,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        if (hasRange) ...[
-                          const Gap(4),
-                          IconButton(
-                            onPressed: () {
-                              dateFrom.value = null;
-                              dateTo.value = null;
-                            },
-                            icon: Icon(
-                              Icons.close_rounded,
-                              size: 18,
-                              color: kTextMid,
-                            ),
-                            tooltip: 'Hapus filter tanggal',
-                            visualDensity: VisualDensity.compact,
-                          ),
+                            const Gap(8),
+                          ],
                         ],
-                      ],
+                      ),
                     );
                   },
                 ),
@@ -375,18 +364,27 @@ class _TransactionList extends ConsumerWidget {
             ],
           ),
         ),
-        if (isTablet) Divider(height: 1, color: kDivider) else const Gap(8),
+        Divider(height: 1, color: kDivider.withValues(alpha: 0.7)),
         Expanded(
           child: RefreshIndicator(
             color: kPrimary,
-            onRefresh: onRefresh,
-            // Satu gulungan: transaksi offline yang belum terkirim di atas,
-            // riwayat dari server di bawahnya.
+            onRefresh: () async {
+              ref.invalidate(ringkasanRiwayatProvider);
+              await onRefresh();
+            },
+            // Satu gulungan: ringkasan, transaksi offline yang belum
+            // terkirim, lalu riwayat dari server dikelompokkan per tanggal.
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: _Ringkasan(dateFrom: dateFrom, dateTo: dateTo),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                   sliver: SliverToBoxAdapter(
                     child: _BagianBelumTerkirim(
                       selectedId: selectedId,
@@ -397,25 +395,39 @@ class _TransactionList extends ConsumerWidget {
                 PagingListener<int, Sale>(
                   controller: pagingController,
                   builder: (context, state, fetchNextPage) => SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     sliver: PagedSliverList<int, Sale>.separated(
                       state: state,
                       fetchNextPage: fetchNextPage,
-                      separatorBuilder: (_, i) => const Gap(10),
+                      separatorBuilder: (_, i) => const Gap(8),
                       builderDelegate: PagedChildBuilderDelegate<Sale>(
                         itemBuilder: (context, sale, index) {
-                          return _SaleTile(
+                          final semua = state.items ?? const <Sale>[];
+                          final awalHari =
+                              index == 0 ||
+                              index >= semua.length ||
+                              !hariSama(
+                                semua[index - 1].createdAt,
+                                sale.createdAt,
+                              );
+                          final kartu = KartuTransaksi(
                             sale: sale,
                             selected: sale.id == selectedId,
                             onTap: () => onTap(sale),
                           );
+                          if (!awalHari) return kartu;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              LabelTanggalRiwayat(
+                                labelTanggalRiwayat(sale.createdAt),
+                              ),
+                              kartu,
+                            ],
+                          );
                         },
-                        noItemsFoundIndicatorBuilder: (_) => Center(
-                          child: Text(
-                            ref.t('history.empty'),
-                            style: TextStyle(color: kTextMid),
-                          ),
-                        ),
+                        noItemsFoundIndicatorBuilder: (_) =>
+                            _KosongRiwayat(teks: ref.t('history.empty')),
                       ),
                     ),
                   ),
@@ -425,6 +437,127 @@ class _TransactionList extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Chip filter berbentuk pil — aktif: biru penuh; pasif: garis tipis.
+class _ChipFilter extends StatelessWidget {
+  final String label;
+  final bool aktif;
+  final IconData? ikon;
+  final VoidCallback onTap;
+  const _ChipFilter({
+    required this.label,
+    required this.aktif,
+    required this.onTap,
+    this.ikon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: aktif ? kPrimary : kCard,
+      shape: StadiumBorder(
+        side: BorderSide(color: aktif ? kPrimary : kDivider),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: aktif ? Colors.white : kTextMid,
+                ),
+              ),
+              if (ikon != null) ...[
+                const Gap(4),
+                Icon(ikon, size: 14, color: Colors.white),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Kartu ringkasan omzet untuk rentang yang sedang dilihat (hari ini bila
+/// tak ada filter tanggal). Disembunyikan saat offline/galat.
+class _Ringkasan extends ConsumerWidget {
+  final ValueNotifier<DateTime?> dateFrom;
+  final ValueNotifier<DateTime?> dateTo;
+  const _Ringkasan({required this.dateFrom, required this.dateTo});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final outletId = ref.watch(activeOutletIdProvider);
+    if (outletId == null) return const SizedBox.shrink();
+    return ValueListenableBuilder<DateTime?>(
+      valueListenable: dateFrom,
+      builder: (context, from, _) {
+        final to = dateTo.value;
+        final hariIni = DateTime.now();
+        final dari = from ?? hariIni;
+        final sampai = (from != null ? to : null) ?? hariIni;
+        final periode = from == null
+            ? 'hari ini'
+            : hariSama(dari, sampai)
+            ? formatShortDate(dari)
+            : '${formatShortDate(dari)} – ${formatShortDate(sampai)}';
+        final data = ref
+            .watch(
+              ringkasanRiwayatProvider((
+                outletId: outletId,
+                dari: formatIsoDate(dari),
+                sampai: formatIsoDate(sampai),
+              )),
+            )
+            .value;
+        if (data == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: KartuRingkasanRiwayat(periode: periode, ringkasan: data),
+        );
+      },
+    );
+  }
+}
+
+class _KosongRiwayat extends StatelessWidget {
+  final String teks;
+  const _KosongRiwayat({required this.teks});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(Icons.receipt_long_outlined, size: 40, color: kTextLight),
+          const Gap(10),
+          Text(
+            teks,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kTextDark,
+            ),
+          ),
+          const Gap(2),
+          Text(
+            'Coba ubah filter atau rentang tanggal.',
+            style: TextStyle(fontSize: 12, color: kTextMid),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -477,7 +610,7 @@ class _BagianBelumTerkirim extends ConsumerWidget {
           ),
           const Gap(8),
           for (final sale in daftar) ...[
-            _SaleTile(
+            KartuTransaksi(
               sale: sale,
               selected: sale.id == selectedId,
               onTap: () => onTap(sale),
@@ -519,254 +652,6 @@ class _DetailEmptyPlaceholder extends StatelessWidget {
           const Gap(12),
           Text(text, style: TextStyle(color: kTextMid, fontSize: 13)),
         ],
-      ),
-    );
-  }
-}
-
-class _SaleTile extends StatelessWidget {
-  final Sale sale;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SaleTile({
-    required this.sale,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(14),
-          border: selected
-              ? Border.all(color: kPrimary, width: 1.5)
-              : Border.all(color: Colors.transparent, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: selected ? 0.06 : 0.04),
-              blurRadius: selected ? 12 : 8,
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Builder(
-              builder: (_) {
-                // Warna leading: penuh = danger, sebagian = warning,
-                // selainnya = success.
-                final Color c = sale.gagalTerkirim
-                    ? kDanger
-                    : sale.pendingSync
-                    ? kWarning
-                    : sale.isRefunded
-                    ? kDanger
-                    : sale.isPartiallyRefunded
-                    ? kWarning
-                    : kSuccess;
-                if (sale.pendingSync) {
-                  return Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: c.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      sale.gagalTerkirim
-                          ? Icons.error_outline_rounded
-                          : Icons.cloud_upload_outlined,
-                      color: c,
-                      size: 20,
-                    ),
-                  );
-                }
-                return Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: c.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: HugeIcon(
-                      icon: sale.isRefunded || sale.isPartiallyRefunded
-                          ? AppIcons.refund
-                          : AppIcons.checkCircle,
-                      color: c,
-                      size: 20,
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          sale.customerName.isNotEmpty
-                              ? sale.customerName
-                              : 'Transaksi #${sale.invoiceId.isNotEmpty ? sale.invoiceId : sale.id}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: kTextDark,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (sale.isFromMenuQr)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: kPrimary,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.qr_code_2,
-                                size: 10,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 3),
-                              Text(
-                                'MENU QR',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      // "BELUM BAYAR" hanya untuk transaksi yang benar-benar
-                      // belum lunas — bukan yang jadi non-'paid' karena retur.
-                      if (!sale.isPaid &&
-                          !sale.isRefunded &&
-                          !sale.isPartiallyRefunded)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: kWarning,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'BELUM BAYAR',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      if (sale.pendingSync)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: sale.gagalTerkirim ? kDanger : kWarning,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            sale.gagalTerkirim
-                                ? 'GAGAL TERKIRIM'
-                                : 'BELUM TERKIRIM',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      if (sale.isPartiallyRefunded)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: kWarning,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'RETUR SEBAGIAN',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const Gap(2),
-                  // Subtitle = invoice/time + tipe + meja (kalau dine-in) +
-                  // metode bayar. Bagian `tableDisplay` hanya disisipkan
-                  // untuk dine-in dengan meja terisi supaya tidak ada
-                  // " · null" untuk takeaway.
-                  Text(
-                    () {
-                      final parts = <String>[];
-                      if (sale.nomorAntrian != null) {
-                        parts.add('Antrian ${sale.nomorAntrian}');
-                      }
-                      if (sale.customerName.isNotEmpty &&
-                          sale.invoiceId.isNotEmpty) {
-                        parts.add('#${sale.invoiceId}');
-                      } else if (sale.customerName.isNotEmpty) {
-                        parts.add('#${sale.id}');
-                      }
-                      parts.add(formatTime(sale.createdAt));
-                      parts.add(sale.orderType);
-                      if (sale.isDineIn && sale.tableDisplay != null) {
-                        // tableDisplay umumnya sudah berbentuk "Meja 1 ·
-                        // Lantai 2" — jangan tambah prefix lagi.
-                        parts.add(sale.tableDisplay!);
-                      }
-                      parts.add(sale.paymentMethod);
-                      return parts.join(' · ');
-                    }(),
-                    style: TextStyle(fontSize: 11, color: kTextMid),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              formatRupiah(sale.total),
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: kPrimary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
