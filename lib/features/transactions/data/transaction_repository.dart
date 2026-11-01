@@ -204,6 +204,23 @@ class TransactionApiService extends BaseApiService {
     );
   }
 
+  /// Ringkasan riwayat (omzet, jumlah, belum bayar) untuk rentang tanggal.
+  Future<Map<String, dynamic>> getSummary(
+    String outletId, {
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    return await get<Map<String, dynamic>>(
+      '/transactions/outlet/$outletId/summary',
+      queryParameters: {
+        if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+        if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+      },
+      converter: (res) =>
+          res is Map ? Map<String, dynamic>.from(res) : <String, dynamic>{},
+    );
+  }
+
   /// Split bill per item: pindahkan [items] ({item_id, qty}) dari tagihan
   /// belum lunas ke tagihan baru. Respons: {source, split}.
   Future<Map<String, dynamic>> pisahTagihan(
@@ -1164,3 +1181,50 @@ List<Sale> saringRiwayatTersimpan(
   }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   return hasil;
 }
+
+/// Ringkasan riwayat untuk satu rentang tanggal (lihat GET
+/// /transactions/outlet/:id/summary).
+class RingkasanRiwayat {
+  final int jumlah;
+  final double omzet;
+  final double rataRata;
+  final int belumBayar;
+  final int diretur;
+
+  const RingkasanRiwayat({
+    required this.jumlah,
+    required this.omzet,
+    required this.rataRata,
+    required this.belumBayar,
+    required this.diretur,
+  });
+
+  factory RingkasanRiwayat.fromJson(Map<String, dynamic> j) {
+    double angka(dynamic v) => v is num ? v.toDouble() : 0;
+    int bulat(dynamic v) => v is num ? v.toInt() : 0;
+    return RingkasanRiwayat(
+      jumlah: bulat(j['total_transactions']),
+      omzet: angka(j['total_revenue']),
+      rataRata: angka(j['average_ticket']),
+      belumBayar: bulat(j['unpaid_count']),
+      diretur: bulat(j['refunded_count']),
+    );
+  }
+}
+
+/// Kunci ringkasan: outlet + rentang (yyyy-MM-dd, inklusif).
+typedef KunciRingkasan = ({String outletId, String dari, String sampai});
+
+/// Ringkasan riwayat. Offline / galat → null (kartunya disembunyikan, bukan
+/// menampilkan angka nol yang tampak seperti fakta).
+final ringkasanRiwayatProvider = FutureProvider.autoDispose
+    .family<RingkasanRiwayat?, KunciRingkasan>((ref, k) async {
+      try {
+        final res = await ref
+            .read(transactionApiServiceProvider)
+            .getSummary(k.outletId, dateFrom: k.dari, dateTo: k.sampai);
+        return RingkasanRiwayat.fromJson(res);
+      } catch (_) {
+        return null;
+      }
+    });

@@ -8,6 +8,7 @@ import 'package:hugeicons/hugeicons.dart';
 import '../../../app/app_routes.dart';
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
+import '../../../core/jenis_usaha.dart';
 import '../../../core/responsive.dart';
 import '../../transactions/ui/transaction_detail_page.dart';
 import '../data/notification_history.dart';
@@ -82,9 +83,10 @@ class NotificationListPage extends HookConsumerWidget {
     if (!isTablet) {
       // Mobile: shell-less, sama dengan RiwayatPage — Scaffold transparent
       // supaya background gradient dari ShellPage tetap kelihatan.
+      // top: false — header notifikasi sendiri yang mengisi area status bar.
       return Scaffold(
         backgroundColor: Colors.transparent,
-        body: SafeArea(child: list),
+        body: SafeArea(top: false, child: list),
       );
     }
 
@@ -117,7 +119,10 @@ class NotificationListPage extends HookConsumerWidget {
                 VerticalDivider(width: 1, color: kDivider),
                 Expanded(
                   child: selectedId.value == null
-                      ? Container(color: Colors.white, child: const _EmptyDetailPane())
+                      ? Container(
+                          color: Colors.white,
+                          child: const _EmptyDetailPane(),
+                        )
                       : TransactionDetailPage(
                           // Re-key supaya saat user pindah selection,
                           // halaman detail rebuild fresh (initState refetch).
@@ -193,15 +198,15 @@ class _ListPanel extends ConsumerWidget {
             ref.read(notificationHistoryProvider.notifier).clearAll();
           },
         ),
-        if (isTablet) Divider(height: 1, color: kDivider) else const Gap(8),
+        Divider(height: 1, color: kDivider.withValues(alpha: 0.7)),
         Expanded(
           child: items.isEmpty
               ? const _EmptyListState()
               : ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => const Gap(10),
+                  separatorBuilder: (_, _) => const Gap(8),
                   itemBuilder: (context, idx) {
                     final item = items[idx];
                     final isSelected =
@@ -266,9 +271,15 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final atasStatusBar = isTablet ? 0.0 : MediaQuery.paddingOf(context).top;
     return Container(
-      color: Colors.white,
-      padding: EdgeInsets.fromLTRB(20, isTablet ? 24 : 16, 12, 16),
+      color: kCard,
+      padding: EdgeInsets.fromLTRB(
+        20,
+        atasStatusBar + (isTablet ? 24 : 12),
+        8,
+        isTablet ? 16 : 12,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -279,18 +290,25 @@ class _Header extends StatelessWidget {
                 Text(
                   'Notifikasi',
                   style: TextStyle(
-                    fontSize: isTablet ? 24 : 18,
-                    fontWeight: isTablet ? FontWeight.w800 : FontWeight.w700,
+                    fontSize: isTablet ? 24 : 20,
+                    fontWeight: FontWeight.w700,
                     color: kTextDark,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                if (hasItems) ...[
-                  const Gap(4),
-                  Text(
-                    unread == 0 ? 'Semua sudah dibaca' : '$unread belum dibaca',
-                    style: TextStyle(fontSize: 12, color: kTextMid),
+                const Gap(2),
+                Text(
+                  !hasItems
+                      ? 'Kabar penting outlet tampil di sini'
+                      : unread == 0
+                      ? 'Semua sudah dibaca'
+                      : '$unread belum dibaca',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: unread > 0 ? kPrimary : kTextMid,
+                    fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400,
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -366,38 +384,39 @@ class _NotifTile extends StatelessWidget {
       // Pola kartu sama dengan _SaleTile di RiwayatPage: kCard background,
       // radius 14, padding 16, transparent border default → primary border
       // saat dipilih (tablet), dengan boxShadow halus.
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: kCard,
-            borderRadius: BorderRadius.circular(14),
-            border: selected
-                ? Border.all(color: kPrimary, width: 1.5)
-                : Border.all(color: Colors.transparent, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: selected ? 0.06 : 0.04),
-                blurRadius: selected ? 12 : 8,
+      child: Material(
+        color: selected
+            ? kPrimary.withValues(alpha: 0.06)
+            : isUnread
+            ? kCard
+            : kCard.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? kPrimary : kDivider.withValues(alpha: 0.6),
+                width: selected ? 1.5 : 1,
               ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Avatar bulat ala WhatsApp.
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar bulat ala WhatsApp.
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_iconFor(item.type), color: accent, size: 20),
                 ),
-                child: Icon(_iconFor(item.type), color: accent, size: 20),
-              ),
-              const Gap(12),
+                const Gap(12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,7 +507,8 @@ class _NotifTile extends StatelessWidget {
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 
   Color _accentFor(String? type) {
@@ -545,48 +565,57 @@ class _NotifTile extends StatelessWidget {
   }
 }
 
-class _EmptyListState extends StatelessWidget {
+class _EmptyListState extends ConsumerWidget {
   const _EmptyListState();
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: kPrimary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: HugeIcon(
-                icon: AppIcons.notification,
-                color: kPrimary,
-                size: 44,
-              ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Isi inbox berbeda per jenis usaha: pesanan QR hanya ada di F&B.
+    final jenis = ref.watch(jenisUsahaProvider);
+    final contoh = switch (jenis) {
+      JenisUsaha.fnb => 'Pesanan QR meja, menu habis, dan pengumuman',
+      JenisUsaha.jasa => 'Pembayaran, pengingat, dan pengumuman',
+      JenisUsaha.retail => 'Stok menipis, pembayaran, dan pengumuman',
+      JenisUsaha.umum => 'Pesanan, stok, dan pengumuman',
+    };
+    return ListView(
+      // Tetap bisa ditarik (konsisten dengan daftar berisi).
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(32, 96, 32, 32),
+      children: [
+        Center(
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: kPrimary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
             ),
-            const Gap(16),
-            Text(
-              'Belum ada notifikasi',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: kTextDark,
-                fontSize: 16,
-              ),
+            alignment: Alignment.center,
+            child: HugeIcon(
+              icon: AppIcons.notification,
+              color: kPrimary,
+              size: 28,
             ),
-            const Gap(6),
-            Text(
-              'Pesanan baru dari QR menu akan muncul di sini.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: kTextMid, height: 1.4),
-            ),
-          ],
+          ),
         ),
-      ),
+        const Gap(16),
+        Text(
+          'Belum ada notifikasi',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: kTextDark,
+            fontSize: 15,
+          ),
+        ),
+        const Gap(4),
+        Text(
+          '$contoh dari pemilik akan muncul di sini.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: kTextMid, height: 1.45),
+        ),
+      ],
     );
   }
 }
