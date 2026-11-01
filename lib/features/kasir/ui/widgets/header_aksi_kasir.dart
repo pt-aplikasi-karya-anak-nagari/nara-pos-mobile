@@ -34,7 +34,9 @@ import '../../../drafts/providers.dart';
 ///               Semantics, jadi ia tetap terbaca pembaca layar dan tetap bisa
 ///               dimunculkan dengan menekan lama.
 class HeaderAksiKasir extends ConsumerWidget {
-  final VoidCallback onScan;
+  /// Null = tombol Scan tak ditampilkan (usaha jasa tak punya barang
+  /// berbarcode — lihat core/jenis_usaha).
+  final VoidCallback? onScan;
   final VoidCallback onCustomOrder;
 
   /// Null = tombol Meja tak ditampilkan (fitur Meja tak berlaku untuk tipe
@@ -44,7 +46,7 @@ class HeaderAksiKasir extends ConsumerWidget {
 
   const HeaderAksiKasir({
     super.key,
-    required this.onScan,
+    this.onScan,
     required this.onCustomOrder,
     this.onMeja,
     required this.onDraft,
@@ -56,7 +58,8 @@ class HeaderAksiKasir extends ConsumerWidget {
     final jumlahDraft = ref.watch(draftsCountProvider);
 
     final aksi = <_Aksi>[
-      _Aksi(icon: AppIcons.scan, label: 'Scan', onTap: onScan),
+      if (onScan != null)
+        _Aksi(icon: AppIcons.scan, label: 'Scan', onTap: onScan!),
       _Aksi(
         icon: AppIcons.add,
         label: 'Custom Order',

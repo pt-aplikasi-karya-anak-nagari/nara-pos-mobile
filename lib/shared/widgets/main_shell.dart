@@ -6,6 +6,7 @@ import 'package:hugeicons/hugeicons.dart';
 
 import '../../app/theme.dart';
 import '../../core/app_icons.dart';
+import '../../core/jenis_usaha.dart';
 import '../../core/i18n.dart';
 import '../../core/responsive.dart';
 import '../../features/drafts/providers.dart';
@@ -20,7 +21,6 @@ import '../../features/profil/data/profil_state.dart';
 import '../../features/user/data/auth_service.dart';
 import '../../features/user/domain/user_role.dart';
 import 'sheet_bawah.dart';
-import '../../features/subscription/data/subscription_repository.dart';
 
 class NavItem {
   final IconAsset icon;
@@ -332,11 +332,12 @@ class RailKanan extends ConsumerWidget {
 /// ref, dan keduanya sudah ada di sini.
 List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
   return [
-    _TombolAksi(
-      icon: AppIcons.scan,
-      label: 'Scan',
-      onTap: () => ref.read(scanTriggerProvider.notifier).trigger(),
-    ),
+    if (ref.fiturTampil('scan'))
+      _TombolAksi(
+        icon: AppIcons.scan,
+        label: 'Scan',
+        onTap: () => ref.read(scanTriggerProvider.notifier).trigger(),
+      ),
     _TombolAksi(
       icon: HugeIcons.strokeRoundedCalculator,
       label: 'Hitung',
@@ -359,8 +360,8 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
         builder: (_) => const CustomOrderSheet(),
       ),
     ),
-    // Fitur Meja bisa dimatikan untuk tipe outlet (mis. Retail).
-    if (ref.hasFeature('table_management'))
+    // Meja hanya untuk usaha F&B (lihat core/jenis_usaha).
+    if (ref.fiturTampil('table_management'))
       _TombolAksi(
         icon: HugeIcons.strokeRoundedTable02,
         label: 'Meja',

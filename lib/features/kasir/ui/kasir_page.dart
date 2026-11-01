@@ -18,6 +18,7 @@ import '../../../core/app_icons.dart';
 import '../../../core/beep_service.dart';
 import '../../../core/format.dart';
 import '../../../core/i18n.dart';
+import '../../../core/jenis_usaha.dart';
 import '../../../core/offline/product_cache.dart';
 import '../../../core/offline/product_offline_sync.dart';
 import '../../../core/offline/sale_outbox.dart';
@@ -46,7 +47,6 @@ import 'widgets/kartu_nomor_antrian.dart';
 import 'widgets/header_aksi_kasir.dart';
 import 'widgets/inline_barcode_scanner.dart';
 import 'widgets/payment_sheet.dart';
-import '../../subscription/data/subscription_repository.dart';
 
 class KasirPage extends HookConsumerWidget {
   const KasirPage({super.key});
@@ -1364,15 +1364,18 @@ class _Header extends HookConsumerWidget {
             // yang dipakai MainShell memutuskan menggambar rail atau bilah.
             if (!context.pakaiRailNavigasi)
               HeaderAksiKasir(
-                onScan: () => ref.read(scanTriggerProvider.notifier).trigger(),
+                onScan: !ref.fiturTampil('scan')
+                    ? null
+                    : () => ref.read(scanTriggerProvider.notifier).trigger(),
                 onCustomOrder: () => tampilkanSheetBawah(
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
                   builder: (_) => const CustomOrderSheet(),
                 ),
-                // Fitur Meja bisa dimatikan untuk tipe outlet (mis. Retail).
-                onMeja: !ref.hasFeature('table_management')
+                // Meja hanya untuk usaha yang melayani makan di tempat (F&B),
+                // dan bila paket/tipe outlet mengizinkannya.
+                onMeja: !ref.fiturTampil('table_management')
                     ? null
                     : () => showDialog(
                         context: context,

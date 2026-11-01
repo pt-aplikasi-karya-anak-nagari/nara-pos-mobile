@@ -12,6 +12,7 @@ import '../../../../core/product_image.dart';
 import '../../domain/cart_item.dart';
 import '../../../drafts/providers.dart';
 import '../../providers.dart';
+import '../../../../core/jenis_usaha.dart';
 import 'empty_states.dart';
 import 'customer_selector.dart';
 import 'line_discount_sheet.dart';
@@ -73,8 +74,11 @@ class CartSheet extends HookConsumerWidget {
     // saat keyboard muncul (mis. ketik catatan), footer ikut naik dan tidak
     // ter-clip di balik keyboard.
     final sheetHeight = mq.size.height - mq.viewInsets.bottom;
+    // Tab pesanan scan meja hanya untuk usaha yang memakai QR meja (F&B);
+    // toko ritel & usaha jasa cukup satu keranjang tanpa tab.
+    final pakaiQr = ref.fiturTampil('qr_self_order');
     return DefaultTabController(
-      length: 2,
+      length: pakaiQr ? 2 : 1,
       child: Container(
         height: sheetHeight,
         decoration: BoxDecoration(
@@ -128,46 +132,47 @@ class CartSheet extends HookConsumerWidget {
                 ),
               ),
               // ── TabBar ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: kBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TabBar(
-                    indicator: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
+              if (pakaiQr)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: kBg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TabBar(
+                      indicator: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      labelColor: kPrimary,
+                      unselectedLabelColor: kTextMid,
+                      labelStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      padding: const EdgeInsets.all(4),
+                      dividerColor: Colors.transparent,
+                      tabs: const [
+                        Tab(text: 'Langsung'),
+                        Tab(text: 'Meja'),
                       ],
                     ),
-                    labelColor: kPrimary,
-                    unselectedLabelColor: kTextMid,
-                    labelStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    padding: const EdgeInsets.all(4),
-                    dividerColor: Colors.transparent,
-                    tabs: const [
-                      Tab(text: 'Langsung'),
-                      Tab(text: 'Meja'),
-                    ],
                   ),
                 ),
-              ),
               const Gap(12),
               Divider(color: kDivider, height: 1),
               Expanded(
@@ -336,7 +341,7 @@ class CartSheet extends HookConsumerWidget {
                       ],
                     ),
                     // Tab 2: Pesanan dari QR menu (source=menu_qr, unpaid).
-                    const MenuOrdersTab(),
+                    if (pakaiQr) const MenuOrdersTab(),
                   ],
                 ),
               ),
