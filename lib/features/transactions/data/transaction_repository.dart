@@ -12,6 +12,7 @@ import '../../../core/offline/entity_cache.dart';
 import '../../../core/offline/product_cache.dart';
 import '../../../core/device_identity.dart';
 import '../../../core/offline/jam_offline.dart';
+import '../../../core/offline/jam_terpercaya.dart';
 import '../../../core/offline/tanda_tangan.dart';
 import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
@@ -531,7 +532,17 @@ class TransactionRepository {
       // offline baru benar-benar terhenti saat tablet tersambung lagi.
       // Memundurkan jam tablet tak memperpendek hitungannya (jam_offline.dart).
       final jam = _ref.read(jamOfflineProvider);
-      final jamMundur = await jam.amati();
+      // JAM PERANGKAT DIUBAH. Waktu jual offline diambil dari jam perangkat;
+      // jam yang dimundurkan/dimajukan memindah omzet ke shift/hari lain dan
+      // mengakali masa langganan. Ditahan sampai jamnya dibetulkan
+      // (jam_terpercaya.dart).
+      final penilaianJam = await jam.periksa();
+      if (!penilaianJam.wajar) {
+        throw TransaksiOfflineDitolak(pesanJamTidakWajar(penilaianJam));
+      }
+      // Jam sempat diubah sejak kontak server terakhir (lalu dibetulkan):
+      // tetap ditandai untuk ditinjau Pemilik.
+      final jamPernahDiubah = jam.pernahDiubah;
       final lamaOffline = jam.lamaOffline();
       // Pengaturan Pemilik, tapi tak pernah lebih longgar dari batas platform.
       final batasOffline = batasOfflineEfektif(pengaturan.maxOfflineHours);
@@ -595,7 +606,7 @@ class TransactionRepository {
         'queue_label': ?nomorAntrian,
         if (kasirId.isNotEmpty) 'cashier_id': kasirId,
         // Jam tablet terdeteksi dimundurkan: penanda untuk ditinjau Pemilik.
-        if (jamMundur) 'jam_mundur': true,
+        if (jamPernahDiubah) 'jam_diubah': true,
         // Dijual dalam sesi kasir yang dibuka offline (kartu/PIN dicocokkan
         // di perangkat, belum oleh server).
         if (_ref.read(authProvider.notifier).sesiOffline) 'sesi_offline': true,

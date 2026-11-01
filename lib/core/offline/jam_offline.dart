@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../shared_prefs.dart';
+import 'jam_terpercaya.dart';
 
 /// Jam untuk pengawasan offline: kapan tablet terakhir tersambung ke server,
 /// dan apakah jam tablet pernah dimundurkan.
@@ -23,12 +25,23 @@ import '../shared_prefs.dart';
 /// terbesar berarti jam tablet dimundurkan. Lama offline dihitung dari jam
 /// terbesar, sehingga memundurkan jam tak memperpendeknya.
 class JamOffline {
-  JamOffline(this._prefs, {DateTime Function()? sekarang})
-    : _sekarang = sekarang ?? DateTime.now;
+  JamOffline(this._prefs, {DateTime Function()? sekarang, SumberUptime? uptime})
+    : _sekarang = sekarang ?? DateTime.now,
+      _uptime = uptime ?? SumberUptime();
 
   static const _kunciOnline = 'offline.jam.terakhir_online';
   static const _kunciServer = 'offline.jam.server';
   static const _kunciTerbesar = 'offline.jam.terbesar';
+  static const _kunciTitik = 'offline.jam.titik';
+  static const _kunciDiubah = 'offline.jam.diubah';
+  static const _kunciSelisihOnline = 'offline.jam.selisih_online_ms';
+
+  final SumberUptime _uptime;
+
+  /// Jam terpercaya hasil [periksa] terakhir + stopwatch sejak itu — supaya
+  /// [waktuAcuan] (sinkron) tetap bisa memakainya.
+  DateTime? _terpercaya;
+  final Stopwatch _sejakTerpercaya = Stopwatch();
 
   /// Selisih jam yang masih dianggap wajar (sinkronisasi jam otomatis).
   static const toleransiMundur = Duration(minutes: 2);
@@ -66,11 +79,107 @@ class JamOffline {
   /// memundurkan jam tablet tak membuat langganan yang habis hidup lagi.
   DateTime waktuAcuan() {
     var acuan = _sekarang();
-    for (final t in [jamTerbesar, jamServerTerakhir]) {
+    final terpercaya = _terpercaya?.add(_sejakTerpercaya.elapsed);
+    for (final t in [jamTerbesar, jamServerTerakhir, terpercaya]) {
       if (t != null && t.isAfter(acuan)) acuan = t;
     }
     return acuan;
   }
+
+  TitikJam? get _titik {
+    final raw = _prefs.getString(_kunciTitik);
+    if (raw == null) return null;
+    try {
+      return TitikJam.dariJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// true bila jam perangkat pernah terdeteksi diubah sejak kontak terakhir
+  /// dengan server. Ikut dikirim di transaksi offline supaya Pemilik bisa
+  /// meninjaunya, walau jamnya sudah dibetulkan sebelum menjual.
+  bool get pernahDiubah => _prefs.getBool(_kunciDiubah) ?? false;
+
+  /// Selisih jam perangkat terhadap server pada kontak terakhir (perangkat −
+  /// server). Untuk peringatan saat online — struk mencetak jam perangkat.
+  Duration? get selisihSaatOnline {
+    final ms = _prefs.getInt(_kunciSelisihOnline);
+    return ms == null ? null : Duration(milliseconds: ms);
+  }
+
+  /// Kontak dengan server: jam server [server] (header Date) adalah kebenaran.
+  ///
+  /// Dicatat sebagai titik jam terpercaya (server + uptime sistem), sebagai
+  /// waktu terakhir online, dan sebagai jam terbesar — BUKAN jam perangkat,
+  /// yang bisa saja sudah diubah selagi online lalu dibawa offline.
+  Future<void> catatKontakServer(DateTime server) async {
+    final now = _sekarang();
+    final lalu = terakhirOnline;
+    final titikLama = _titik;
+    if (lalu != null &&
+        titikLama != null &&
+        !server.isBefore(lalu) &&
+        server.difference(lalu) < jedaCatat) {
+      return;
+    }
+    await catatJamServer(server);
+    final kini = await _uptime.baca();
+    if (kini != null) {
+      await _prefs.setString(
+        _kunciTitik,
+        jsonEncode(
+          TitikJam(
+            server: server,
+            uptimeMs: kini.uptimeMs,
+            boot: kini.boot,
+          ).toJson(),
+        ),
+      );
+    }
+    await _tulis(_kunciOnline, server);
+    await _tulis(_kunciTerbesar, server);
+    await _prefs.setInt(
+      _kunciSelisihOnline,
+      now.difference(server).inMilliseconds,
+    );
+    await _prefs.remove(_kunciDiubah);
+    _terpercaya = server;
+    _sejakTerpercaya
+      ..reset()
+      ..start();
+  }
+
+  /// Nilai jam perangkat sekarang terhadap jam terpercaya (atau, bila tak
+  /// diketahui, terhadap jam terbesar yang pernah terlihat).
+  ///
+  /// Hasil tak wajar dicatat ([pernahDiubah]) sampai kontak server berikutnya.
+  /// Jam terbesar hanya dinaikkan oleh jam yang wajar.
+  Future<PenilaianJam> periksa() async {
+    final now = _sekarang();
+    final terpercaya = waktuTerpercaya(_titik, await _uptime.baca());
+    if (terpercaya != null) {
+      _terpercaya = terpercaya;
+      _sejakTerpercaya
+        ..reset()
+        ..start();
+    }
+    final hasil = nilaiJam(
+      perangkat: now,
+      terpercaya: terpercaya,
+      terbesar: jamTerbesar,
+    );
+    if (!hasil.wajar) {
+      await _prefs.setBool(_kunciDiubah, true);
+      return hasil;
+    }
+    final terbesar = jamTerbesar;
+    if (terbesar == null || now.isAfter(terbesar)) {
+      await _tulis(_kunciTerbesar, now);
+    }
+    return hasil;
+  }
+
   DateTime? get jamTerbesar => _baca(_kunciTerbesar);
 
   /// Dipanggil setiap ada respons dari server. Jam tablet saat itu dianggap
@@ -87,29 +196,17 @@ class JamOffline {
     await _tulis(_kunciTerbesar, now);
   }
 
-  /// Periksa jam sekarang. `true` bila jam tablet dimundurkan dibanding jam
-  /// terbesar yang pernah terlihat. Jam terbesar hanya pernah naik.
-  Future<bool> amati() async {
-    final now = _sekarang();
-    final terbesar = jamTerbesar;
-    if (terbesar != null && now.isBefore(terbesar.subtract(toleransiMundur))) {
-      return true;
-    }
-    if (terbesar == null || now.isAfter(terbesar)) {
-      await _tulis(_kunciTerbesar, now);
-    }
-    return false;
-  }
+  /// `true` bila jam perangkat terdeteksi diubah (mundur ATAU maju).
+  Future<bool> amati() async => !(await periksa()).wajar;
 
   /// Lama tablet tak tersambung ke server. Null bila belum pernah tercatat
   /// (aplikasi baru diperbarui) — tak ada yang bisa dinilai.
   Duration? lamaOffline() {
     final online = terakhirOnline;
     if (online == null) return null;
-    final now = _sekarang();
-    final terbesar = jamTerbesar;
-    final acuan = terbesar != null && terbesar.isAfter(now) ? terbesar : now;
-    final lama = acuan.difference(online);
+    // Jam acuan yang tak bisa dimundurkan (termasuk jam terpercaya), supaya
+    // memundurkan jam perangkat tak memperpendek hitungan lama offline.
+    final lama = waktuAcuan().difference(online);
     return lama.isNegative ? Duration.zero : lama;
   }
 }
@@ -162,3 +259,19 @@ String? peringatanBatasOffline(Duration? lama, int batasJam) {
 final jamOfflineProvider = Provider<JamOffline>(
   (ref) => JamOffline(ref.watch(sharedPreferencesProvider)),
 );
+
+/// Galat aksi offline (shift, kas, pelunasan) yang ditahan karena jam
+/// perangkat diubah. Pesannya siap ditampilkan ke kasir.
+class JamPerangkatDiubah implements Exception {
+  JamPerangkatDiubah(this.pesan);
+  final String pesan;
+  @override
+  String toString() => pesan;
+}
+
+/// Tahan aksi offline bila jam perangkat diubah. Dipanggil sebelum aksi
+/// offline apa pun yang mencatat waktu kejadian dari jam perangkat.
+Future<void> pastikanJamWajar(JamOffline jam) async {
+  final p = await jam.periksa();
+  if (!p.wajar) throw JamPerangkatDiubah(pesanJamTidakWajar(p));
+}
