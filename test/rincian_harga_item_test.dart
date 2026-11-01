@@ -16,17 +16,17 @@ void main() {
       'modifiers': [
         {'name': 'Boba', 'price': 5000, 'group_name': 'Topping'},
         {'name': 'Extra Shot', 'price': 4000},
-        {'name': 'Less Sugar', 'price': 0},
+        {'name': 'Less Sugar', 'price': 0, 'group_name': 'Gula'},
       ],
     });
     expect(it.hargaDasar, 22000);
     expect(
       it.rincianHarga.map((r) => (r.label, r.harga, r.tambahan)).toList(),
       [
-        ('Large', 22000.0, false),
-        ('Boba', 5000.0, true),
+        ('Harga dasar (Large)', 22000.0, false),
+        ('Topping: Boba', 5000.0, true),
         ('Extra Shot', 4000.0, true),
-        ('Less Sugar', 0.0, true),
+        ('Gula: Less Sugar', 0.0, true),
       ],
     );
   });
@@ -53,7 +53,7 @@ void main() {
         {'name': 'Keju', 'price': 3000},
       ],
     });
-    expect(it.rincianHarga.first.label, 'Harga');
+    expect(it.rincianHarga.first.label, 'Harga dasar');
     expect(it.rincianHarga.first.harga, 15000);
   });
 
@@ -65,5 +65,24 @@ void main() {
     });
     expect(biasa.rincianHarga, isEmpty);
     expect(AddOnStruk.dariJson(null), isEmpty);
+  });
+
+  test('ukuran sebagai add-on (grup Ukuran) berlabel grupnya', () {
+    final it = SaleItem.fromJson({
+      'product_name': 'Teh Telur',
+      'quantity': 1,
+      'original_price': 22000,
+      'price_at_time': 22000,
+      'modifiers': [
+        {'name': 'Large', 'price': 7000, 'group_name': 'Ukuran'},
+        {'name': 'Boba', 'price': 3000, 'group_name': 'Topping'},
+      ],
+    });
+    expect(it.rincianHarga.map((r) => r.label).toList(), [
+      'Harga dasar',
+      'Ukuran: Large',
+      'Topping: Boba',
+    ]);
+    expect(it.rincianHarga.fold<double>(0, (s, r) => s + r.harga), 22000);
   });
 }
