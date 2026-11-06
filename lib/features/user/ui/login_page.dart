@@ -4,7 +4,6 @@ import 'package:gap/gap.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../app/theme.dart';
-import '../../../app/theme_mode_provider.dart';
 import '../../../core/buka_url.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/i18n.dart';
@@ -80,7 +79,7 @@ class LoginPage extends ConsumerWidget {
   }
 }
 
-/// Logo + nama produk di kiri, tema & bahasa di kanan.
+/// Logo + nama produk di kiri, bahasa di kanan.
 class _BilahAtas extends StatelessWidget {
   const _BilahAtas();
 
@@ -110,8 +109,6 @@ class _BilahAtas extends StatelessWidget {
         ),
         const Spacer(),
         const _PilihBahasa(),
-        const Gap(8),
-        const _TombolTema(),
       ],
     );
   }
@@ -212,48 +209,6 @@ class _Tautan extends StatelessWidget {
         // Area sentuh tetap cukup besar walau teksnya kecil.
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         child: Text(label, style: gaya),
-      ),
-    );
-  }
-}
-
-/// Tombol tema: ikon saja, labelnya di tooltip & Semantics.
-class _TombolTema extends ConsumerWidget {
-  const _TombolTema();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(themeModeProvider);
-    final (ikon, label) = switch (mode) {
-      ThemeMode.system => (Icons.brightness_auto_outlined, 'Tema: Sistem'),
-      ThemeMode.light => (Icons.light_mode_outlined, 'Tema: Terang'),
-      ThemeMode.dark => (Icons.dark_mode_outlined, 'Tema: Gelap'),
-    };
-    final berikut = switch (mode) {
-      ThemeMode.system => ThemeMode.light,
-      ThemeMode.light => ThemeMode.dark,
-      ThemeMode.dark => ThemeMode.system,
-    };
-
-    return Tooltip(
-      message: label,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: InkWell(
-          onTap: () => ref.read(themeModeProvider.notifier).setMode(berikut),
-          customBorder: const CircleBorder(),
-          child: Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: kDivider),
-            ),
-            child: Icon(ikon, size: 18, color: kTextMid),
-          ),
-        ),
       ),
     );
   }
