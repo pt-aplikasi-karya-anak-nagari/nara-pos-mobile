@@ -31,6 +31,9 @@ class OutletReceiptSettings {
   final bool footerShowQr;
   final String footerQrUrl;
   final String footerQrCaption;
+  /// Catatan outlet (multi-baris) di bawah struk — diatur Owner per outlet
+  /// di dashboard web. Kosong = tidak dicetak.
+  final String footerNote;
 
   // Sosmed & WiFi tamu (dikelola Owner di dashboard web).
   final List<AkunSosmed> socialAccounts;
@@ -70,6 +73,7 @@ class OutletReceiptSettings {
     this.footerShowQr = false,
     this.footerQrUrl = '',
     this.footerQrCaption = 'Scan untuk review',
+    this.footerNote = '',
     this.socialAccounts = const [],
     this.showSocialAccounts = true,
     this.wifiSsid = '',
@@ -111,6 +115,7 @@ class OutletReceiptSettings {
       footerQrUrl: (json['footer_qr_url'] as String?) ?? '',
       footerQrCaption:
           (json['footer_qr_caption'] as String?) ?? 'Scan untuk review',
+      footerNote: (json['footer_note'] as String?) ?? '',
       socialAccounts: sosmed is List
           ? sosmed
               .whereType<Map<String, dynamic>>()
@@ -150,6 +155,7 @@ class OutletReceiptSettings {
         'footer_show_qr': footerShowQr,
         'footer_qr_url': footerQrUrl,
         'footer_qr_caption': footerQrCaption,
+        'footer_note': footerNote,
         'social_accounts': socialAccounts.map((a) => a.toJson()).toList(),
         'show_social_accounts': showSocialAccounts,
         'wifi_ssid': wifiSsid,
@@ -177,6 +183,25 @@ class OutletReceiptSettings {
       for (final a in socialAccounts)
         if (a.handle.trim().isNotEmpty) '${a.label} ${a.handle.trim()}',
     ];
+  }
+
+  /// Baris catatan outlet untuk dicetak, persis per baris yang ditulis Owner.
+  /// Baris kosong di tengah dipertahankan (jadi spasi); baris kosong di tepi
+  /// dibuang. Kosong bila catatan belum diisi.
+  List<String> get barisCatatan {
+    final baris = footerNote
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n')
+        .map((b) => b.trimRight())
+        .toList();
+    while (baris.isNotEmpty && baris.first.trim().isEmpty) {
+      baris.removeAt(0);
+    }
+    while (baris.isNotEmpty && baris.last.trim().isEmpty) {
+      baris.removeLast();
+    }
+    return baris;
   }
 
   /// Baris WiFi tamu: nama, lalu sandi (bila ada). Kosong bila dimatikan

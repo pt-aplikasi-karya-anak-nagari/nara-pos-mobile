@@ -5,11 +5,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../app/theme_mode_provider.dart';
+import '../../../core/buka_url.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/i18n.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
 import 'staff_session_page.dart';
 import 'widgets/forgot_password_sheet.dart';
-import 'widgets/register_sheet.dart';
 
 /// Lebar maksimum kolom login. Cukup lega untuk keypad PIN, cukup sempit
 /// supaya di tablet mendatar mata tak perlu menyapu seluruh layar.
@@ -153,7 +154,9 @@ class _TautanBawah extends ConsumerWidget {
             if (email != null && email.isNotEmpty && context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Password direset. Coba mulai sesi lagi.'),
+                  content: Text(
+                    'Tautan ubah password dikirim. Cek email Anda.',
+                  ),
                 ),
               );
             }
@@ -165,14 +168,10 @@ class _TautanBawah extends ConsumerWidget {
           children: [
             Text(ref.t('login.no_account'), style: gayaRedup),
             _Tautan(
+              key: const ValueKey('login-daftar-web'),
               label: ref.t('login.register'),
               gaya: gayaAksi,
-              onTap: () => tampilkanSheetBawah(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const RegisterSheet(),
-              ),
+              onTap: () => bukaDaftarDiWeb(context, ref),
             ),
           ],
         ),
@@ -181,8 +180,25 @@ class _TautanBawah extends ConsumerWidget {
   }
 }
 
+/// Pendaftaran akun Pemilik HANYA lewat web: verifikasi email & no. HP,
+/// pilihan paket, dan kode referral ada di sana, dan server menolak
+/// pendaftaran dari aplikasi kasir. Di sini cukup buka halamannya.
+Future<void> bukaDaftarDiWeb(BuildContext context, WidgetRef ref) =>
+    bukaDiBrowser(
+      context,
+      ref,
+      AppConfig.daftarPemilikUrl,
+      pesanGagal:
+          'Buka ${AppConfig.daftarPemilikUrl} di browser untuk mendaftar.',
+    );
+
 class _Tautan extends StatelessWidget {
-  const _Tautan({required this.label, required this.gaya, required this.onTap});
+  const _Tautan({
+    super.key,
+    required this.label,
+    required this.gaya,
+    required this.onTap,
+  });
   final String label;
   final TextStyle gaya;
   final VoidCallback onTap;

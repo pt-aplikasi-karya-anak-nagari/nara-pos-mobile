@@ -13,6 +13,8 @@ import '../customers/domain/customer.dart';
 import '../tables/domain/pos_table.dart';
 import '../outlet/data/outlet_service.dart';
 import 'domain/cart_item.dart';
+import 'domain/pajak_multi_tarif.dart';
+import '../settings/data/tarif_pajak.dart';
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 class CartNotifier extends Notifier<List<CartItem>> {
@@ -222,6 +224,42 @@ final discountTotalProvider = Provider<double>(
 // perhitungan lama (subtotal + SC + PPN). Basis = subtotal cart (setelah diskon
 // per item). Sebelumnya provider ini selalu menambah PPN di atas → salah untuk
 // outlet tax-inclusive (dobel-charge PPN).
+//
+// Pajak multi-tarif: bila keranjang memuat produk bertarif TAMBAHAN (mis. PPN
+// untuk barang retail di outlet ber-PB1), hitungan lewat hitungPajakKeranjang
+// — cermin server — dan rinciannya per tarif ada di [rincianPajakProvider].
+// Tanpa tarif tambahan, jalur lama di bawah dipakai apa adanya.
+final _rincianMultiTarifProvider = Provider<RincianPajakKeranjang?>((ref) {
+  final outlet = ref.watch(activeOutletProvider);
+  if (outlet == null || !outlet.taxEnabled) return null;
+  final tarif = ref.watch(tarifPajakProvider);
+  if (tarif.isEmpty) return null;
+  final cart = ref.watch(cartProvider);
+  final adaTarifLain = cart.any((c) {
+    final id = c.product.taxRateId;
+    return c.isTaxable && id != null && (tarif[id]?.aktif ?? false);
+  });
+  if (!adaTarifLain) return null;
+  return hitungPajakKeranjang(
+    outlet: outlet,
+    tarif: tarif,
+    baris: [
+      for (final c in cart)
+        BarisHitungPajak(
+          subtotal: c.subtotal,
+          kenaPajak: c.isTaxable,
+          tarifId: c.product.taxRateId,
+        ),
+    ],
+  );
+});
+
+/// Rincian pajak per tarif untuk keranjang/pembayaran/struk. Kosong = satu
+/// tarif (tampilkan satu baris pajak seperti biasa).
+final rincianPajakProvider = Provider<List<BarisPajak>>(
+  (ref) => ref.watch(_rincianMultiTarifProvider)?.rincian ?? const [],
+);
+
 final _taxBreakdownProvider =
     Provider<
       ({double subtotal, double serviceCharge, double tax, double grandTotal})
@@ -235,6 +273,15 @@ final _taxBreakdownProvider =
           serviceCharge: 0.0,
           tax: 0.0,
           grandTotal: subtotal,
+        );
+      }
+      final multi = ref.watch(_rincianMultiTarifProvider);
+      if (multi != null) {
+        return (
+          subtotal: multi.subtotal,
+          serviceCharge: multi.serviceCharge,
+          tax: multi.tax,
+          grandTotal: multi.grandTotal,
         );
       }
       // Pajak dihitung HANYA dari taxableSubtotal (item non-pajak dikecualikan),

@@ -166,17 +166,18 @@ void main() {
       expect(r.grandTotal, 100000);
     });
 
-    test('service charge TIDAK ikut kalau pajak dimatikan', () {
-      // Jalur pintas di awal fungsi keluar sebelum service charge dihitung.
-      // Perilaku ini mudah berubah tanpa sengaja saat seseorang memindahkan
-      // perhitungan SC ke luar dari cabang pajak.
+    test('service charge TETAP ditagih walau pajak dimatikan', () {
+      // Service charge bukan pajak. Server (computeCheckoutTotals) & menu QR
+      // web menagihnya walau pajak outlet nonaktif — kasir wajib sama, kalau
+      // tidak total di layar lebih kecil dari yang tercatat server.
       final r = _outlet(
         taxEnabled: false,
         servicePercent: 10,
       ).computeTaxBreakdown(100000);
 
-      expect(r.serviceCharge, 0);
-      expect(r.grandTotal, 100000);
+      expect(r.serviceCharge, 10000);
+      expect(r.tax, 0);
+      expect(r.grandTotal, 110000);
     });
 
     test('nominal nol atau negatif tidak menghasilkan pajak negatif', () {
