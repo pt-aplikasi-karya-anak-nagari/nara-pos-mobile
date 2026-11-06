@@ -421,6 +421,7 @@ class PaymentSheet extends HookConsumerWidget {
                   subtotal: subtotal,
                   originalSubtotal: originalSubtotal,
                   tax: tax,
+                  rincianPajak: ref.read(rincianPajakProvider),
                   // discountTotal mencakup diskon item + promo + tukar poin supaya
                   // laporan mencerminkan seluruh potongan. total (final_amount) sudah
                   // dikurangi promo & poin di atas.
@@ -849,11 +850,22 @@ class PaymentSheet extends HookConsumerWidget {
                         color: kTextMid,
                       ),
                     ],
-                    if (ref.watch(taxSettingsProvider).enabled) ...[
+                    if (ref.watch(taxSettingsProvider).enabled &&
+                        ref.watch(rincianPajakProvider).isNotEmpty)
+                      for (final b in ref.watch(rincianPajakProvider)) ...[
+                        const Gap(6),
+                        _SheetBreakdownRow(
+                          label:
+                              '${b.label}${taxInclusive ? ' · termasuk' : ''}',
+                          value: formatRupiah(b.pajak),
+                          color: kTextMid,
+                        ),
+                      ]
+                    else if (ref.watch(taxSettingsProvider).enabled) ...[
                       const Gap(6),
                       _SheetBreakdownRow(
                         label:
-                            'PPN (${_payFmtPct(ref.watch(taxSettingsProvider).percent)}%)${taxInclusive ? ' · termasuk' : ''}',
+                            '${ref.watch(taxSettingsProvider).taxName} (${_payFmtPct(ref.watch(taxSettingsProvider).percent)}%)${taxInclusive ? ' · termasuk' : ''}',
                         value: formatRupiah(ref.watch(taxProvider)),
                         color: kTextMid,
                       ),

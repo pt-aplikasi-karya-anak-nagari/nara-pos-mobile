@@ -5,7 +5,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../../app/app_routes.dart';
 import '../../../app/theme.dart';
-import '../../../app/theme_mode_provider.dart';
 import '../../../core/app_icons.dart';
 import '../../../core/i18n.dart';
 import '../../../core/jenis_usaha.dart';
@@ -41,7 +40,6 @@ import '../../shifts/ui/shift_management_dialog.dart';
 import '../../payments/ui/payment_method_management_page.dart';
 import '../data/profil_state.dart';
 import '../../user/domain/assignable_role.dart';
-import '../../../shared/widgets/sheet_bawah.dart';
 
 class ProfilPage extends HookConsumerWidget {
   const ProfilPage({super.key});
@@ -524,12 +522,6 @@ class ProfilPage extends HookConsumerWidget {
                           .read(localeProvider.notifier)
                           .set(v ? AppLocale.en : AppLocale.id),
                     ),
-                    // Tile pilih tema: Sistem / Terang / Gelap.
-                    _ThemeTile(
-                      currentMode: ref.watch(themeModeProvider),
-                      onChanged: (m) =>
-                          ref.read(themeModeProvider.notifier).setMode(m),
-                    ),
                     // Absensi pegawai — semua role bisa akses (untuk
                     // check-in/out & lihat riwayat sendiri). Digating plan via
                     // fitur 'attendance'.
@@ -952,145 +944,6 @@ class _Tile extends StatelessWidget {
               color: selected ? kPrimary : kTextLight,
               size: 18,
             ),
-    );
-  }
-}
-
-/// Tile selektor tema: tap row → buka bottom sheet pilih Sistem/Terang/Gelap.
-/// Indikator value saat ini muncul di sisi kanan.
-class _ThemeTile extends StatelessWidget {
-  final ThemeMode currentMode;
-  final ValueChanged<ThemeMode> onChanged;
-  const _ThemeTile({required this.currentMode, required this.onChanged});
-
-  String _labelFor(ThemeMode m) {
-    switch (m) {
-      case ThemeMode.light:
-        return 'Terang';
-      case ThemeMode.dark:
-        return 'Gelap';
-      case ThemeMode.system:
-        return 'Sistem';
-    }
-  }
-
-  IconData _iconFor(ThemeMode m) {
-    switch (m) {
-      case ThemeMode.light:
-        return Icons.light_mode_outlined;
-      case ThemeMode.dark:
-        return Icons.dark_mode_outlined;
-      case ThemeMode.system:
-        return Icons.brightness_auto_outlined;
-    }
-  }
-
-  Future<void> _open(BuildContext context) async {
-    final picked = await tampilkanSheetBawah<ThemeMode>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.only(
-          top: 12,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: kDivider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Text(
-                    'Pilih Tema',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: kTextDark,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Gap(8),
-            for (final m in ThemeMode.values)
-              ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: currentMode == m
-                        ? kPrimary.withValues(alpha: 0.12)
-                        : kBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    _iconFor(m),
-                    color: currentMode == m ? kPrimary : kTextMid,
-                  ),
-                ),
-                title: Text(
-                  _labelFor(m),
-                  style: TextStyle(
-                    color: kTextDark,
-                    fontWeight: currentMode == m
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                  ),
-                ),
-                subtitle: m == ThemeMode.system
-                    ? Text(
-                        'Ikuti pengaturan sistem',
-                        style: TextStyle(color: kTextMid),
-                      )
-                    : null,
-                trailing: currentMode == m
-                    ? const Icon(Icons.check_circle, color: kPrimary)
-                    : null,
-                onTap: () => Navigator.pop(context, m),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (picked != null) onChanged(picked);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _Baris(
-      ikon: _IkonMenu(
-        warna: kPrimary,
-        child: Icon(_iconFor(currentMode), size: 18, color: kPrimary),
-      ),
-      label: 'Tema',
-      onTap: () => _open(context),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _labelFor(currentMode),
-            style: TextStyle(fontSize: 13, color: kTextMid),
-          ),
-          const Gap(4),
-          HugeIcon(icon: AppIcons.chevronRight, color: kTextLight, size: 18),
-        ],
-      ),
     );
   }
 }

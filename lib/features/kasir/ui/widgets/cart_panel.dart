@@ -35,6 +35,7 @@ class CartPanel extends ConsumerWidget {
     final tax = ref.watch(taxProvider);
     final total = ref.watch(totalProvider);
     final taxSettings = ref.watch(taxSettingsProvider);
+    final rincianPajak = ref.watch(rincianPajakProvider);
     // null selama memuat/galat — sengaja DIBEDAKAN dari 0; lihat
     // TabBerlencana.jumlah.
     final pesananMeja = ref.watch(menuOrdersProvider).asData?.value;
@@ -339,11 +340,21 @@ class CartPanel extends ConsumerWidget {
                                     color: kTextMid,
                                   ),
                                 ],
-                                if (taxSettings.enabled) ...[
+                                if (taxSettings.enabled &&
+                                    rincianPajak.isNotEmpty)
+                                  for (final b in rincianPajak) ...[
+                                    const Gap(4),
+                                    _BreakdownRow(
+                                      label: b.label,
+                                      value: formatRupiah(b.pajak),
+                                      color: kTextMid,
+                                    ),
+                                  ]
+                                else if (taxSettings.enabled) ...[
                                   const Gap(4),
                                   _BreakdownRow(
                                     label:
-                                        'PPN (${_fmtPct(taxSettings.percent)}%)',
+                                        '${taxSettings.taxName} (${_fmtPct(taxSettings.percent)}%)',
                                     value: formatRupiah(tax),
                                     color: kTextMid,
                                   ),

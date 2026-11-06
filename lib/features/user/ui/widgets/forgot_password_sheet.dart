@@ -5,17 +5,16 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../../../app/theme.dart';
 import '../../data/auth_api_service.dart';
 
-/// Bottom sheet alur "Lupa Password".
+/// Bottom sheet "Lupa password" Pemilik — HANYA mengirim tautan ke email.
 ///
-/// Dua langkah:
-///   1. Masukkan email → POST /password/forgot → backend mengirim link
-///      reset ke email (selalu sukses generic, tidak membocorkan apakah
-///      email terdaftar).
-///   2. (Opsional) User menempel token dari email + password baru →
-///      POST /password/reset → selesai tanpa harus buka web.
+/// Password baru dibuat di halaman web yang dibuka dari tautan itu, bukan di
+/// aplikasi kasir. Alasannya keamanan: perangkat kasir dipakai bersama dan
+/// layarnya menghadap pelanggan, jadi password yang juga membuka dashboard
+/// web tak semestinya diketik di sini. Token reset pun tak pernah ditempel
+/// ke aplikasi — ia hanya hidup di tautan email (sekali pakai, 30 menit).
 ///
-/// Mengembalikan email (String) lewat Navigator.pop bila reset berhasil,
-/// supaya halaman login bisa pre-fill field email.
+/// Jawaban server selalu sama, terdaftar atau tidak, supaya sheet ini tak
+/// bisa dipakai menebak email Pemilik.
 class ForgotPasswordSheet extends ConsumerStatefulWidget {
   final String initialEmail;
   const ForgotPasswordSheet({super.key, this.initialEmail = ''});
@@ -27,12 +26,10 @@ class ForgotPasswordSheet extends ConsumerStatefulWidget {
 
 class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
   late final TextEditingController _emailCtrl;
-  final _tokenCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
 
-  bool _sent = false; // sudah kirim permintaan reset?
+  /// Email tujuan tautan terakhir; non-null = layar konfirmasi.
+  String? _terkirimKe;
   bool _loading = false;
-  bool _obscure = true;
   String? _error;
 
   @override
@@ -44,55 +41,25 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
   @override
   void dispose() {
     _emailCtrl.dispose();
-    _tokenCtrl.dispose();
-    _passCtrl.dispose();
     super.dispose();
   }
 
-  bool get _emailValid {
-    final e = _emailCtrl.text.trim();
-    return e.contains('@') && e.contains('.');
-  }
+  bool get _emailValid =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(_emailCtrl.text.trim());
 
-  Future<void> _requestReset() async {
+  Future<void> _kirimTautan() async {
     if (!_emailValid) {
-      setState(() => _error = 'Masukkan email yang valid');
+      setState(() => _error = 'Masukkan email yang valid, mis. nama@email.com');
       return;
     }
+    final email = _emailCtrl.text.trim();
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      await ref
-          .read(authApiServiceProvider)
-          .requestPasswordReset(_emailCtrl.text.trim());
-      if (mounted) setState(() => _sent = true);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _resetPassword() async {
-    final token = _tokenCtrl.text.trim();
-    final pass = _passCtrl.text;
-    if (token.isEmpty) {
-      setState(() => _error = 'Token reset wajib diisi');
-      return;
-    }
-    if (pass.length < 8) {
-      setState(() => _error = 'Password minimal 8 karakter');
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      await ref.read(authApiServiceProvider).resetPassword(token, pass);
-      if (mounted) Navigator.of(context).pop(_emailCtrl.text.trim());
+      await ref.read(authApiServiceProvider).requestPasswordReset(email);
+      if (mounted) setState(() => _terkirimKe = email);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -103,6 +70,7 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final terkirim = _terkirimKe != null;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
@@ -127,7 +95,7 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
             ),
             const Gap(18),
             Text(
-              _sent ? 'Reset Password' : 'Lupa Password',
+              terkirim ? 'Cek email Anda' : 'Lupa password',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -135,55 +103,25 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
               ),
             ),
             const Gap(6),
-            Text(
-              _sent
-                  ? 'Kami telah mengirim link reset ke email Anda. Buka link tersebut, '
-                        'atau tempel token dari email di bawah untuk mengatur ulang password di sini.'
-                  : 'Masukkan email akun Anda. Kami akan mengirim link untuk mengatur ulang password.',
-              style: TextStyle(fontSize: 13, color: kTextMid, height: 1.4),
-            ),
-            const Gap(18),
-
-            // ── Email ──
-            _Field(
-              controller: _emailCtrl,
-              label: 'Email',
-              hint: 'nama@email.com',
-              keyboardType: TextInputType.emailAddress,
-              enabled: !_sent && !_loading,
-              icon: Icons.alternate_email_rounded,
-            ),
-
-            if (_sent) ...[
-              const Gap(12),
-              _Field(
-                controller: _tokenCtrl,
-                label: 'Token Reset (dari email)',
-                hint: 'Tempel token di sini',
-                enabled: !_loading,
-                icon: Icons.vpn_key_rounded,
+            if (!terkirim) ...[
+              Text(
+                'Masukkan email akun Pemilik. Kami kirim tautan untuk membuat '
+                'password baru di website.',
+                style: TextStyle(fontSize: 13, color: kTextMid, height: 1.4),
               ),
-              const Gap(12),
+              const Gap(18),
               _Field(
-                controller: _passCtrl,
-                label: 'Password Baru',
-                hint: 'Minimal 8 karakter',
+                key: const ValueKey('lupa-email'),
+                controller: _emailCtrl,
+                label: 'Email',
+                hint: 'nama@email.com',
+                keyboardType: TextInputType.emailAddress,
                 enabled: !_loading,
-                obscure: _obscure,
-                icon: Icons.lock_outline_rounded,
-                suffix: IconButton(
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 20,
-                    color: kTextMid,
-                  ),
-                ),
+                icon: Icons.alternate_email_rounded,
+                onSubmitted: (_) => _loading ? null : _kirimTautan(),
               ),
-            ],
-
+            ] else
+              _Konfirmasi(email: _terkirimKe!),
             if (_error != null) ...[
               const Gap(12),
               Container(
@@ -199,15 +137,17 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
                 ),
               ),
             ],
-
             const Gap(20),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
+                key: const ValueKey('lupa-kirim'),
                 onPressed: _loading
                     ? null
-                    : (_sent ? _resetPassword : _requestReset),
+                    : (terkirim
+                          ? () => Navigator.of(context).pop(_terkirimKe)
+                          : _kirimTautan),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimary,
                   foregroundColor: Colors.white,
@@ -226,7 +166,7 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
                         ),
                       )
                     : Text(
-                        _sent ? 'Reset Password' : 'Kirim Link Reset',
+                        terkirim ? 'Selesai' : 'Kirim tautan ubah password',
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
@@ -234,13 +174,21 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
                       ),
               ),
             ),
-            if (_sent) ...[
+            if (terkirim) ...[
               const Gap(8),
               Center(
                 child: TextButton(
-                  onPressed: _loading ? null : _requestReset,
+                  // Server menahan permintaan beruntun (jeda 1 menit per
+                  // email) — tombol ini aman ditekan, tapi email baru hanya
+                  // datang setelah jedanya lewat.
+                  onPressed: _loading
+                      ? null
+                      : () => setState(() {
+                          _terkirimKe = null;
+                          _error = null;
+                        }),
                   child: Text(
-                    'Kirim ulang link',
+                    'Belum menerima? Kirim ulang',
                     style: TextStyle(
                       color: kPrimary,
                       fontWeight: FontWeight.w600,
@@ -257,25 +205,103 @@ class _ForgotPasswordSheetState extends ConsumerState<ForgotPasswordSheet> {
   }
 }
 
+/// Isi layar konfirmasi: apa yang terjadi & langkah berikutnya.
+class _Konfirmasi extends StatelessWidget {
+  const _Konfirmasi({required this.email});
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    final gaya = TextStyle(fontSize: 13, color: kTextMid, height: 1.45);
+    Widget langkah(String nomor, String teks) => Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: kPrimary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              nomor,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: kPrimary,
+              ),
+            ),
+          ),
+          const Gap(10),
+          Expanded(child: Text(teks, style: gaya)),
+        ],
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            style: gaya,
+            children: [
+              const TextSpan(text: 'Jika '),
+              TextSpan(
+                text: email,
+                style: TextStyle(fontWeight: FontWeight.w700, color: kTextDark),
+              ),
+              const TextSpan(
+                text:
+                    ' terdaftar sebagai akun Pemilik, tautan ubah password '
+                    'sudah kami kirim.',
+              ),
+            ],
+          ),
+        ),
+        const Gap(6),
+        langkah('1', 'Buka email dari NARA (cek juga folder Spam/Promosi).'),
+        langkah(
+          '2',
+          'Ketuk "Buat Password Baru" — tautan berlaku 30 menit dan hanya '
+              'bisa dipakai sekali.',
+        ),
+        langkah(
+          '3',
+          'Buat password baru di website. Semua perangkat yang sedang login '
+              'otomatis dikeluarkan.',
+        ),
+        const Gap(10),
+        Text(
+          'Untuk masuk di aplikasi kasir, Anda tetap memakai PIN Otorisasi — '
+          'bukan password.',
+          style: TextStyle(fontSize: 12, color: kTextLight, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
 class _Field extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String hint;
   final bool enabled;
-  final bool obscure;
   final IconData icon;
-  final Widget? suffix;
   final TextInputType? keyboardType;
+  final ValueChanged<String>? onSubmitted;
 
   const _Field({
+    super.key,
     required this.controller,
     required this.label,
     required this.hint,
     required this.icon,
     this.enabled = true,
-    this.obscure = false,
-    this.suffix,
     this.keyboardType,
+    this.onSubmitted,
   });
 
   @override
@@ -295,14 +321,14 @@ class _Field extends StatelessWidget {
         TextField(
           controller: controller,
           enabled: enabled,
-          obscureText: obscure,
           keyboardType: keyboardType,
+          autocorrect: false,
+          onSubmitted: onSubmitted,
           style: TextStyle(fontSize: 14, color: kTextDark),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: kTextLight),
             prefixIcon: Icon(icon, size: 20, color: kTextMid),
-            suffixIcon: suffix,
             filled: true,
             fillColor: kBg,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
