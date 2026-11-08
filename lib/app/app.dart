@@ -23,6 +23,8 @@ import '../core/offline/audit_offline.dart';
 import '../core/offline/cadangan_transaksi.dart';
 import '../core/offline/data_kasir_offline.dart';
 import '../core/notifications.dart';
+import '../core/network/dio_client.dart';
+import '../core/versi_app.dart';
 import '../features/kasir/providers.dart';
 import '../features/notifications/data/notification_history.dart';
 import '../features/printer/data/printer_service.dart';
@@ -33,6 +35,14 @@ import '../features/transactions/data/transaction_repository.dart';
 import 'app_routes.dart';
 import 'router.dart';
 import 'theme.dart';
+
+/// Cek batas build sekali saat app dibuka (lihat core/versi_app.dart).
+final _cekVersiProvider = FutureProvider<void>(
+  (ref) => cekVersiSaatMulai(
+    ref.read(dioProvider),
+    ref.read(perluUpdateProvider.notifier),
+  ),
+);
 
 class NaraApp extends ConsumerWidget {
   const NaraApp({super.key});
@@ -55,6 +65,8 @@ class NaraApp extends ConsumerWidget {
     // Laporan perangkat ke server (nomor struk offline terakhir & antrian) —
     // supaya transaksi offline tak bisa dihilangkan tanpa jejak.
     ref.watch(laporanPerangkatOtomatisProvider);
+    ref.watch(_cekVersiProvider);
+    final perluUpdate = ref.watch(perluUpdateProvider);
 
     return Sizer(
       builder: (context, orientation, deviceType) {
@@ -74,6 +86,10 @@ class NaraApp extends ConsumerWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             builder: (context, child) {
+              // Build di bawah minimum server: tutup semua halaman.
+              if (perluUpdate != null) {
+                return LayarPerbaruiApp(info: perluUpdate);
+              }
               final Widget app = _NotificationTapListener(
                 child: _PendengarPesananRealtime(
                   child: _OrderRefreshListener(

@@ -98,6 +98,7 @@ dependencies:
   geolocator: ^14.1.2
   flutter_tts: ^4.2.5
   sentry_flutter: ^10.2.0
+  package_info_plus: ^10.2.2
 
 dev_dependencies:
   flutter_test:

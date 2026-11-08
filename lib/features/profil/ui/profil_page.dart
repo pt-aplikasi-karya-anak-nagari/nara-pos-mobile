@@ -6,6 +6,8 @@ import 'package:hugeicons/hugeicons.dart';
 import '../../../app/app_routes.dart';
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
+import '../../../core/buka_url.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/i18n.dart';
 import '../../../core/jenis_usaha.dart';
 import '../../../core/responsive.dart';
@@ -536,6 +538,21 @@ class ProfilPage extends HookConsumerWidget {
                         ),
                         selected: selectedMenu == 'attendance',
                       ),
+                    // Hapus akun & unduh data — dilakukan Pemilik di Dashboard
+                    // Web; tautan ini membuka panduannya (wajib Google Play).
+                    _Tile(
+                      spec: _TileSpec(
+                        id: 'hapus_akun',
+                        icon: AppIcons.delete,
+                        label: isEn ? 'Delete account & data' : 'Hapus akun & data',
+                        onTap: () => bukaDiBrowser(
+                          context,
+                          ref,
+                          urlPanduanHapusAkun,
+                          pesanGagal: 'Buka $urlPanduanHapusAkun di browser.',
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 _Grup(

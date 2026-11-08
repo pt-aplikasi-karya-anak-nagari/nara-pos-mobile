@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../auth_storage.dart';
 import '../device_identity.dart';
 import '../offline/jam_offline.dart';
+import '../versi_app.dart';
 import '../config/app_config.dart';
 import '../../features/user/data/auth_service.dart';
 import 'api_endpoint.dart';
@@ -73,6 +74,10 @@ final dioProvider = Provider<Dio>((ref) {
         // header ini untuk memblokir login role Owner/Manager di mobile
         // (mereka hanya boleh login lewat Dashboard Web).
         options.headers['X-Client-Platform'] = 'mobile';
+        // Nomor build untuk paksa update (server: MOBILE_MIN_BUILD).
+        if (VersiApp.build > 0) {
+          options.headers['X-App-Build'] = '${VersiApp.build}';
+        }
 
         // Identitas perangkat: server memakainya untuk menegakkan "satu staf
         // = satu perangkat" sambil tetap mengizinkan tablet yang sama masuk
@@ -97,6 +102,21 @@ final dioProvider = Provider<Dio>((ref) {
         // Server membalas (walau dengan galat) = tablet tersambung.
         if (e.response != null) {
           _catatTersambung(ref, e.response!.headers.value('date'));
+        }
+        // Build terlalu lama (426): tampilkan layar Perbarui aplikasi, dan
+        // teruskan sebagai galat koneksi supaya antrian offline MENAHAN
+        // transaksi (bukan menandainya gagal) sampai aplikasi diperbarui.
+        final perluUpdate = infoDariRespons(e.response);
+        if (perluUpdate != null) {
+          ref.read(perluUpdateProvider.notifier).tandai(perluUpdate);
+          return handler.reject(
+            DioException(
+              requestOptions: e.requestOptions,
+              response: e.response,
+              type: DioExceptionType.connectionError,
+              error: 'Aplikasi perlu diperbarui',
+            ),
+          );
         }
         var authToastShown = false;
         if (_shouldAttemptRefresh(e, authStorage)) {

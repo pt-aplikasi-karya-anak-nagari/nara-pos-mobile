@@ -79,3 +79,12 @@ Skrip menolak build kalau secret kosong/masih secret dev, kalau
 `key.properties` tidak ada, atau kalau alamat server rilis bukan `https://`.
 Naikkan `version:` di `pubspec.yaml` (angka setelah `+` wajib naik) tiap
 unggahan ke Play Store.
+
+### 4. Paksa update (versi minimum)
+
+Aplikasi mengirim nomor build (angka setelah `+` di `version:`) di header
+`X-App-Build`. Untuk mewajibkan semua tablet memakai build terbaru, set di
+server `MOBILE_MIN_BUILD=<build>` (dan `MOBILE_UPDATE_URL` bila bukan Play
+Store). Build lebih lama langsung menampilkan layar **Perbarui aplikasi**;
+transaksi offline di perangkat ditahan dan terkirim setelah update.
+Naikkan `MOBILE_MIN_BUILD` hanya SETELAH build baru tersedia di Play Store.

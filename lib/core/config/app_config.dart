@@ -91,3 +91,7 @@ class AppConfig {
     }
   }
 }
+
+/// Panduan hapus akun & unduh data (Kebijakan Privasi) — juga URL yang
+/// didaftarkan di Play Console sebagai "Delete account URL".
+const String urlPanduanHapusAkun = '${AppConfig.webBaseUrl}/privasi#hapus-akun';
