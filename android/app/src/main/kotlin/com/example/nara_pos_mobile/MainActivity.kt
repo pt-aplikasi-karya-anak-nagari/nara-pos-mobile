@@ -1,4 +1,4 @@
-package id.nara.pos
+package com.example.nara_pos_mobile
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

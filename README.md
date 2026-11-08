@@ -32,18 +32,25 @@ screenshot, request, maupun data pengguna selain id — lihat
 
 ## Rilis Android
 
-ID aplikasi: **`id.nara.pos`** (Android `applicationId` & iOS bundle ID).
-Permanen setelah terbit di Play Store — jangan diubah.
+ID aplikasi **saat ini masih bawaan example** (sementara, supaya cocok dengan
+file Firebase yang ada): Android `com.example.nara_pos_mobile`, iOS
+`com.example.naraPosMobile`. **Play Store menolak ID `com.example`**, dan ID
+tak bisa diubah setelah terbit — ganti ke ID final (rencana: `id.nara.pos`)
+sebelum rilis pertama.
 
-### 1. Firebase untuk ID baru (sekali saja)
+### 1. Ganti ke ID final + Firebase (sekali saja, sebelum rilis)
 
-`google-services.json`, `GoogleService-Info.plist`, dan
-`lib/firebase_options.dart` terikat ke ID aplikasi. Daftarkan app
-`id.nara.pos` (Android & iOS) di Firebase project `nara-pos`, lalu:
+1. Ubah `namespace` & `applicationId` di `android/app/build.gradle.kts`,
+   package Kotlin di `android/app/src/main/kotlin/`, dan
+   `PRODUCT_BUNDLE_IDENTIFIER` di `ios/Runner.xcodeproj/project.pbxproj`.
+2. Daftarkan app ID final di Firebase project `nara-pos` & buat ulang
+   `google-services.json`, `GoogleService-Info.plist`,
+   `lib/firebase_options.dart`:
 
 ```bash
+npm install -g firebase-tools && firebase login
 dart pub global activate flutterfire_cli
-flutterfire configure --project=nara-pos
+flutterfire configure --project=nara-pos --platforms=android,ios \n  --android-package-name=id.nara.pos --ios-bundle-id=id.nara.pos
 ```
 
 ### 2. Kunci upload (sekali saja — SIMPAN BAIK-BAIK)

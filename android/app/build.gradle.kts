@@ -1,3 +1,8 @@
+// Diimpor eksplisit: di skrip Gradle, `java` merujuk ekstensi Gradle `java`,
+// bukan paket java.util — `java.util.Properties()` gagal dikompilasi.
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -16,10 +21,10 @@ plugins {
 // Build rilis (assembleRelease / bundleRelease) GAGAL kalau file ini tak ada,
 // supaya APK/AAB bertanda tangan kunci debug tidak pernah ikut terbit.
 // Cara membuat keystore: lihat README.md bagian "Rilis Android".
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
-    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    FileInputStream(keystorePropertiesFile).use { stream -> keystoreProperties.load(stream) }
 }
 val memintaBuildRilis = gradle.startParameter.taskNames.any {
     it.contains("Release", ignoreCase = true)
@@ -32,7 +37,7 @@ if (memintaBuildRilis && !keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "id.nara.pos"
+    namespace = "com.example.nara_pos_mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -45,8 +50,10 @@ android {
     }
 
     defaultConfig {
-        // ID aplikasi permanen di Play Store — JANGAN diubah setelah terbit.
-        applicationId = "id.nara.pos"
+        // SEMENTARA: ID bawaan example, cocok dengan google-services.json yang ada.
+        // Ganti ke ID final (mis. id.nara.pos) + flutterfire configure SEBELUM
+        // rilis ke Play Store — ID tak bisa diubah setelah terbit.
+        applicationId = "com.example.nara_pos_mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26

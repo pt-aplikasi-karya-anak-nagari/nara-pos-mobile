@@ -1,4 +1,4 @@
-package id.nara.pos
+package com.example.nara_pos_mobile
 
 import android.Manifest
 import android.annotation.SuppressLint

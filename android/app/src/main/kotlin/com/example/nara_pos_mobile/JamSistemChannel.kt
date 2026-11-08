@@ -1,4 +1,4 @@
-package id.nara.pos
+package com.example.nara_pos_mobile
 
 import android.content.Context
 import android.os.Build
