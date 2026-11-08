@@ -23,6 +23,8 @@ import '../core/offline/audit_offline.dart';
 import '../core/offline/cadangan_transaksi.dart';
 import '../core/offline/data_kasir_offline.dart';
 import '../core/notifications.dart';
+import '../core/network/dio_client.dart';
+import '../core/versi_app.dart';
 import '../features/kasir/providers.dart';
 import '../features/notifications/data/notification_history.dart';
 import '../features/printer/data/printer_service.dart';
@@ -33,7 +35,14 @@ import '../features/transactions/data/transaction_repository.dart';
 import 'app_routes.dart';
 import 'router.dart';
 import 'theme.dart';
-import 'theme_mode_provider.dart';
+
+/// Cek batas build sekali saat app dibuka (lihat core/versi_app.dart).
+final _cekVersiProvider = FutureProvider<void>(
+  (ref) => cekVersiSaatMulai(
+    ref.read(dioProvider),
+    ref.read(perluUpdateProvider.notifier),
+  ),
+);
 
 class NaraApp extends ConsumerWidget {
   const NaraApp({super.key});
@@ -42,7 +51,6 @@ class NaraApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final locale = ref.watch(localeProvider);
-    final themeMode = ref.watch(themeModeProvider);
     // Aktifkan auto-sync transaksi offline sepanjang sesi: men-drain outbox
     // saat koneksi kembali online + sekali saat app start.
     ref.watch(offlineAutoSyncProvider);
@@ -57,36 +65,18 @@ class NaraApp extends ConsumerWidget {
     // Laporan perangkat ke server (nomor struk offline terakhir & antrian) —
     // supaya transaksi offline tak bisa dihilangkan tanpa jejak.
     ref.watch(laporanPerangkatOtomatisProvider);
-
-    // Sinkronkan global brightness notifier sebelum subtree dibangun
-    // ulang dengan theme baru. Tanpa langkah ini, getter `kBg/kCard/...`
-    // bisa kembalikan nilai brightness lama saat MaterialApp rebuild
-    // pertama setelah user toggle.
-    final platformBrightness = MediaQuery.platformBrightnessOf(context);
-    final effectiveBrightness = switch (themeMode) {
-      ThemeMode.light => Brightness.light,
-      ThemeMode.dark => Brightness.dark,
-      ThemeMode.system => platformBrightness,
-    };
-    setAppBrightness(effectiveBrightness);
+    ref.watch(_cekVersiProvider);
+    final perluUpdate = ref.watch(perluUpdateProvider);
 
     return Sizer(
       builder: (context, orientation, deviceType) {
         return ToastificationWrapper(
           child: MaterialApp.router(
-            // Key di-bind ke effectiveBrightness supaya entire widget
-            // tree di bawah MaterialApp di-rebuild dari awal saat user
-            // toggle tema. Tanpa ini, widget yang HARDCODE konstanta
-            // `kBg/kCard/...` (tanpa dependency Theme.of) tidak akan
-            // ikut rebuild — UI jadi mixed warna lama+baru sampai user
-            // pindah halaman. GoRouter mempertahankan location, jadi
-            // user tetap di halaman yang sama setelah switch.
-            key: ValueKey(effectiveBrightness),
             title: 'NARA',
             debugShowCheckedModeBanner: false,
+            // Hanya tema terang — dark mode dihapus dari aplikasi kasir.
             theme: buildLightTheme(),
-            darkTheme: buildDarkTheme(),
-            themeMode: themeMode,
+            themeMode: ThemeMode.light,
             routerConfig: router,
             locale: locale.toLocale(),
             supportedLocales: const [Locale('id'), Locale('en')],
@@ -96,6 +86,10 @@ class NaraApp extends ConsumerWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             builder: (context, child) {
+              // Build di bawah minimum server: tutup semua halaman.
+              if (perluUpdate != null) {
+                return LayarPerbaruiApp(info: perluUpdate);
+              }
               final Widget app = _NotificationTapListener(
                 child: _PendengarPesananRealtime(
                   child: _OrderRefreshListener(
@@ -174,8 +168,10 @@ class _NotificationTapListenerState
     WidgetsBinding.instance.addObserver(this);
     // Aplikasi di layar → sinkron latar belakang tak perlu jalan.
     unawaited(
-      tandaiLatarDepan(ref.read(sharedPreferencesProvider), true)
-          .catchError((_) {}),
+      tandaiLatarDepan(
+        ref.read(sharedPreferencesProvider),
+        true,
+      ).catchError((_) {}),
     );
     // Konsumsi initial message (app diluncurkan dari state killed via tap
     // notif). Pakai post-frame supaya router sudah ter-mount saat di-call.

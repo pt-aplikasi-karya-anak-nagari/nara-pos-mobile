@@ -1,3 +1,8 @@
+// Diimpor eksplisit: di skrip Gradle, `java` merujuk ekstensi Gradle `java`,
+// bukan paket java.util — `java.util.Properties()` gagal dikompilasi.
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -5,6 +10,30 @@ plugins {
     // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// ─── Kunci tanda tangan rilis ───────────────────────────────────────────
+// Dibaca dari android/key.properties (TIDAK di-commit, lihat android/.gitignore):
+//   storeFile=/path/absolut/nara-upload.jks
+//   storePassword=...
+//   keyAlias=nara-upload
+//   keyPassword=...
+// Build rilis (assembleRelease / bundleRelease) GAGAL kalau file ini tak ada,
+// supaya APK/AAB bertanda tangan kunci debug tidak pernah ikut terbit.
+// Cara membuat keystore: lihat README.md bagian "Rilis Android".
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use { stream -> keystoreProperties.load(stream) }
+}
+val memintaBuildRilis = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
+if (memintaBuildRilis && !keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "android/key.properties tidak ditemukan. Build rilis wajib ditandatangani " +
+            "kunci upload sendiri, bukan kunci debug. Lihat README.md bagian \"Rilis Android\".",
+    )
 }
 
 android {
@@ -21,7 +50,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // SEMENTARA: ID bawaan example, cocok dengan google-services.json yang ada.
+        // Ganti ke ID final (mis. id.nara.pos) + flutterfire configure SEBELUM
+        // rilis ke Play Store — ID tak bisa diubah setelah terbit.
         applicationId = "com.example.nara_pos_mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -31,11 +62,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

@@ -12,6 +12,7 @@ import '../../../../core/product_image.dart';
 import '../../domain/cart_item.dart';
 import '../../../drafts/providers.dart';
 import '../../providers.dart';
+import '../../domain/pajak_multi_tarif.dart';
 import '../../../../core/jenis_usaha.dart';
 import 'empty_states.dart';
 import 'customer_selector.dart';
@@ -331,6 +332,8 @@ class CartSheet extends HookConsumerWidget {
                             showBreakdown: showBreakdown.value,
                             taxEnabled: taxSettings.enabled,
                             taxPercent: taxSettings.percent,
+                            taxName: taxSettings.taxName,
+                            rincianPajak: ref.watch(rincianPajakProvider),
                             discountTotal: ref.watch(discountTotalProvider),
                             serviceCharge: ref.watch(serviceChargeProvider),
                             serviceChargeName: taxSettings.serviceChargeName,
@@ -462,6 +465,8 @@ class _CartFooter extends StatelessWidget {
   final bool showBreakdown;
   final bool taxEnabled;
   final double taxPercent;
+  final String taxName;
+  final List<BarisPajak> rincianPajak;
   final double discountTotal;
   final double serviceCharge;
   final String serviceChargeName;
@@ -475,6 +480,8 @@ class _CartFooter extends StatelessWidget {
     required this.showBreakdown,
     required this.taxEnabled,
     required this.taxPercent,
+    required this.taxName,
+    this.rincianPajak = const [],
     required this.discountTotal,
     required this.serviceCharge,
     required this.serviceChargeName,
@@ -504,10 +511,19 @@ class _CartFooter extends StatelessWidget {
             color: kTextMid,
           ),
         ],
-        if (taxEnabled) ...[
+        if (taxEnabled && rincianPajak.isNotEmpty)
+          for (final b in rincianPajak) ...[
+            const Gap(4),
+            _BreakdownRow(
+              label: b.label,
+              value: formatRupiah(b.pajak),
+              color: kTextMid,
+            ),
+          ]
+        else if (taxEnabled) ...[
           const Gap(4),
           _BreakdownRow(
-            label: 'PPN (${_fmtPct(taxPercent)}%)',
+            label: '$taxName (${_fmtPct(taxPercent)}%)',
             value: formatRupiah(tax),
             color: kTextMid,
           ),

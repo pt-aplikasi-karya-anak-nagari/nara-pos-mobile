@@ -29,3 +29,69 @@ Opsional — tanpa DSN, Sentry tidak dinyalakan. DSN dibaca saat build:
 Yang dikirim hanya crash & galat tak tertangani, tanpa isi `debugPrint`,
 screenshot, request, maupun data pengguna selain id — lihat
 `lib/core/pantau.dart`. Event saat offline dikirim begitu tablet online.
+
+## Rilis Android
+
+ID aplikasi **saat ini masih bawaan example** (sementara, supaya cocok dengan
+file Firebase yang ada): Android `com.example.nara_pos_mobile`, iOS
+`com.example.naraPosMobile`. **Play Store menolak ID `com.example`**, dan ID
+tak bisa diubah setelah terbit — ganti ke ID final (rencana: `id.nara.pos`)
+sebelum rilis pertama.
+
+### 1. Ganti ke ID final + Firebase (sekali saja, sebelum rilis)
+
+1. Ubah `namespace` & `applicationId` di `android/app/build.gradle.kts`,
+   package Kotlin di `android/app/src/main/kotlin/`, dan
+   `PRODUCT_BUNDLE_IDENTIFIER` di `ios/Runner.xcodeproj/project.pbxproj`.
+2. Daftarkan app ID final di Firebase project `nara-pos` & buat ulang
+   `google-services.json`, `GoogleService-Info.plist`,
+   `lib/firebase_options.dart`:
+
+```bash
+npm install -g firebase-tools && firebase login
+dart pub global activate flutterfire_cli
+flutterfire configure --project=nara-pos --platforms=android,ios \n  --android-package-name=id.nara.pos --ios-bundle-id=id.nara.pos
+```
+
+### 2. Kunci upload (sekali saja — SIMPAN BAIK-BAIK)
+
+Kunci ini tidak bisa diganti sendiri; kalau hilang, update aplikasi tidak
+bisa diunggah. Simpan file `.jks` + password-nya di password manager /
+brankas, di luar repo.
+
+```bash
+keytool -genkeypair -v -keystore ~/nara-upload.jks -alias nara-upload \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Buat `android/key.properties` (sudah di `.gitignore`, JANGAN di-commit):
+
+```properties
+storeFile=/path/absolut/ke/nara-upload.jks
+storePassword=...
+keyAlias=nara-upload
+keyPassword=...
+```
+
+Aktifkan **Play App Signing** saat membuat aplikasi di Play Console.
+
+### 3. Build
+
+```bash
+NARA_API_SECRET='<API_SECRET_KEY server produksi>' \
+  TARGET=appbundle ./scripts/build_prod.sh
+```
+
+Skrip menolak build kalau secret kosong/masih secret dev, kalau
+`key.properties` tidak ada, atau kalau alamat server rilis bukan `https://`.
+Naikkan `version:` di `pubspec.yaml` (angka setelah `+` wajib naik) tiap
+unggahan ke Play Store.
+
+### 4. Paksa update (versi minimum)
+
+Aplikasi mengirim nomor build (angka setelah `+` di `version:`) di header
+`X-App-Build`. Untuk mewajibkan semua tablet memakai build terbaru, set di
+server `MOBILE_MIN_BUILD=<build>` (dan `MOBILE_UPDATE_URL` bila bukan Play
+Store). Build lebih lama langsung menampilkan layar **Perbarui aplikasi**;
+transaksi offline di perangkat ditahan dan terkirim setelah update.
+Naikkan `MOBILE_MIN_BUILD` hanya SETELAH build baru tersedia di Play Store.

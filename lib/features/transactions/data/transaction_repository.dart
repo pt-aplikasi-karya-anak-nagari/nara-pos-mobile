@@ -18,6 +18,7 @@ import '../../../core/offline/nomor_struk_offline.dart';
 import '../../../core/offline/sale_outbox.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../kasir/domain/cart_item.dart';
+import '../../kasir/domain/pajak_multi_tarif.dart';
 import '../../kasir/domain/batas_diskon.dart';
 import '../domain/sale.dart';
 import '../domain/sale_item.dart';
@@ -376,6 +377,9 @@ class TransactionRepository {
     required double total,
     double discountTotal = 0,
     double serviceCharge = 0,
+    // Rincian pajak per tarif yang ditampilkan kasir — dipakai struk lokal
+    // (offline). Online, struk memakai rincian dari server.
+    List<BarisPajak> rincianPajak = const [],
     required String paymentMethod,
     double cashAmount = 0,
     double changeAmount = 0,
@@ -691,6 +695,7 @@ class TransactionRepository {
         subtotal: subtotal,
         originalSubtotal: originalSubtotal,
         tax: tax,
+        rincianPajak: rincianPajak,
         discountTotal: discountTotal,
         serviceCharge: serviceCharge,
         total: total,

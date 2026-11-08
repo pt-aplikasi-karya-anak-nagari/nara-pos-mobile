@@ -134,7 +134,7 @@ class Outlet {
   ({double subtotal, double serviceCharge, double tax, double grandTotal})
       computeTaxBreakdown(double amount, {double? taxableSubtotal}) {
     final taxable = taxableSubtotal ?? amount;
-    if (!taxEnabled || amount <= 0) {
+    if (amount <= 0) {
       return (
         subtotal: amount,
         serviceCharge: 0,
@@ -144,6 +144,19 @@ class Outlet {
     }
     final taxRate = (taxPercent / 100).clamp(0, 1).toDouble();
     final serviceRate = (serviceChargePercent / 100).clamp(0, 1).toDouble();
+
+    // Pajak nonaktif: service charge BUKAN pajak — tetap ditagih, sama dengan
+    // server (computeCheckoutTotals) & menu QR web. Dulu kasir menampilkan 0,
+    // padahal server menagihnya → total di layar < total tercatat.
+    if (!taxEnabled) {
+      final service = amount * serviceRate;
+      return (
+        subtotal: amount.roundToDouble(),
+        serviceCharge: service.roundToDouble(),
+        tax: 0,
+        grandTotal: (amount + service).roundToDouble(),
+      );
+    }
 
     if (taxInclusive && taxRate > 0) {
       // Pajak di-back-out HANYA dari porsi taxable; item bebas pajak tidak
