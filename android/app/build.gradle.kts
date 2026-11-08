@@ -7,8 +7,32 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// ─── Kunci tanda tangan rilis ───────────────────────────────────────────
+// Dibaca dari android/key.properties (TIDAK di-commit, lihat android/.gitignore):
+//   storeFile=/path/absolut/nara-upload.jks
+//   storePassword=...
+//   keyAlias=nara-upload
+//   keyPassword=...
+// Build rilis (assembleRelease / bundleRelease) GAGAL kalau file ini tak ada,
+// supaya APK/AAB bertanda tangan kunci debug tidak pernah ikut terbit.
+// Cara membuat keystore: lihat README.md bagian "Rilis Android".
+val keystoreProperties = java.util.Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+val memintaBuildRilis = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
+if (memintaBuildRilis && !keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "android/key.properties tidak ditemukan. Build rilis wajib ditandatangani " +
+            "kunci upload sendiri, bukan kunci debug. Lihat README.md bagian \"Rilis Android\".",
+    )
+}
+
 android {
-    namespace = "com.example.nara_pos_mobile"
+    namespace = "id.nara.pos"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,8 +45,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.nara_pos_mobile"
+        // ID aplikasi permanen di Play Store — JANGAN diubah setelah terbit.
+        applicationId = "id.nara.pos"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -31,11 +55,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

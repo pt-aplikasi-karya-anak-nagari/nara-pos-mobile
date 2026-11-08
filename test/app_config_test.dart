@@ -21,6 +21,12 @@ String? masalahAlamatRilis(String url) {
 
 void main() {
   group('AppConfig rilis', () {
+    test('secret rilis tidak ditulis di repo (disuntik --dart-define)', () {
+      // Tanpa --dart-define, rilis harus kosong -> app menolak start.
+      expect(AppConfig.apiSecretRilis, isEmpty);
+      expect(AppConfig.apiSecret, AppConfig.apiSecretDev);
+    });
+
     test('apiHostRilis https & bukan host lokal', () {
       expect(masalahAlamatRilis(AppConfig.apiHostRilis), isNull);
     });

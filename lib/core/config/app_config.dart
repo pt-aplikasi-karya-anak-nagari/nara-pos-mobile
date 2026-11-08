@@ -33,9 +33,22 @@ class AppConfig {
   /// Path versi API, mis. `/api/v1`.
   static const String apiBasePath = '/api/v1';
 
-  /// HMAC secret untuk header `X-SIGNATURE`. Harus cocok dengan
-  /// `API_SECRET_KEY` di backend — dev maupun produksi.
-  static const String apiSecret = 'mako_api_secret_key_789';
+  /// HMAC secret dev untuk header `X-SIGNATURE` (cocok dengan `.env` lokal).
+  /// Backend produksi MENOLAK nilai ini, jadi build rilis wajib memakai
+  /// secret sendiri.
+  static const String apiSecretDev = 'mako_api_secret_key_789';
+
+  /// Secret rilis TIDAK ditulis di repo: disuntik saat build lewat
+  /// `--dart-define=NARA_API_SECRET=...` (dilakukan `scripts/build_prod.sh`
+  /// dari env `NARA_API_SECRET`). Harus sama dengan `API_SECRET_KEY` server
+  /// produksi.
+  static const String apiSecretRilis = String.fromEnvironment('NARA_API_SECRET');
+
+  /// HMAC secret yang dipakai saat ini (dipilih dari mode build). Debug boleh
+  /// di-override juga lewat `--dart-define`.
+  static const String apiSecret = kReleaseMode
+      ? apiSecretRilis
+      : (apiSecretRilis == '' ? apiSecretDev : apiSecretRilis);
 
   /// URL absolut base API (host + basePath).
   static String get apiBaseUrl => '$apiHost$apiBasePath';
@@ -69,5 +82,12 @@ class AppConfig {
   static void assertValid() {
     assert(apiHost.isNotEmpty, 'apiHost tidak boleh kosong.');
     assert(apiSecret.isNotEmpty, 'apiSecret tidak boleh kosong.');
+    // Assert mati di rilis — build rilis tanpa secret harus tetap ketahuan.
+    if (kReleaseMode && apiSecret.isEmpty) {
+      throw StateError(
+        'NARA_API_SECRET kosong: build rilis wajib lewat scripts/build_prod.sh '
+        'dengan env NARA_API_SECRET.',
+      );
+    }
   }
 }
