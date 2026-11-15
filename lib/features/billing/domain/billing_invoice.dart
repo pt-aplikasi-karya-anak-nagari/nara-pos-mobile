@@ -74,7 +74,16 @@ class BillingInvoice {
   /// Owner boleh mengunggah bukti transfer HANYA selama invoice pending.
   /// Backend menolak upload untuk status non-pending; invoice yang ditolak
   /// harus di-checkout ulang (bikin invoice pending baru), bukan re-upload.
-  bool get canUploadProof => status == 'pending';
+  ///
+  /// Invoice QRIS tidak pernah butuh bukti: ia dilunasi otomatis oleh gateway,
+  /// dan server menolak unggahannya.
+  bool get canUploadProof => status == 'pending' && !isQris;
+
+  /// Dibayar otomatis lewat QRIS (Xendit).
+  bool get isQris => paymentMethodCode == 'xendit_qris';
+
+  /// Invoice QRIS yang masih menunggu pembayaran.
+  bool get menungguQris => status == 'pending' && isQris;
 
   factory BillingInvoice.fromJson(Map<String, dynamic> json) {
     DateTime parseDate(dynamic value) {
