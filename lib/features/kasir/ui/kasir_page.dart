@@ -65,13 +65,19 @@ class KasirPage extends HookConsumerWidget {
     ref.listen(realtimeEventsProvider, (prev, next) {
       final ev = next.asData?.value;
       if (ev == null || ev.type != 'inventory.low_stock') return;
-      final name = (ev.data['name'] as String?) ?? 'Produk';
+      final name = (ev.data['name'] as String?) ?? context.t('common.product');
       final stock = ev.data['stock'];
       final unit = (ev.data['stock_unit'] as String?) ?? '';
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: Text('⚠️ Stok menipis: $name — sisa $stock $unit'.trim()),
+          content: Text(
+            context.tf('kasir.low_stock', {
+              'name': name,
+              'stock': stock,
+              'unit': unit,
+            }).trim(),
+          ),
           backgroundColor: const Color(0xFFB45309), // amber-700
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
@@ -130,7 +136,8 @@ class KasirPage extends HookConsumerWidget {
       // Beri tahu kasir sekilas saat produk menjadi habis (bukan saat pulih,
       // supaya tidak berisik). Label ikut alasan habisnya.
       if (!isInStock) {
-        final name = (ev.data['name'] as String?) ?? 'Produk';
+        final name =
+            (ev.data['name'] as String?) ?? context.t('common.product');
         final label = switch (reason) {
           'manual' => ref.t('product.marked_86'),
           'ingredient' => ref.t('product.ingredient_out'),
@@ -366,7 +373,7 @@ class KasirPage extends HookConsumerWidget {
               ),
               const Gap(20),
               Text(
-                'Pembayaran Berhasil',
+                context.t('kasir.paid_title'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16.sp,
@@ -376,7 +383,7 @@ class KasirPage extends HookConsumerWidget {
               ),
               const Gap(8),
               Text(
-                'Transaksi #${sale.invoiceId} telah selesai.',
+                context.tf('kasir.paid_sub', {'invoice': sale.invoiceId}),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: kTextMid),
               ),
@@ -402,7 +409,7 @@ class KasirPage extends HookConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Total Pembayaran',
+                          context.t('kasir.total_payment'),
                           style: TextStyle(
                             fontSize: 13,
                             color: kTextMid,
@@ -427,7 +434,7 @@ class KasirPage extends HookConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Metode',
+                          context.t('pay.method'),
                           style: TextStyle(
                             fontSize: 13,
                             color: kTextMid,
@@ -450,7 +457,7 @@ class KasirPage extends HookConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Dibayar',
+                            context.t('pay.paid'),
                             style: TextStyle(
                               fontSize: 13,
                               color: kTextMid,
@@ -472,7 +479,7 @@ class KasirPage extends HookConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Kembalian',
+                            context.t('pay.change'),
                             style: TextStyle(
                               fontSize: 13,
                               color: kTextMid,
@@ -513,7 +520,7 @@ class KasirPage extends HookConsumerWidget {
                       ),
                       elevation: 0,
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         HugeIcon(
@@ -523,7 +530,7 @@ class KasirPage extends HookConsumerWidget {
                         ),
                         SizedBox(width: 8),
                         Text(
-                          'Cetak Struk',
+                          context.t('kasir.print_receipt'),
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -540,7 +547,7 @@ class KasirPage extends HookConsumerWidget {
                   child: TextButton(
                     onPressed: () => Navigator.pop(ctx),
                     child: Text(
-                      'Tutup',
+                      context.t('common.close'),
                       style: TextStyle(
                         color: kTextMid,
                         fontWeight: FontWeight.w700,
@@ -803,11 +810,11 @@ class KasirPage extends HookConsumerWidget {
                     size: 48,
                   ),
                   const Gap(16),
-                  Text('Gagal memuat produk'),
+                  Text(context.t('kasir.load_failed')),
                   const Gap(8),
                   ElevatedButton(
                     onPressed: () => pagingController.refresh(),
-                    child: const Text('Coba Lagi'),
+                    child: Text(context.t('common.retry')),
                   ),
                 ],
               ),
@@ -844,8 +851,8 @@ class KasirPage extends HookConsumerWidget {
                         const Gap(16),
                         Text(
                           isSearching
-                              ? 'Produk tidak ditemukan'
-                              : 'Belum ada produk',
+                              ? context.t('kasir.not_found')
+                              : context.t('kasir.empty'),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: kTextDark,
@@ -854,8 +861,8 @@ class KasirPage extends HookConsumerWidget {
                         const Gap(4),
                         Text(
                           isSearching
-                              ? 'Coba kata kunci lain'
-                              : 'Tambahkan produk dulu untuk mulai berjualan',
+                              ? context.t('kasir.try_other')
+                              : context.t('kasir.add_first'),
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 12, color: kTextMid),
                         ),
@@ -869,7 +876,7 @@ class KasirPage extends HookConsumerWidget {
                               color: Colors.white,
                               size: 18,
                             ),
-                            label: const Text('Kelola Produk'),
+                            label: Text(context.t('kasir.manage_products')),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: kPrimary,
                               foregroundColor: Colors.white,
@@ -975,7 +982,7 @@ class KasirPage extends HookConsumerWidget {
               ),
               const Gap(24),
               Text(
-                'Kasir Masih Tertutup',
+                context.t('kasir.closed_title'),
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -984,7 +991,7 @@ class KasirPage extends HookConsumerWidget {
               ),
               const Gap(8),
               Text(
-                'Silakan buka kasir terlebih dahulu\nuntuk mulai memproses transaksi.',
+                context.t('kasir.closed_sub'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: kTextMid, fontSize: 16),
               ),
@@ -1044,7 +1051,7 @@ class KasirPage extends HookConsumerWidget {
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
-                                  'Buka Kasir Sekarang',
+                                  context.t('kasir.open_now'),
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
@@ -1525,7 +1532,7 @@ class _Header extends HookConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                c,
+                                _labelKategori(context, c),
                                 style: TextStyle(
                                   color: active ? Colors.white : Colors.white,
                                   fontSize: 12,
@@ -1536,7 +1543,7 @@ class _Header extends HookConsumerWidget {
                               ),
                             ] else
                               Text(
-                                c,
+                                _labelKategori(context, c),
                                 style: TextStyle(
                                   color: active ? kPrimary : Colors.white,
                                   fontSize: 12,
@@ -1561,6 +1568,16 @@ class _Header extends HookConsumerWidget {
   }
 }
 
+/// Label chip kategori. "Terlaris" dan "Semua" adalah kategori buatan aplikasi
+/// (nilainya dipakai sebagai penanda di logika filter, jadi TIDAK diterjemahkan
+/// di sana); hanya tampilannya yang mengikuti bahasa. Kategori lain adalah
+/// nama buatan Pemilik dan ditampilkan apa adanya.
+String _labelKategori(BuildContext context, String c) => switch (c) {
+  'Terlaris' => context.t('cat.best'),
+  'Semua' => context.t('cat.all'),
+  _ => c,
+};
+
 class _GridDensityControl extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1581,19 +1598,19 @@ class _GridDensityControl extends ConsumerWidget {
             icon: Icons.grid_view_rounded,
             active: density == -1,
             onTap: () => notifier.set(-1),
-            tooltip: 'Besar',
+            tooltip: context.t('density.large'),
           ),
           _DensityBtn(
             icon: Icons.grid_on_rounded,
             active: density == 0,
             onTap: () => notifier.set(0),
-            tooltip: 'Normal',
+            tooltip: context.t('density.normal'),
           ),
           _DensityBtn(
             icon: Icons.apps_rounded,
             active: density == 1,
             onTap: () => notifier.set(1),
-            tooltip: 'Kecil',
+            tooltip: context.t('density.small'),
           ),
         ],
       ),
@@ -1659,8 +1676,7 @@ class CustomOrderSheet extends HookConsumerWidget {
         child: SafeArea(
           top: false,
           child: Text(
-            'Pesanan custom dimatikan Pemilik untuk outlet ini. Pilih produk '
-            'dari katalog, atau minta Pemilik mengaktifkannya di Pengaturan App.',
+            context.t('custom.disabled'),
             style: TextStyle(color: kTextMid, fontSize: 14, height: 1.5),
           ),
         ),
@@ -1697,7 +1713,7 @@ class CustomOrderSheet extends HookConsumerWidget {
                 ),
                 const Gap(12),
                 Text(
-                  'Pesanan Custom',
+                  context.t('custom.title'),
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -1712,8 +1728,8 @@ class CustomOrderSheet extends HookConsumerWidget {
               autofocus: true,
               textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
-                labelText: 'Nama Produk / Pesanan',
-                hintText: 'Misal: Nasi Goreng Spesial',
+                labelText: context.t('custom.name'),
+                hintText: context.t('custom.name_hint'),
                 filled: true,
                 fillColor: kBg,
                 border: OutlineInputBorder(
@@ -1728,7 +1744,7 @@ class CustomOrderSheet extends HookConsumerWidget {
               keyboardType: TextInputType.number,
               inputFormatters: [RupiahInputFormatter()],
               decoration: InputDecoration(
-                labelText: 'Harga Satuan',
+                labelText: context.t('custom.price'),
                 hintText: 'Rp 0',
                 filled: true,
                 fillColor: kBg,
@@ -1760,8 +1776,8 @@ class CustomOrderSheet extends HookConsumerWidget {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Tambah ke Keranjang',
+                child: Text(
+                  context.t('custom.add'),
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,

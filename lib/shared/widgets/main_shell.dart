@@ -335,13 +335,13 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
     if (ref.fiturTampil('scan'))
       _TombolAksi(
         icon: AppIcons.scan,
-        label: 'Scan',
+        label: context.t('shell.scan'),
         onTap: () => ref.read(scanTriggerProvider.notifier).trigger(),
       ),
     _TombolAksi(
       icon: HugeIcons.strokeRoundedCalculator,
-      label: 'Hitung',
-      labelPanjang: 'Kalkulator',
+      label: context.t('shell.calc_short'),
+      labelPanjang: context.t('shell.calc'),
       // Dialog, bukan halaman: kasir memakainya sambil keranjang tetap di
       // layar, dan menutupnya tak boleh mengubah apa pun di belakangnya.
       onTap: () => showDialog(
@@ -351,8 +351,8 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
     ),
     _TombolAksi(
       icon: AppIcons.add,
-      label: 'Custom',
-      labelPanjang: 'Custom Order',
+      label: context.t('shell.custom_short'),
+      labelPanjang: context.t('shell.custom'),
       onTap: () => tampilkanSheetBawah(
         context: context,
         isScrollControlled: true,
@@ -364,7 +364,7 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
     if (ref.fiturTampil('table_management'))
       _TombolAksi(
         icon: HugeIcons.strokeRoundedTable02,
-        label: 'Meja',
+        label: context.t('shell.table'),
         onTap: () => showDialog(
           context: context,
           builder: (_) => Dialog(
@@ -385,7 +385,7 @@ List<Widget> _aksiCepat(BuildContext context, WidgetRef ref) {
       ),
     _TombolAksi(
       icon: AppIcons.task,
-      label: 'Draft',
+      label: context.t('shell.draft'),
       lencana: (r) => r.watch(draftsCountProvider),
       onTap: () => tampilkanSheetBawah(
         context: context,

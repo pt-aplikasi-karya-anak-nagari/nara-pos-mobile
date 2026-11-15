@@ -59,7 +59,7 @@ Future<String?> _promptManagerPin(
         final pin = pinController.text.trim();
         final pinValid = pin.length >= 4 && pin.length <= 6;
         return AlertDialog(
-          title: const Text('Otorisasi'),
+          title: Text(context.t('auth.title')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,10 +81,7 @@ Future<String?> _promptManagerPin(
                 ),
               ),
               const Gap(12),
-              const Text(
-                'Diskon melampaui batas kasir. Minta PIN otorisasi dari '
-                'Pemilik atau penyelia yang berwenang untuk melanjutkan.',
-              ),
+              Text(context.t('auth.discount_over')),
               const Gap(12),
               TextField(
                 controller: pinController,
@@ -95,8 +92,8 @@ Future<String?> _promptManagerPin(
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (_) => setLocal(() {}),
                 decoration: InputDecoration(
-                  labelText: 'PIN Otorisasi',
-                  hintText: '4-6 digit',
+                  labelText: context.t('auth.pin'),
+                  hintText: context.t('auth.pin_hint'),
                   counterText: '',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -108,11 +105,11 @@ Future<String?> _promptManagerPin(
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal'),
+              child: Text(context.t('common.cancel')),
             ),
             FilledButton(
               onPressed: pinValid ? () => Navigator.pop(ctx, pin) : null,
-              child: const Text('Otorisasi'),
+              child: Text(context.t('auth.submit')),
             ),
           ],
         );
@@ -241,11 +238,12 @@ class PaymentSheet extends HookConsumerWidget {
         (custTier != 'Regular' || custTierMult > 1.0);
 
     Future<void> applyPromo() async {
+      // Dibaca sebelum await: BuildContext tak boleh dipakai sesudahnya.
+      final bahasa = context.bahasa;
       final code = promoController.text.trim();
       if (code.isEmpty || applyingPromo.value) return;
       if (offline) {
-        promoError.value =
-            'Kode promo butuh internet untuk diperiksa. Coba lagi saat online.';
+        promoError.value = tr('pay.promo_offline', bahasa);
         return;
       }
       applyingPromo.value = true;
@@ -254,7 +252,7 @@ class PaymentSheet extends HookConsumerWidget {
         final outlet = ref.read(activeOutletProvider);
         final outletId = outlet?.remoteId;
         if (outletId == null) {
-          promoError.value = 'Outlet tidak aktif.';
+          promoError.value = tr('pay.outlet_inactive', bahasa);
           return;
         }
         final promo = await ref
@@ -262,21 +260,22 @@ class PaymentSheet extends HookConsumerWidget {
             .validate(outletId, code);
         if (subtotalNow < promo.minPurchaseAmount) {
           appliedPromo.value = null;
-          promoError.value =
-              'Min. belanja ${formatRupiah(promo.minPurchaseAmount)} untuk promo ini.';
+          promoError.value = trf('pay.promo_min', bahasa, {
+            'amount': formatRupiah(promo.minPurchaseAmount),
+          });
           return;
         }
         final disc = promo.discountFor(cartItems, subtotalNow);
         if (disc <= 0) {
           appliedPromo.value = null;
-          promoError.value = 'Promo tidak berlaku untuk item di keranjang.';
+          promoError.value = tr('pay.promo_na', bahasa);
           return;
         }
         appliedPromo.value = promo;
         promoError.value = null;
       } catch (e) {
         appliedPromo.value = null;
-        promoError.value = 'Kode promo tidak valid / tidak aktif.';
+        promoError.value = tr('pay.promo_invalid', bahasa);
       } finally {
         applyingPromo.value = false;
       }
@@ -307,6 +306,7 @@ class PaymentSheet extends HookConsumerWidget {
     }, [selectedIndex.value]);
 
     Future<void> pickPaymentProof() async {
+      final judulCrop = context.t('pay.crop_title');
       try {
         final picker = ImagePicker();
         final picked = await picker.pickImage(
@@ -318,7 +318,7 @@ class PaymentSheet extends HookConsumerWidget {
         if (picked == null) return;
         final croppedPath = await ImageCrop.square(
           picked.path,
-          title: 'Crop bukti pembayaran',
+          title: judulCrop,
         );
         if (croppedPath == null) return;
         proofPath.value = croppedPath;
@@ -333,9 +333,13 @@ class PaymentSheet extends HookConsumerWidget {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Gagal upload bukti: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                context.tf('pay.proof_upload_failed', {'error': e}),
+              ),
+            ),
+          );
         }
       }
     }
@@ -569,8 +573,8 @@ class PaymentSheet extends HookConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${sale.nomorAntrian != null ? 'Nomor antrian ${sale.nomorAntrian}. ' : ''}'
-                'Tersimpan offline — otomatis disinkronkan saat koneksi kembali.',
+                '${sale.nomorAntrian != null ? context.tf('pay.queue_no', {'no': sale.nomorAntrian}) : ''}'
+                '${context.t('pay.saved_offline')}',
               ),
               backgroundColor: kWarning,
               duration: const Duration(seconds: 6),
@@ -587,7 +591,9 @@ class PaymentSheet extends HookConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Gagal menyimpan transaksi: ${e.toString().replaceAll('Exception: ', '')}',
+                context.tf('pay.save_failed', {
+                  'error': e.toString().replaceAll('Exception: ', ''),
+                }),
               ),
               backgroundColor: kDanger,
             ),
@@ -633,7 +639,7 @@ class PaymentSheet extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Tambah Pembayaran',
+                          context.t('pay.add_payment'),
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 16,
@@ -642,12 +648,14 @@ class PaymentSheet extends HookConsumerWidget {
                         ),
                         const Gap(4),
                         Text(
-                          'Sisa tagihan: ${formatRupiah(remaining)}',
+                          context.tf('pay.remaining_amount', {
+                            'amount': formatRupiah(remaining),
+                          }),
                           style: TextStyle(color: kTextMid, fontSize: 12),
                         ),
                         const Gap(16),
                         Text(
-                          'Metode',
+                          context.t('pay.method'),
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
@@ -690,7 +698,7 @@ class PaymentSheet extends HookConsumerWidget {
                         ),
                         const Gap(16),
                         Text(
-                          'Nominal',
+                          context.t('pay.amount'),
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
@@ -735,8 +743,8 @@ class PaymentSheet extends HookConsumerWidget {
                               ),
                               elevation: 0,
                             ),
-                            child: const Text(
-                              'Tambah',
+                            child: Text(
+                              context.t('common.add'),
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -793,7 +801,7 @@ class PaymentSheet extends HookConsumerWidget {
                 ),
               ),
               Text(
-                'Pembayaran',
+                context.t('pay.title'),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -802,7 +810,7 @@ class PaymentSheet extends HookConsumerWidget {
               ),
               const Gap(4),
               Text(
-                'Total yang harus dibayar',
+                context.t('pay.total_due'),
                 style: TextStyle(fontSize: 13, color: kTextMid),
               ),
               const Gap(6),
@@ -826,7 +834,7 @@ class PaymentSheet extends HookConsumerWidget {
                 child: Column(
                   children: [
                     _SheetBreakdownRow(
-                      label: 'Subtotal',
+                      label: context.t('cart.subtotal'),
                       // Pakai subtotal SEBELUM diskon item supaya baris
                       // "Subtotal − Diskon" foot ke total (kalau pakai subtotal
                       // setelah diskon, baris Diskon terlihat dobel-potong).
@@ -835,7 +843,7 @@ class PaymentSheet extends HookConsumerWidget {
                     if (ref.watch(discountTotalProvider) > 0) ...[
                       const Gap(6),
                       _SheetBreakdownRow(
-                        label: 'Diskon',
+                        label: context.t('cart.discount'),
                         value:
                             '- ${formatRupiah(ref.watch(discountTotalProvider))}',
                         color: kSuccess,
@@ -856,7 +864,7 @@ class PaymentSheet extends HookConsumerWidget {
                         const Gap(6),
                         _SheetBreakdownRow(
                           label:
-                              '${b.label}${taxInclusive ? ' · termasuk' : ''}',
+                              '${b.label}${taxInclusive ? context.t('pay.inclusive') : ''}',
                           value: formatRupiah(b.pajak),
                           color: kTextMid,
                         ),
@@ -865,7 +873,7 @@ class PaymentSheet extends HookConsumerWidget {
                       const Gap(6),
                       _SheetBreakdownRow(
                         label:
-                            '${ref.watch(taxSettingsProvider).taxName} (${_payFmtPct(ref.watch(taxSettingsProvider).percent)}%)${taxInclusive ? ' · termasuk' : ''}',
+                            '${ref.watch(taxSettingsProvider).taxName} (${_payFmtPct(ref.watch(taxSettingsProvider).percent)}%)${taxInclusive ? context.t('pay.inclusive') : ''}',
                         value: formatRupiah(ref.watch(taxProvider)),
                         color: kTextMid,
                       ),
@@ -874,7 +882,7 @@ class PaymentSheet extends HookConsumerWidget {
                       const Gap(6),
                       _SheetBreakdownRow(
                         label:
-                            'Promo${appliedPromo.value != null ? ' (${appliedPromo.value!.code})' : ''}',
+                            '${context.t('pay.promo')}${appliedPromo.value != null ? ' (${appliedPromo.value!.code})' : ''}',
                         value: '- ${formatRupiah(promoDiscount)}',
                         color: kSuccess,
                       ),
@@ -882,7 +890,9 @@ class PaymentSheet extends HookConsumerWidget {
                     if (pointsDiscount > 0) ...[
                       const Gap(6),
                       _SheetBreakdownRow(
-                        label: 'Tukar $pointsToRedeem poin',
+                        label: context.tf('pay.redeem_n', {
+                          'n': pointsToRedeem,
+                        }),
                         value: '- ${formatRupiah(pointsDiscount)}',
                         color: kSuccess,
                       ),
@@ -895,7 +905,7 @@ class PaymentSheet extends HookConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Total Bayar',
+                          context.t('pay.total_pay'),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -939,7 +949,7 @@ class PaymentSheet extends HookConsumerWidget {
                             onSubmitted: (_) => applyPromo(),
                             decoration: InputDecoration(
                               isDense: true,
-                              hintText: 'Kode promo',
+                              hintText: context.t('pay.promo_code'),
                               filled: true,
                               fillColor: Colors.white,
                               contentPadding: const EdgeInsets.symmetric(
@@ -980,7 +990,7 @@ class PaymentSheet extends HookConsumerWidget {
                                           color: Colors.white,
                                         ),
                                       )
-                                    : const Text('Terapkan'),
+                                    : Text(context.t('common.apply')),
                               )
                             : OutlinedButton(
                                 onPressed: clearPromo,
@@ -990,7 +1000,7 @@ class PaymentSheet extends HookConsumerWidget {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
-                                child: const Text('Hapus'),
+                                child: Text(context.t('common.delete')),
                               ),
                       ],
                     ),
@@ -1009,7 +1019,9 @@ class PaymentSheet extends HookConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
-                          'Promo "${appliedPromo.value!.name}" diterapkan.',
+                          context.tf('pay.promo_applied', {
+                            'name': appliedPromo.value!.name,
+                          }),
                           style: TextStyle(color: kSuccess, fontSize: 12),
                         ),
                       ),
@@ -1031,15 +1043,21 @@ class PaymentSheet extends HookConsumerWidget {
                     onChanged: (v) => redeemPoints.value = v,
                     activeThumbColor: kPrimary,
                     activeTrackColor: kPrimary.withValues(alpha: 0.5),
-                    title: const Text(
-                      'Tukar poin',
+                    title: Text(
+                      context.t('pay.redeem'),
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),
                     ),
                     subtitle: Text(
-                      '$customerPoints poin tersedia · tukar $maxRedeemablePoints poin = ${formatRupiah(maxRedeemablePoints * pointValue)}',
+                      context.tf('pay.points_available', {
+                        'points': customerPoints,
+                        'n': maxRedeemablePoints,
+                        'amount': formatRupiah(
+                          maxRedeemablePoints * pointValue,
+                        ),
+                      }),
                       style: TextStyle(color: kTextMid, fontSize: 12),
                     ),
                   ),
@@ -1111,7 +1129,7 @@ class PaymentSheet extends HookConsumerWidget {
               if (isDineIn) ...[
                 const Gap(16),
                 Text(
-                  'Meja',
+                  context.t('pay.table'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1193,7 +1211,9 @@ class PaymentSheet extends HookConsumerWidget {
                           if (custTierMult > 1.0) ...[
                             const Gap(6),
                             Text(
-                              'poin ×${_fmtMult(custTierMult)}',
+                              context.tf('pay.points_mult', {
+                                'm': _fmtMult(custTierMult),
+                              }),
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 11,
@@ -1210,7 +1230,7 @@ class PaymentSheet extends HookConsumerWidget {
               const Gap(18),
               if (!splitActive) ...[
                 Text(
-                  "Tipe Pembayaran",
+                  context.t('pay.type'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1294,7 +1314,7 @@ class PaymentSheet extends HookConsumerWidget {
                           ),
                           const Gap(8),
                           Text(
-                            'Bagi jadi beberapa metode (Split)',
+                            context.t('pay.split_toggle'),
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
@@ -1310,7 +1330,7 @@ class PaymentSheet extends HookConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Split Pembayaran',
+                        context.t('pay.split_title'),
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
@@ -1320,7 +1340,7 @@ class PaymentSheet extends HookConsumerWidget {
                       GestureDetector(
                         onTap: () => splitTenders.value = [],
                         child: Text(
-                          'Reset',
+                          context.t('common.reset'),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
@@ -1391,7 +1411,7 @@ class PaymentSheet extends HookConsumerWidget {
                           border: Border.all(color: kPrimary),
                         ),
                         child: Text(
-                          '+ Tambah metode',
+                          context.t('pay.add_method'),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
@@ -1413,10 +1433,10 @@ class PaymentSheet extends HookConsumerWidget {
                       children: [
                         Text(
                           splitRemaining.abs() < 0.5
-                              ? 'Lunas'
+                              ? context.t('pay.settled')
                               : (splitRemaining > 0
-                                    ? 'Sisa tagihan'
-                                    : 'Kelebihan'),
+                                    ? context.t('pay.remaining')
+                                    : context.t('pay.over')),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: kTextDark,
@@ -1461,7 +1481,7 @@ class PaymentSheet extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Detail Rekening Transfer',
+                          context.t('pay.transfer_detail'),
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
@@ -1470,18 +1490,18 @@ class PaymentSheet extends HookConsumerWidget {
                         ),
                         const Divider(height: 24),
                         _InfoRow(
-                          label: 'Bank',
+                          label: context.t('pay.bank'),
                           value: selectedPM.providerName ?? '-',
                         ),
                         const Gap(8),
                         _InfoRow(
-                          label: 'Nomor Rekening',
+                          label: context.t('pay.account_no'),
                           value: selectedPM.accountNumber!,
                           isCopyable: true,
                         ),
                         const Gap(8),
                         _InfoRow(
-                          label: 'Atas Nama',
+                          label: context.t('pay.account_name'),
                           value: selectedPM.accountName ?? '-',
                         ),
                       ],
@@ -1493,7 +1513,7 @@ class PaymentSheet extends HookConsumerWidget {
               if (!splitActive && selectedPM?.type == 'cash') ...[
                 const Gap(20),
                 Text(
-                  'Jumlah Uang Tunai',
+                  context.t('pay.cash_amount'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -1581,7 +1601,9 @@ class PaymentSheet extends HookConsumerWidget {
                               ),
                             ),
                             child: Text(
-                              isTotal ? 'Uang Pas' : formatRupiah(v),
+                              isTotal
+                                  ? context.t('pay.exact')
+                                  : formatRupiah(v),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
@@ -1614,7 +1636,7 @@ class PaymentSheet extends HookConsumerWidget {
                             ),
                             SizedBox(width: 6),
                             Text(
-                              'Kembalian',
+                              context.t('pay.change'),
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: kTextDark,
@@ -1676,8 +1698,8 @@ class PaymentSheet extends HookConsumerWidget {
                   ),
                   child: Text(
                     (!splitActive && selectedPM?.type == 'later')
-                        ? 'Simpan Pesanan (Bayar Nanti)'
-                        : 'Konfirmasi Pembayaran',
+                        ? context.t('pay.confirm_later')
+                        : context.t('pay.confirm'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -1810,7 +1832,9 @@ class _TablePickerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    activeTable != null ? activeTable!.name : 'Pilih Meja',
+                    activeTable != null
+                        ? activeTable!.name
+                        : context.t('pay.pick_table'),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -1819,8 +1843,13 @@ class _TablePickerCard extends StatelessWidget {
                   ),
                   Text(
                     activeTable != null
-                        ? '${activeTable!.group?.name ?? 'Meja'} — ${activeTable!.capacity} Kursi'
-                        : 'Belum ada meja dipilih',
+                        ? context.tf('pay.table_seats', {
+                            'group':
+                                activeTable!.group?.name ??
+                                context.t('pay.table'),
+                            'n': activeTable!.capacity,
+                          })
+                        : context.t('pay.no_table'),
                     style: TextStyle(fontSize: 12, color: kTextMid),
                   ),
                 ],
@@ -1901,13 +1930,13 @@ class _PaymentProofPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Bukti Pembayaran (opsional)',
+        Text(
+          context.t('pay.proof_title'),
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
         ),
         const Gap(2),
         Text(
-          'Foto QRIS scan, struk transfer, atau receipt mesin EDC.',
+          context.t('pay.proof_sub'),
           style: TextStyle(fontSize: 11, color: kTextMid),
         ),
         const Gap(10),
@@ -1964,7 +1993,7 @@ class _PaymentProofPicker extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: onPick,
             icon: const Icon(Icons.photo_camera_outlined, size: 18),
-            label: const Text('Upload Foto Bukti'),
+            label: Text(context.t('pay.proof_upload')),
             style: OutlinedButton.styleFrom(
               foregroundColor: kPrimary,
               side: const BorderSide(color: kPrimary),
@@ -2065,8 +2094,8 @@ class KartuQris extends ConsumerWidget {
         children: [
           Text(
             terkunci
-                ? 'Scan & Bayar — nominal sudah terisi'
-                : 'Scan QRIS untuk Bayar',
+                ? context.t('pay.qris_scan_filled')
+                : context.t('pay.qris_scan'),
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 13,
@@ -2127,8 +2156,9 @@ class KartuQris extends ConsumerWidget {
                   const Gap(6),
                   Flexible(
                     child: Text(
-                      'Nominal belum masuk ke QR — minta pelanggan '
-                      'mengetik ${formatRupiah(nominal)} sendiri.',
+                      context.tf('pay.qris_manual', {
+                        'amount': formatRupiah(nominal),
+                      }),
                       style: TextStyle(
                         fontSize: 11,
                         height: 1.3,
@@ -2157,7 +2187,9 @@ class _PilihJatuhTempo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = nilai == null ? 'Hari ini' : formatTanggalJatuhTempo(nilai!);
+    final label = nilai == null
+        ? context.t('pay.today')
+        : formatTanggalJatuhTempo(nilai!);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -2174,7 +2206,7 @@ class _PilihJatuhTempo extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Jatuh tempo',
+                  context.t('pay.due'),
                   style: TextStyle(fontSize: 12, color: kTextMid),
                 ),
                 Text(
@@ -2189,7 +2221,7 @@ class _PilihJatuhTempo extends StatelessWidget {
           ),
           if (nilai != null)
             IconButton(
-              tooltip: 'Kembalikan ke hari ini',
+              tooltip: context.t('pay.due_reset'),
               onPressed: () => onUbah(null),
               icon: const Icon(Icons.close, size: 18),
             ),
@@ -2203,11 +2235,11 @@ class _PilihJatuhTempo extends StatelessWidget {
                 firstDate: hari,
                 // Sama dengan batas server (piutang.MaksHariJatuhTempo).
                 lastDate: hari.add(const Duration(days: 365)),
-                helpText: 'Jatuh tempo pembayaran',
+                helpText: context.t('pay.due_help'),
               );
               if (dipilih != null) onUbah(dipilih);
             },
-            child: const Text('Ubah'),
+            child: Text(context.t('common.change')),
           ),
         ],
       ),

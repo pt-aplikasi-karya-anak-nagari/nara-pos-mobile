@@ -8,6 +8,7 @@ import '../../../antrian/ui/tombol_antrian.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/app_icons.dart';
 import '../../../../core/format.dart';
+import '../../../../core/i18n.dart';
 import '../../../../core/product_image.dart';
 import '../../domain/cart_item.dart';
 import '../../../drafts/providers.dart';
@@ -110,7 +111,7 @@ class CartSheet extends HookConsumerWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            'Pesanan',
+                            context.t('cart.title'),
                             style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
@@ -121,7 +122,7 @@ class CartSheet extends HookConsumerWidget {
                         const Flexible(child: TombolAntrian()),
                         const SizedBox(width: 4),
                         IconButton(
-                          tooltip: 'Tutup',
+                          tooltip: context.t('common.close'),
                           onPressed: () => Navigator.of(context).maybePop(),
                           icon: Icon(Icons.close_rounded, color: kTextMid),
                           visualDensity: VisualDensity.compact,
@@ -167,9 +168,9 @@ class CartSheet extends HookConsumerWidget {
                       indicatorSize: TabBarIndicatorSize.tab,
                       padding: const EdgeInsets.all(4),
                       dividerColor: Colors.transparent,
-                      tabs: const [
-                        Tab(text: 'Langsung'),
-                        Tab(text: 'Meja'),
+                      tabs: [
+                        Tab(text: context.t('cart.tab_direct')),
+                        Tab(text: context.t('cart.tab_table')),
                       ],
                     ),
                   ),
@@ -197,12 +198,15 @@ class CartSheet extends HookConsumerWidget {
                                     children: [
                                       _CartStatChip(
                                         icon: AppIcons.inventory,
-                                        label: '${cart.length} Produk',
+                                        label: context.tf('cart.n_products', {
+                                          'n': cart.length,
+                                        }),
                                       ),
                                       _CartStatChip(
                                         icon: AppIcons.receiptLong,
-                                        label:
-                                            '${ref.watch(totalItemsProvider)} Item',
+                                        label: context.tf('cart.n_items', {
+                                          'n': ref.watch(totalItemsProvider),
+                                        }),
                                       ),
                                     ],
                                   ),
@@ -224,8 +228,12 @@ class CartSheet extends HookConsumerWidget {
                                           SnackBar(
                                             content: Text(
                                               ok
-                                                  ? 'Pesanan disimpan ke draft'
-                                                  : 'Gagal menyimpan draft',
+                                                  ? context.t(
+                                                      'cart.draft_saved',
+                                                    )
+                                                  : context.t(
+                                                      'cart.draft_failed',
+                                                    ),
                                             ),
                                           ),
                                         );
@@ -243,7 +251,7 @@ class CartSheet extends HookConsumerWidget {
                                             8,
                                           ),
                                         ),
-                                        child: const Row(
+                                        child: Row(
                                           children: [
                                             HugeIcon(
                                               icon: AppIcons.task,
@@ -252,7 +260,7 @@ class CartSheet extends HookConsumerWidget {
                                             ),
                                             SizedBox(width: 4),
                                             Text(
-                                              'Simpan Draft',
+                                              context.t('cart.save_draft'),
                                               style: TextStyle(
                                                 color: kPrimary,
                                                 fontSize: 11,
@@ -277,7 +285,7 @@ class CartSheet extends HookConsumerWidget {
                                             8,
                                           ),
                                         ),
-                                        child: const Row(
+                                        child: Row(
                                           children: [
                                             HugeIcon(
                                               icon: AppIcons.delete,
@@ -286,7 +294,7 @@ class CartSheet extends HookConsumerWidget {
                                             ),
                                             SizedBox(width: 4),
                                             Text(
-                                              'Hapus Semua',
+                                              context.t('cart.clear_all'),
                                               style: TextStyle(
                                                 color: kDanger,
                                                 fontSize: 11,
@@ -387,7 +395,9 @@ class _LineDiscountButton extends StatelessWidget {
             ),
             const SizedBox(width: 2),
             Text(
-              hasDiscount ? 'Edit Diskon' : 'Beri Diskon',
+              hasDiscount
+                  ? context.t('cart.edit_discount')
+                  : context.t('cart.give_discount'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
@@ -414,7 +424,7 @@ class _TaxFreeBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        'Bebas pajak',
+        context.t('cart.tax_free'),
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w700,
@@ -494,11 +504,14 @@ class _CartFooter extends StatelessWidget {
     final breakdown = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _BreakdownRow(label: 'Subtotal', value: formatRupiah(subtotal)),
+        _BreakdownRow(
+          label: context.t('cart.subtotal'),
+          value: formatRupiah(subtotal),
+        ),
         if (discountTotal > 0) ...[
           const Gap(4),
           _BreakdownRow(
-            label: 'Diskon',
+            label: context.t('cart.discount'),
             value: '- ${formatRupiah(discountTotal)}',
             color: kSuccess,
           ),
@@ -575,7 +588,7 @@ class _CartFooter extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Total',
+                context.t('cart.total'),
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -621,7 +634,7 @@ class _CartFooter extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Bayar ${formatRupiah(total)}',
+                    context.tf('cart.pay', {'total': formatRupiah(total)}),
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -748,7 +761,9 @@ class _CartRow extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'DISKON ${item.discountLabel}',
+                                  context.tf('cart.discount_badge', {
+                                    'label': item.discountLabel,
+                                  }),
                                   style: const TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w800,
@@ -757,7 +772,9 @@ class _CartRow extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                'Hemat ${formatRupiah(item.lineDiscount)}',
+                                context.tf('cart.save', {
+                                  'amount': formatRupiah(item.lineDiscount),
+                                }),
                                 style: const TextStyle(
                                   fontSize: 10,
                                   color: kAccent,
@@ -865,7 +882,7 @@ class _NoteFieldState extends State<_NoteField> {
           style: TextStyle(fontSize: 12, color: kTextDark),
           decoration: InputDecoration(
             isDense: true,
-            hintText: 'Catatan (mis. tanpa es, extra pedas)',
+            hintText: context.t('cart.note_hint'),
             hintStyle: TextStyle(fontSize: 11, color: kTextLight),
             prefixIcon: Padding(
               padding: EdgeInsets.only(left: 10, right: 6),

@@ -7,6 +7,7 @@ import '../../../antrian/ui/tombol_antrian.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/app_icons.dart';
 import '../../../../core/format.dart';
+import '../../../../core/i18n.dart';
 import '../../../../core/product_image.dart';
 import '../../domain/cart_item.dart';
 import '../../../products/domain/product.dart' show IsiPaket;
@@ -76,7 +77,7 @@ class CartPanel extends ConsumerWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Pesanan',
+                        context.t('cart.title'),
                         style: TextStyle(
                           fontSize: 14.sp,
                           fontWeight: FontWeight.w700,
@@ -134,14 +135,14 @@ class CartPanel extends ConsumerWidget {
                         // dipercaya, dan kepala panel adalah tempat yang lebih
                         // mudah terlewat daripada tab yang sedang ia sentuh.
                         TabBerlencana(
-                          label: 'Langsung di Kasir',
+                          label: context.t('cart.tab_direct_full'),
                           jumlah: cart.length,
                         ),
                         // menuOrdersProvider sudah menyaring lewat
                         // pesananMejaPerluDitangani, jadi panjangnya memang
                         // jumlah yang menunggu ditangani.
                         TabBerlencana(
-                          label: 'Pesanan dari Scan Meja',
+                          label: context.t('cart.tab_table_full'),
                           jumlah: pesananMeja?.length,
                         ),
                       ],
@@ -178,8 +179,12 @@ class CartPanel extends ConsumerWidget {
                                           SnackBar(
                                             content: Text(
                                               ok
-                                                  ? 'Pesanan disimpan ke draft'
-                                                  : 'Gagal menyimpan draft',
+                                                  ? context.t(
+                                                      'cart.draft_saved',
+                                                    )
+                                                  : context.t(
+                                                      'cart.draft_failed',
+                                                    ),
                                             ),
                                           ),
                                         );
@@ -197,7 +202,7 @@ class CartPanel extends ConsumerWidget {
                                             8,
                                           ),
                                         ),
-                                        child: const Row(
+                                        child: Row(
                                           children: [
                                             HugeIcon(
                                               icon: AppIcons.task,
@@ -206,7 +211,7 @@ class CartPanel extends ConsumerWidget {
                                             ),
                                             SizedBox(width: 4),
                                             Text(
-                                              'Draft',
+                                              context.t('cart.draft'),
                                               style: TextStyle(
                                                 color: kPrimary,
                                                 fontSize: 11,
@@ -223,15 +228,19 @@ class CartPanel extends ConsumerWidget {
                                         showDialog(
                                           context: context,
                                           builder: (context) => AlertDialog(
-                                            title: const Text('Konfirmasi'),
-                                            content: const Text(
-                                              'Anda yakin ingin menghapus semua pesanan?',
+                                            title: Text(
+                                              context.t('cart.confirm'),
+                                            ),
+                                            content: Text(
+                                              context.t('cart.clear_q'),
                                             ),
                                             actions: [
                                               TextButton(
                                                 onPressed: () =>
                                                     Navigator.pop(context),
-                                                child: const Text('Tidak'),
+                                                child: Text(
+                                                  context.t('common.no'),
+                                                ),
                                               ),
                                               ElevatedButton(
                                                 style: ElevatedButton.styleFrom(
@@ -242,7 +251,9 @@ class CartPanel extends ConsumerWidget {
                                                   Navigator.pop(context);
                                                   return notifier.clear();
                                                 },
-                                                child: const Text('Hapus'),
+                                                child: Text(
+                                                  context.t('common.delete'),
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -259,7 +270,7 @@ class CartPanel extends ConsumerWidget {
                                             8,
                                           ),
                                         ),
-                                        child: const Row(
+                                        child: Row(
                                           children: [
                                             HugeIcon(
                                               icon: AppIcons.delete,
@@ -268,7 +279,7 @@ class CartPanel extends ConsumerWidget {
                                             ),
                                             SizedBox(width: 4),
                                             Text(
-                                              'Semua',
+                                              context.t('cart.clear_all_short'),
                                               style: TextStyle(
                                                 color: kDanger,
                                                 fontSize: 11,
@@ -317,13 +328,13 @@ class CartPanel extends ConsumerWidget {
                               children: [
                                 // ── Breakdown Transparan ──
                                 _BreakdownRow(
-                                  label: 'Subtotal',
+                                  label: context.t('cart.subtotal'),
                                   value: formatRupiah(subtotal),
                                 ),
                                 if (ref.watch(discountTotalProvider) > 0) ...[
                                   const Gap(4),
                                   _BreakdownRow(
-                                    label: 'Diskon',
+                                    label: context.t('cart.discount'),
                                     value:
                                         '- ${formatRupiah(ref.watch(discountTotalProvider))}',
                                     color: kSuccess,
@@ -368,7 +379,7 @@ class CartPanel extends ConsumerWidget {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Total',
+                                      context.t('cart.total'),
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
@@ -409,7 +420,9 @@ class CartPanel extends ConsumerWidget {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Bayar ${formatRupiah(total)}',
+                                          context.tf('cart.pay', {
+                                            'total': formatRupiah(total),
+                                          }),
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.w700,
@@ -469,7 +482,9 @@ class _LineDiscountButton extends StatelessWidget {
             ),
             const SizedBox(width: 2),
             Text(
-              hasDiscount ? 'Edit Diskon' : 'Beri Diskon',
+              hasDiscount
+                  ? context.t('cart.edit_discount')
+                  : context.t('cart.give_discount'),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
@@ -496,7 +511,7 @@ class _TaxFreeBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        'Bebas pajak',
+        context.t('cart.tax_free'),
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w700,
@@ -569,7 +584,12 @@ class _CartRow extends ConsumerWidget {
                   if (item.product.bundleItems.isNotEmpty) ...[
                     const Gap(2),
                     Text(
-                      'Isi: ${IsiPaket.label(item.product.bundleItems, kali: item.qty)}',
+                      context.tf('cart.bundle', {
+                        'items': IsiPaket.label(
+                          item.product.bundleItems,
+                          kali: item.qty,
+                        ),
+                      }),
                       style: TextStyle(fontSize: 10, color: kTextMid),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -635,7 +655,9 @@ class _CartRow extends ConsumerWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'DISKON ${item.discountLabel}',
+                                  context.tf('cart.discount_badge', {
+                                    'label': item.discountLabel,
+                                  }),
                                   style: const TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w800,
@@ -644,7 +666,9 @@ class _CartRow extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                'Hemat ${formatRupiah(item.lineDiscount)}',
+                                context.tf('cart.save', {
+                                  'amount': formatRupiah(item.lineDiscount),
+                                }),
                                 style: const TextStyle(
                                   fontSize: 10,
                                   color: kAccent,
@@ -752,7 +776,7 @@ class _NoteFieldState extends State<_NoteField> {
           style: TextStyle(fontSize: 12, color: kTextDark),
           decoration: InputDecoration(
             isDense: true,
-            hintText: 'Catatan (mis. tanpa es, extra pedas)',
+            hintText: context.t('cart.note_hint'),
             hintStyle: TextStyle(fontSize: 11, color: kTextLight),
             prefixIcon: Padding(
               padding: EdgeInsets.only(left: 10, right: 6),
