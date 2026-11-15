@@ -76,6 +76,16 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            // Anti reverse engineering (lapisan Java/Kotlin): R8 membuang kode
+            // yang tak terpakai & mengacak nama kelas/metode, sehingga APK hasil
+            // dekompilasi (jadx/apktool) jauh lebih sulit dibaca. Kode Dart
+            // diacak terpisah lewat --obfuscate di scripts/build_prod.sh.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

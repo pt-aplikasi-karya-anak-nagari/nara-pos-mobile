@@ -37,7 +37,39 @@ fi
 grep -E "static const String (apiHostRilis|makoScanQrBaseUrlRilis)" lib/core/config/app_config.dart \
   | sed -E "s/.*(apiHostRilis|makoScanQrBaseUrlRilis) = '([^']*)'.*/  ✓ \1 = \2/"
 
+# ── Anti-repackaging: sidik jari sertifikat rilis resmi ─────────────────────
+# Aplikasi membandingkan sertifikat penanda tangan APK yang terpasang dengan
+# nilai ini; APK yang dibongkar lalu ditandatangani ulang orang lain ditolak
+# (lib/core/keamanan/integritas_perangkat.dart). Bisa juga diisi manual lewat
+# env NARA_SERTIFIKAT_SHA256 (mis. sidik jari "App signing key" di Play Console
+# bila memakai Play App Signing — APK dari Play ditandatangani kunci Google).
+SERTIFIKAT="${NARA_SERTIFIKAT_SHA256:-}"
+if [ -z "$SERTIFIKAT" ] && [ "$TARGET" = "apk" ] && command -v keytool >/dev/null 2>&1; then
+  prop() { grep -E "^$1=" android/key.properties | head -1 | cut -d= -f2- | tr -d '\r'; }
+  STORE="$(prop storeFile)"
+  case "$STORE" in /*|[A-Za-z]:*) ;; *) STORE="android/app/$STORE" ;; esac
+  SERTIFIKAT="$(keytool -list -v -keystore "$STORE" -alias "$(prop keyAlias)" \
+    -storepass "$(prop storePassword)" 2>/dev/null \
+    | grep -E 'SHA256:' | head -1 | sed -E 's/.*SHA256: *//' | tr -d ': \r' || true)"
+fi
+if [ -n "$SERTIFIKAT" ]; then
+  echo "  ✓ Sertifikat rilis ${SERTIFIKAT:0:12}… — pemeriksaan APK dirakit ulang aktif"
+else
+  echo "  ⚠ Sidik jari sertifikat tidak ditemukan — pemeriksaan APK dirakit ulang dilewati." >&2
+  echo "    Untuk AAB/Play App Signing isi NARA_SERTIFIKAT_SHA256 dari Play Console." >&2
+fi
+
+# ── Anti reverse engineering kode Dart ───────────────────────────────────────
+# --obfuscate mengacak nama kelas & fungsi Dart di libapp.so. Peta simbol untuk
+# membaca stack trace disimpan di build/simbol/<versi> — JANGAN dibagikan;
+# unggah ke Sentry (sentry-dart-plugin) supaya laporan crash tetap terbaca.
+VERSI="$(grep -E '^version:' pubspec.yaml | sed -E 's/version: *//' | tr -d '\r')"
+SIMBOL="build/simbol/${VERSI}"
+
 exec flutter build "$TARGET" \
   --release \
+  --obfuscate \
+  --split-debug-info="$SIMBOL" \
   --dart-define=NARA_API_SECRET="$NARA_API_SECRET" \
+  --dart-define=NARA_SERTIFIKAT_SHA256="$SERTIFIKAT" \
   "$@"

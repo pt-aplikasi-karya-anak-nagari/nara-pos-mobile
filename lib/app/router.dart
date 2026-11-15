@@ -39,6 +39,7 @@ import '../features/izin/ui/halaman_izin.dart';
 import '../features/tables/ui/table_management_page.dart';
 import '../shared/widgets/main_shell.dart';
 import '../shared/widgets/wadah_branch_beranimasi.dart';
+import '../core/keamanan/layar_keamanan.dart';
 import 'app_routes.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -69,7 +70,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         path: AppRoutes.login,
         name: AppRoutes.loginName,
-        builder: (_, _) => const LoginPage(),
+        // Password & PIN diketik di sini: layar tak boleh di-screenshot/direkam.
+        builder: (_, _) => const LayarRahasia(child: LoginPage()),
       ),
       StatefulShellRoute(
         builder: (context, state, navigationShell) =>
@@ -205,7 +207,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         path: AppRoutes.pinSettings,
         name: AppRoutes.pinSettingsName,
-        builder: (_, _) => const PinSettingsPage(),
+        builder: (_, _) => const LayarRahasia(child: PinSettingsPage()),
       ),
       GoRoute(
         parentNavigatorKey: _rootNavigatorKey,

@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart' show Alignment, Text, TextDirection;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../auth_storage.dart';
@@ -181,8 +182,12 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
-  // Add logging in debug mode
-  dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true));
+  // Log lengkap HANYA di build debug. Sebelumnya log ini aktif juga di rilis:
+  // isi request & response — termasuk token akses, refresh token, dan PIN
+  // login — tercetak ke logcat, yang bisa dibaca siapa pun lewat USB/ADB.
+  if (kDebugMode) {
+    dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true));
+  }
 
   return dio;
 });

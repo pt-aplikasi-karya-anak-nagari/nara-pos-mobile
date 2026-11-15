@@ -25,6 +25,8 @@ import '../core/offline/data_kasir_offline.dart';
 import '../core/notifications.dart';
 import '../core/network/dio_client.dart';
 import '../core/versi_app.dart';
+import '../core/keamanan/integritas_perangkat.dart';
+import '../core/keamanan/layar_keamanan.dart';
 import '../features/kasir/providers.dart';
 import '../features/notifications/data/notification_history.dart';
 import '../features/printer/data/printer_service.dart';
@@ -67,6 +69,8 @@ class NaraApp extends ConsumerWidget {
     ref.watch(laporanPerangkatOtomatisProvider);
     ref.watch(_cekVersiProvider);
     final perluUpdate = ref.watch(perluUpdateProvider);
+    // Root/jailbreak, Frida/Xposed, debugger, APK dirakit ulang (rilis saja).
+    final tolakPerangkat = ref.watch(integritasProvider);
 
     return Sizer(
       builder: (context, orientation, deviceType) {
@@ -86,6 +90,9 @@ class NaraApp extends ConsumerWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             builder: (context, child) {
+              if (tolakPerangkat.isNotEmpty) {
+                return LayarPerangkatTidakAman(alasan: tolakPerangkat);
+              }
               // Build di bawah minimum server: tutup semua halaman.
               if (perluUpdate != null) {
                 return LayarPerbaruiApp(info: perluUpdate);
