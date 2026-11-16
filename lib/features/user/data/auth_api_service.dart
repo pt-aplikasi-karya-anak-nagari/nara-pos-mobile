@@ -202,9 +202,14 @@ class AuthApiService extends BaseApiService {
 
   /// Langkah 1: Pemilik/Manajer membuktikan kehadiran. TIDAK menerbitkan sesi
   /// untuk mereka — hanya mengembalikan daftar staf yang boleh bertugas.
+  ///
+  /// Buktinya [pin] (PIN Otorisasi 4–6 digit) ATAU [password]. PIN yang
+  /// diutamakan; password tetap ada untuk Pemilik yang belum menyetel PIN.
+  /// Hanya salah satu yang dikirim — server mendahulukan PIN bila keduanya ada.
   Future<StaffSessionStart> startStaffSession({
     required String email,
-    required String password,
+    String password = '',
+    String pin = '',
     required String outletId,
     String deviceLabel = '',
   }) async {
@@ -212,7 +217,7 @@ class AuthApiService extends BaseApiService {
       ApiEndpoint.staffSessionStart,
       data: {
         'email': email,
-        'password': password,
+        if (pin.isNotEmpty) 'pin': pin else 'password': password,
         'outlet_id': outletId,
         'device_label': deviceLabel,
       },

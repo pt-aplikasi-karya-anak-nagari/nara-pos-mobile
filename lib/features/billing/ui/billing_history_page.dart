@@ -276,6 +276,15 @@ class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
               value: 'Bukti ditolak — unggah ulang bukti yang benar.',
             ),
           ],
+          if (invoice.menungguQris) ...[
+            const Gap(8),
+            _InfoRow(
+              label: 'Pembayaran',
+              value:
+                  'QRIS — buka Langganan dan pilih paket ini lagi untuk '
+                  'menampilkan kode QR. Langganan aktif otomatis setelah dibayar.',
+            ),
+          ],
           if (invoice.canUploadProof) ...[
             const Gap(12),
             SizedBox(

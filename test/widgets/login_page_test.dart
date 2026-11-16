@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
 
+import 'package:nara_pos_mobile/core/buka_url.dart';
 import 'package:nara_pos_mobile/core/shared_prefs.dart';
 import 'package:nara_pos_mobile/core/staff_device_storage.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_api_service.dart';
@@ -68,7 +69,11 @@ class _AuthPalsu extends AuthNotifier {
   );
 }
 
-Future<void> _buka(WidgetTester tester, Size ukuran) async {
+Future<void> _buka(
+  WidgetTester tester,
+  Size ukuran, {
+  List<Uri>? dibuka,
+}) async {
   tester.view.physicalSize = ukuran;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -82,6 +87,11 @@ Future<void> _buka(WidgetTester tester, Size ukuran) async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         staffDeviceStorageProvider.overrideWithValue(_StoragePalsu()),
         authProvider.overrideWith(_AuthPalsu.new),
+        // Browser palsu: catat URL yang dibuka, jangan buka apa pun.
+        pembukaUrlProvider.overrideWithValue((uri) async {
+          dibuka?.add(uri);
+          return true;
+        }),
       ],
       child: Sizer(builder: (_, _, _) => const MaterialApp(home: LoginPage())),
     ),
@@ -135,5 +145,23 @@ void main() {
   testWidgets('tidak overflow di ponsel kecil', (t) async {
     await _buka(t, const Size(360, 640));
     expect(t.takeException(), isNull);
+  });
+
+  testWidgets('Daftar membuka halaman pendaftaran di WEB, bukan form di app', (
+    t,
+  ) async {
+    // Pendaftaran akun Pemilik hanya lewat web (server menolak dari app).
+    final dibuka = <Uri>[];
+    await _buka(t, const Size(1280, 800), dibuka: dibuka);
+
+    final tombol = find.byKey(const ValueKey('login-daftar-web'));
+    await t.ensureVisible(tombol);
+    await t.tap(tombol);
+    await t.pumpAndSettle();
+
+    expect(dibuka, hasLength(1));
+    expect(dibuka.single.path, '/register');
+    // Tak ada form pendaftaran yang terbuka di dalam aplikasi.
+    expect(find.byType(BottomSheet), findsNothing);
   });
 }

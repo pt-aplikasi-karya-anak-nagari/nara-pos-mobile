@@ -14,9 +14,12 @@ import '../../billing/data/billing_repository.dart';
 import '../data/subscription_repository.dart';
 import '../domain/subscription.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
+import 'pembayaran_qris.dart';
 
 /// Buka sheet pembayaran/perpanjangan langganan: pilih paket → buat invoice
-/// checkout → tampilkan instruksi transfer bank manual + unggah bukti transfer.
+/// checkout → tampilkan kode QRIS (langganan aktif otomatis setelah dibayar).
+/// Bila server belum memakai gateway, yang tampil instruksi transfer bank
+/// manual + unggah bukti transfer.
 Future<void> showSubscriptionCheckoutSheet(
   BuildContext context,
   WidgetRef ref,
@@ -79,7 +82,8 @@ class _SubscriptionCheckoutSheetState
       if (!mounted) return;
       // Invoice pending dibuat → riwayat tagihan berubah.
       ref.invalidate(billingInvoicesProvider);
-      // Tampilkan instruksi transfer bank di sheet ini (bukan lagi QR gateway).
+      // Tampilkan instruksi bayar di sheet ini: kode QRIS, atau rekening bank
+      // bila server memakai transfer manual.
       setState(() => _result = result);
     } on RenewalChoiceRequiredException catch (e) {
       if (!mounted) return;
@@ -333,7 +337,71 @@ class _SubscriptionCheckoutSheetState
     );
   }
 
+  /// Pembayaran QRIS terkonfirmasi: segarkan langganan (fitur paket baru
+  /// langsung terbaca di seluruh aplikasi) lalu tutup sheet.
+  void _saatLunas() {
+    if (!mounted) return;
+    ref.invalidate(billingInvoicesProvider);
+    ref.invalidate(activeOutletSubscriptionProvider);
+    _snack('Pembayaran berhasil. Langganan sudah aktif. 🎉');
+    Navigator.of(context).pop();
+  }
+
+  Widget _buildQris(BillingCheckoutResult result) {
+    final outletId = ref.read(activeOutletIdProvider) ?? '';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Bayar dengan QRIS',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: kTextDark,
+                  ),
+                ),
+              ),
+              Text(
+                'Invoice ${result.invoiceNo}',
+                style: TextStyle(color: kTextMid, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+            child: PembayaranQris(
+              outletId: outletId,
+              hasil: result,
+              membuatUlang: _loading,
+              onLunas: _saatLunas,
+              onBuatUlang: () {
+                final kode = _selectedCode;
+                if (kode != null) _checkout(kode);
+              },
+            ),
+          ),
+        ),
+        SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Bayar nanti'),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInstructions(BillingCheckoutResult result) {
+    if (result.qris) return _buildQris(result);
     final pi = result.paymentInstruction;
     return Column(
       children: [

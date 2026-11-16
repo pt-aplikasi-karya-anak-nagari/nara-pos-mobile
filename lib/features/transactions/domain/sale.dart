@@ -1,5 +1,6 @@
 import '../../customers/domain/customer.dart';
 import 'sale_item.dart';
+import '../../kasir/domain/pajak_multi_tarif.dart';
 
 class Sale {
   String id;
@@ -9,6 +10,9 @@ class Sale {
   double subtotal;
   double originalSubtotal;
   double tax;
+  /// Rincian pajak per tarif (pajak multi-tarif). Kosong = satu tarif →
+  /// struk mencetak satu baris pajak seperti biasa.
+  List<BarisPajak> rincianPajak;
   double discountTotal;
   double serviceCharge;
   double total;
@@ -160,6 +164,7 @@ class Sale {
     required this.subtotal,
     this.originalSubtotal = 0,
     required this.tax,
+    this.rincianPajak = const [],
     this.discountTotal = 0,
     this.serviceCharge = 0,
     required this.total,
@@ -392,6 +397,7 @@ class Sale {
       // di sana strukmya memang tak dicetak.
       originalSubtotal: _d(json['subtotal_amount']),
       tax: _d(json['tax_amount']),
+      rincianPajak: _rincianDariJson(json['taxes']),
       discountTotal: _d(json['discount_amount']),
       serviceCharge: _d(json['service_charge']),
       total: _d(json['final_amount']),
@@ -489,6 +495,23 @@ class Sale {
       'payment_method': paymentMethod,
       'items': items.map((e) => e.toJson()).toList(),
     };
+  }
+
+  /// `taxes` dari server (transaction_taxes) → rincian per tarif.
+  static List<BarisPajak> _rincianDariJson(dynamic v) {
+    if (v is! List) return const [];
+    return [
+      for (final r in v.whereType<Map>())
+        BarisPajak(
+          tarifId: (r['tax_rate_id'] as String?)?.isNotEmpty == true
+              ? r['tax_rate_id'] as String
+              : null,
+          nama: r['tax_name']?.toString() ?? '',
+          persen: _d(r['tax_percent']),
+          dasar: _d(r['base_amount']),
+          pajak: _d(r['tax_amount']),
+        ),
+    ];
   }
 
   static double _d(dynamic v) {

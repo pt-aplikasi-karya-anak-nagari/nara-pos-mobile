@@ -51,6 +51,10 @@ class Product {
   // (is_taxable=false) dikecualikan dari basis pajak di kasir & backend.
   // Level produk saja — varian mengikuti induknya.
   bool isTaxable;
+  // taxRateId: tarif pajak TAMBAHAN outlet (pajak multi-tarif), mis. PPN untuk
+  // barang retail di outlet ber-PB1. null = tarif default outlet. Hanya
+  // berlaku bila isTaxable; tarif yang tak dikenal/nonaktif → tarif default.
+  String? taxRateId;
   String discountType;
   double discountValue;
   String discountName;
@@ -111,6 +115,7 @@ class Product {
     this.manualOutOfStock = false,
     this.oosReason = '',
     this.isTaxable = true,
+    this.taxRateId,
     this.discountType = 'none',
     this.discountValue = 0,
     this.discountName = '',
@@ -147,6 +152,7 @@ class Product {
     bool? manualOutOfStock,
     String? oosReason,
     bool? isTaxable,
+    String? taxRateId,
     String? discountType,
     double? discountValue,
     String? discountName,
@@ -179,6 +185,7 @@ class Product {
       manualOutOfStock: manualOutOfStock ?? this.manualOutOfStock,
       oosReason: oosReason ?? this.oosReason,
       isTaxable: isTaxable ?? this.isTaxable,
+      taxRateId: taxRateId ?? this.taxRateId,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
       discountName: discountName ?? this.discountName,
@@ -233,6 +240,10 @@ class Product {
       // Default true saat field absen → produk lama (payload/cache tanpa
       // is_taxable) tetap dianggap kena pajak.
       isTaxable: json['is_taxable'] as bool? ?? true,
+      // Absen (server lama / cache lama) → null → tarif default outlet.
+      taxRateId: (json['tax_rate_id'] as String?)?.trim().isNotEmpty == true
+          ? (json['tax_rate_id'] as String).trim()
+          : null,
       discountType: json['discount_type'] as String? ?? 'none',
       discountValue: (json['discount_value'] as num? ?? 0).toDouble(),
       discountName: json['discount_name'] as String? ?? '',
@@ -272,6 +283,7 @@ class Product {
     'manual_out_of_stock': manualOutOfStock,
     'oos_reason': oosReason,
     'is_taxable': isTaxable,
+    'tax_rate_id': taxRateId,
     'discount_type': discountType,
     'discount_value': discountValue,
     'discount_name': discountName,

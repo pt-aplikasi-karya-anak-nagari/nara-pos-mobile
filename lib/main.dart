@@ -23,6 +23,7 @@ import 'core/pantau.dart';
 import 'core/shared_prefs.dart';
 import 'features/notifications/data/notification_history.dart';
 import 'features/notifications/domain/app_notification.dart';
+import 'core/versi_app.dart';
 import 'firebase_options.dart';
 
 /// Background message handler. WAJIB top-level + `@pragma('vm:entry-point')`
@@ -112,6 +113,7 @@ Future<void> _bootstrap() async {
 
   try {
     AppConfig.assertValid();
+    await VersiApp.muat();
     debugPrint('[NARA] API=${AppConfig.apiBaseUrl}');
 
     // Firebase best-effort. Config prod bisa mismatch, Play Services usang, atau

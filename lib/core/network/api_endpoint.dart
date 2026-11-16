@@ -31,6 +31,8 @@ class ApiEndpoint {
       '/outlets/$outletId/billing/checkout';
   static String billingInvoiceUploadProof(String invoiceId) =>
       '/billing/invoices/$invoiceId/upload-proof';
+  static String billingCekPembayaran(String outletId, String invoiceId) =>
+      '/outlets/$outletId/billing/invoices/$invoiceId/cek-pembayaran';
   static String billingInvoiceDownload(String invoiceId) =>
       '/billing/invoices/$invoiceId/download';
   static String outletEmployees(String outletId) =>

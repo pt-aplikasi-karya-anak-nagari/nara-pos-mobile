@@ -971,7 +971,22 @@ class PrinterService {
         ]),
       );
     }
-    if (showTax && sale.tax > 0) {
+    if (showTax && sale.rincianPajak.isNotEmpty) {
+      // Pajak multi-tarif: satu baris per tarif, mis. "PB1 (10%)", "PPN (11%)".
+      for (final b in sale.rincianPajak) {
+        if (b.pajak == 0) continue;
+        bytes.addAll(
+          gen.row([
+            PosColumn(text: _safe(b.label), width: 7),
+            PosColumn(
+              text: formatRupiah(b.pajak),
+              width: 5,
+              styles: const PosStyles(align: PosAlign.right),
+            ),
+          ]),
+        );
+      }
+    } else if (showTax && sale.tax > 0) {
       bytes.addAll(
         gen.row([
           PosColumn(text: 'Pajak', width: 6),
@@ -1098,6 +1113,21 @@ class PrinterService {
           styles: const PosStyles(align: PosAlign.center),
         ),
       );
+    }
+    // Catatan outlet (diatur Owner di dashboard), dicetak per baris.
+    final catatan = rs?.barisCatatan ?? const <String>[];
+    if (catatan.isNotEmpty) {
+      bytes.addAll(gen.feed(1));
+      for (final b in catatan) {
+        bytes.addAll(
+          b.trim().isEmpty
+              ? gen.feed(1)
+              : gen.text(
+                  _safe(b),
+                  styles: const PosStyles(align: PosAlign.center),
+                ),
+        );
+      }
     }
     // Akun sosmed & WiFi tamu outlet (diatur Owner di dashboard).
     final sosmed = rs?.barisSosmed ?? const <String>[];

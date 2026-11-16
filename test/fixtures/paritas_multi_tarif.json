@@ -1,0 +1,513 @@
+[
+  {
+    "name": "satu_tarif_saja",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 5,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 87500,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      }
+    ],
+    "expected": {
+      "subtotal": 87500,
+      "service_charge": 4375,
+      "tax": 9188,
+      "total": 101063,
+      "taxes": []
+    }
+  },
+  {
+    "name": "pb1_ppn_bebas_exclusive_sc5",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 5,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 100000,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      },
+      {
+        "subtotal": 20000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      },
+      {
+        "subtotal": 30000,
+        "is_taxable": false,
+        "tax_rate_id": ""
+      }
+    ],
+    "expected": {
+      "subtotal": 150000,
+      "service_charge": 7500,
+      "tax": 12950,
+      "total": 170450,
+      "taxes": [
+        {
+          "tax_rate_id": "",
+          "tax_name": "PB1",
+          "tax_percent": 10,
+          "base_amount": 107500,
+          "tax_amount": 10750
+        },
+        {
+          "tax_rate_id": "TAXR-PPN",
+          "tax_name": "PPN",
+          "tax_percent": 11,
+          "base_amount": 20000,
+          "tax_amount": 2200
+        }
+      ]
+    }
+  },
+  {
+    "name": "tiga_tarif_pecahan",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 7.5,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      },
+      {
+        "id": "TAXR-PB",
+        "name": "Pajak Hiburan",
+        "percent": 12.5,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 33333,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      },
+      {
+        "subtotal": 17777,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      },
+      {
+        "subtotal": 9999,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PB"
+      }
+    ],
+    "expected": {
+      "subtotal": 61109,
+      "service_charge": 4583,
+      "tax": 6997,
+      "total": 72689,
+      "taxes": [
+        {
+          "tax_rate_id": "",
+          "tax_name": "PB1",
+          "tax_percent": 10,
+          "base_amount": 37916,
+          "tax_amount": 3792
+        },
+        {
+          "tax_rate_id": "TAXR-PB",
+          "tax_name": "Pajak Hiburan",
+          "tax_percent": 12.5,
+          "base_amount": 9999,
+          "tax_amount": 1250
+        },
+        {
+          "tax_rate_id": "TAXR-PPN",
+          "tax_name": "PPN",
+          "tax_percent": 11,
+          "base_amount": 17777,
+          "tax_amount": 1955
+        }
+      ]
+    }
+  },
+  {
+    "name": "inclusive_dua_tarif",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 0,
+      "tax_inclusive": true
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 110000,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      },
+      {
+        "subtotal": 111000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      }
+    ],
+    "expected": {
+      "subtotal": 200000,
+      "service_charge": 0,
+      "tax": 21000,
+      "total": 221000,
+      "taxes": [
+        {
+          "tax_rate_id": "",
+          "tax_name": "PB1",
+          "tax_percent": 10,
+          "base_amount": 100000,
+          "tax_amount": 10000
+        },
+        {
+          "tax_rate_id": "TAXR-PPN",
+          "tax_name": "PPN",
+          "tax_percent": 11,
+          "base_amount": 100000,
+          "tax_amount": 11000
+        }
+      ]
+    }
+  },
+  {
+    "name": "inclusive_sc_bebas",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 5,
+      "tax_inclusive": true
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 55555,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      },
+      {
+        "subtotal": 44444,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      },
+      {
+        "subtotal": 10000,
+        "is_taxable": false,
+        "tax_rate_id": ""
+      }
+    ],
+    "expected": {
+      "subtotal": 100544,
+      "service_charge": 5027,
+      "tax": 9455,
+      "total": 115026,
+      "taxes": [
+        {
+          "tax_rate_id": "",
+          "tax_name": "PB1",
+          "tax_percent": 10,
+          "base_amount": 50505,
+          "tax_amount": 5051
+        },
+        {
+          "tax_rate_id": "TAXR-PPN",
+          "tax_name": "PPN",
+          "tax_percent": 11,
+          "base_amount": 40040,
+          "tax_amount": 4404
+        }
+      ]
+    }
+  },
+  {
+    "name": "hanya_tarif_tambahan",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 10,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 50000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      }
+    ],
+    "expected": {
+      "subtotal": 50000,
+      "service_charge": 5000,
+      "tax": 6000,
+      "total": 61000,
+      "taxes": [
+        {
+          "tax_rate_id": "",
+          "tax_name": "PB1",
+          "tax_percent": 10,
+          "base_amount": 5000,
+          "tax_amount": 500
+        },
+        {
+          "tax_rate_id": "TAXR-PPN",
+          "tax_name": "PPN",
+          "tax_percent": 11,
+          "base_amount": 50000,
+          "tax_amount": 5500
+        }
+      ]
+    }
+  },
+  {
+    "name": "tarif_nonaktif_jadi_default",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 0,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      },
+      {
+        "id": "TAXR-MATI",
+        "name": "Lama",
+        "percent": 5,
+        "is_active": false
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 40000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-MATI"
+      },
+      {
+        "subtotal": 25000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      }
+    ],
+    "expected": {
+      "subtotal": 65000,
+      "service_charge": 0,
+      "tax": 6750,
+      "total": 71750,
+      "taxes": [
+        {
+          "tax_rate_id": "",
+          "tax_name": "PB1",
+          "tax_percent": 10,
+          "base_amount": 40000,
+          "tax_amount": 4000
+        },
+        {
+          "tax_rate_id": "TAXR-PPN",
+          "tax_name": "PPN",
+          "tax_percent": 11,
+          "base_amount": 25000,
+          "tax_amount": 2750
+        }
+      ]
+    }
+  },
+  {
+    "name": "tarif_tak_dikenal_jadi_default",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 0,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 40000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-HILANG"
+      }
+    ],
+    "expected": {
+      "subtotal": 40000,
+      "service_charge": 0,
+      "tax": 4000,
+      "total": 44000,
+      "taxes": []
+    }
+  },
+  {
+    "name": "pajak_nonaktif_sc_tetap_ditagih",
+    "outlet": {
+      "tax_enabled": false,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 5,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 33333,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      },
+      {
+        "subtotal": 20000,
+        "is_taxable": true,
+        "tax_rate_id": "TAXR-PPN"
+      }
+    ],
+    "expected": {
+      "subtotal": 53333,
+      "service_charge": 2667,
+      "tax": 0,
+      "total": 56000,
+      "taxes": []
+    }
+  },
+  {
+    "name": "pajak_nonaktif_inclusive_sc",
+    "outlet": {
+      "tax_enabled": false,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 10,
+      "tax_inclusive": true
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 55555,
+        "is_taxable": true,
+        "tax_rate_id": ""
+      }
+    ],
+    "expected": {
+      "subtotal": 55555,
+      "service_charge": 5556,
+      "tax": 0,
+      "total": 61111,
+      "taxes": []
+    }
+  },
+  {
+    "name": "bebas_pajak_semua",
+    "outlet": {
+      "tax_enabled": true,
+      "tax_percent": 10,
+      "tax_name": "PB1",
+      "service_charge_percent": 5,
+      "tax_inclusive": false
+    },
+    "tax_rates": [
+      {
+        "id": "TAXR-PPN",
+        "name": "PPN",
+        "percent": 11,
+        "is_active": true
+      }
+    ],
+    "items": [
+      {
+        "subtotal": 70000,
+        "is_taxable": false,
+        "tax_rate_id": ""
+      },
+      {
+        "subtotal": 5000,
+        "is_taxable": false,
+        "tax_rate_id": "TAXR-PPN"
+      }
+    ],
+    "expected": {
+      "subtotal": 75000,
+      "service_charge": 3750,
+      "tax": 375,
+      "total": 79125,
+      "taxes": []
+    }
+  }
+]

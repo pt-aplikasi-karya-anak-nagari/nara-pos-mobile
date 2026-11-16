@@ -559,6 +559,239 @@ const Map<String, Map<String, String>> _strings = {
     'id': 'Nama kategori sudah ada',
     'en': 'Category name already exists',
   },
+
+  // ── alur kasir: shell, keranjang, pembayaran ──
+  'common.no': {'id': 'Tidak', 'en': 'No'},
+  'common.add': {'id': 'Tambah', 'en': 'Add'},
+  'common.apply': {'id': 'Terapkan', 'en': 'Apply'},
+  'common.reset': {'id': 'Reset', 'en': 'Reset'},
+  'common.change': {'id': 'Ubah', 'en': 'Change'},
+  'common.product': {'id': 'Produk', 'en': 'Product'},
+  'shell.scan': {'id': 'Scan', 'en': 'Scan'},
+  'shell.calc_short': {'id': 'Hitung', 'en': 'Calc'},
+  'shell.calc': {'id': 'Kalkulator', 'en': 'Calculator'},
+  'shell.custom_short': {'id': 'Custom', 'en': 'Custom'},
+  'shell.custom': {'id': 'Custom Order', 'en': 'Custom Order'},
+  'shell.table': {'id': 'Meja', 'en': 'Tables'},
+  'shell.draft': {'id': 'Draft', 'en': 'Drafts'},
+  'cart.title': {'id': 'Pesanan', 'en': 'Order'},
+  'cart.tab_direct_full': {'id': 'Langsung di Kasir', 'en': 'At the Counter'},
+  'cart.tab_table_full': {
+    'id': 'Pesanan dari Scan Meja',
+    'en': 'Table QR Orders',
+  },
+  'cart.tab_direct': {'id': 'Langsung', 'en': 'Counter'},
+  'cart.tab_table': {'id': 'Meja', 'en': 'Tables'},
+  'cart.n_products': {'id': '{n} Produk', 'en': '{n} Products'},
+  'cart.n_items': {'id': '{n} Item', 'en': '{n} Items'},
+  'cart.draft_saved': {
+    'id': 'Pesanan disimpan ke draft',
+    'en': 'Order saved as a draft',
+  },
+  'cart.draft_failed': {
+    'id': 'Gagal menyimpan draft',
+    'en': 'Could not save the draft',
+  },
+  'cart.draft': {'id': 'Draft', 'en': 'Draft'},
+  'cart.save_draft': {'id': 'Simpan Draft', 'en': 'Save Draft'},
+  'cart.confirm': {'id': 'Konfirmasi', 'en': 'Confirm'},
+  'cart.clear_q': {
+    'id': 'Anda yakin ingin menghapus semua pesanan?',
+    'en': 'Remove every item from this order?',
+  },
+  'cart.clear_all_short': {'id': 'Semua', 'en': 'All'},
+  'cart.clear_all': {'id': 'Hapus Semua', 'en': 'Clear All'},
+  'cart.subtotal': {'id': 'Subtotal', 'en': 'Subtotal'},
+  'cart.discount': {'id': 'Diskon', 'en': 'Discount'},
+  'cart.total': {'id': 'Total', 'en': 'Total'},
+  'cart.pay': {'id': 'Bayar {total}', 'en': 'Pay {total}'},
+  'cart.edit_discount': {'id': 'Edit Diskon', 'en': 'Edit Discount'},
+  'cart.give_discount': {'id': 'Beri Diskon', 'en': 'Add Discount'},
+  'cart.tax_free': {'id': 'Bebas pajak', 'en': 'Tax-free'},
+  'cart.bundle': {'id': 'Isi: {items}', 'en': 'Includes: {items}'},
+  'cart.discount_badge': {'id': 'DISKON {label}', 'en': 'DISCOUNT {label}'},
+  'cart.save': {'id': 'Hemat {amount}', 'en': 'Save {amount}'},
+  'cart.note_hint': {
+    'id': 'Catatan (mis. tanpa es, extra pedas)',
+    'en': 'Note (e.g. no ice, extra spicy)',
+  },
+  'cat.best': {'id': 'Terlaris', 'en': 'Best Sellers'},
+  'kasir.low_stock': {
+    'id': '⚠️ Stok menipis: {name} — sisa {stock} {unit}',
+    'en': '⚠️ Low stock: {name} — {stock} {unit} left',
+  },
+  'kasir.paid_title': {'id': 'Pembayaran Berhasil', 'en': 'Payment Successful'},
+  'kasir.paid_sub': {
+    'id': 'Transaksi #{invoice} telah selesai.',
+    'en': 'Transaction #{invoice} is complete.',
+  },
+  'kasir.total_payment': {'id': 'Total Pembayaran', 'en': 'Payment Total'},
+  'kasir.print_receipt': {'id': 'Cetak Struk', 'en': 'Print Receipt'},
+  'kasir.load_failed': {
+    'id': 'Gagal memuat produk',
+    'en': 'Could not load products',
+  },
+  'kasir.empty': {'id': 'Belum ada produk', 'en': 'No products yet'},
+  'kasir.try_other': {
+    'id': 'Coba kata kunci lain',
+    'en': 'Try another keyword',
+  },
+  'kasir.add_first': {
+    'id': 'Tambahkan produk dulu untuk mulai berjualan',
+    'en': 'Add products to start selling',
+  },
+  'kasir.manage_products': {'id': 'Kelola Produk', 'en': 'Manage Products'},
+  'kasir.closed_title': {
+    'id': 'Kasir Masih Tertutup',
+    'en': 'The Register Is Closed',
+  },
+  'kasir.closed_sub': {
+    'id':
+        'Silakan buka kasir terlebih dahulu\nuntuk mulai memproses transaksi.',
+    'en': 'Open the register first\nto start taking orders.',
+  },
+  'kasir.open_now': {'id': 'Buka Kasir Sekarang', 'en': 'Open Register Now'},
+  'density.large': {'id': 'Besar', 'en': 'Large'},
+  'density.normal': {'id': 'Normal', 'en': 'Normal'},
+  'density.small': {'id': 'Kecil', 'en': 'Small'},
+  'custom.disabled': {
+    'id':
+        'Pesanan custom dimatikan Pemilik untuk outlet ini. Pilih produk dari katalog, atau minta Pemilik mengaktifkannya di Pengaturan App.',
+    'en':
+        'Custom orders are turned off by the Owner for this outlet. Pick a product from the catalog, or ask the Owner to enable them in App Settings.',
+  },
+  'custom.title': {'id': 'Pesanan Custom', 'en': 'Custom Order'},
+  'custom.name': {'id': 'Nama Produk / Pesanan', 'en': 'Item Name'},
+  'custom.name_hint': {
+    'id': 'Misal: Nasi Goreng Spesial',
+    'en': 'e.g. Special Fried Rice',
+  },
+  'custom.price': {'id': 'Harga Satuan', 'en': 'Unit Price'},
+  'custom.add': {'id': 'Tambah ke Keranjang', 'en': 'Add to Cart'},
+  'auth.title': {'id': 'Otorisasi', 'en': 'Authorization'},
+  'auth.discount_over': {
+    'id':
+        'Diskon melampaui batas kasir. Minta PIN otorisasi dari Pemilik atau penyelia yang berwenang untuk melanjutkan.',
+    'en':
+        'This discount is above the cashier limit. Ask the Owner or an authorized supervisor for their PIN to continue.',
+  },
+  'auth.pin': {'id': 'PIN Otorisasi', 'en': 'Authorization PIN'},
+  'auth.pin_hint': {'id': '4-6 digit', 'en': '4–6 digits'},
+  'auth.submit': {'id': 'Otorisasi', 'en': 'Authorize'},
+  'pay.promo_offline': {
+    'id': 'Kode promo butuh internet untuk diperiksa. Coba lagi saat online.',
+    'en':
+        'Promo codes need an internet connection to be checked. Try again when online.',
+  },
+  'pay.outlet_inactive': {
+    'id': 'Outlet tidak aktif.',
+    'en': 'The outlet is not active.',
+  },
+  'pay.promo_min': {
+    'id': 'Min. belanja {amount} untuk promo ini.',
+    'en': 'This promo needs a minimum spend of {amount}.',
+  },
+  'pay.promo_na': {
+    'id': 'Promo tidak berlaku untuk item di keranjang.',
+    'en': 'This promo does not apply to the items in the cart.',
+  },
+  'pay.promo_invalid': {
+    'id': 'Kode promo tidak valid / tidak aktif.',
+    'en': 'Promo code is invalid or inactive.',
+  },
+  'pay.crop_title': {'id': 'Crop bukti pembayaran', 'en': 'Crop payment proof'},
+  'pay.proof_upload_failed': {
+    'id': 'Gagal upload bukti: {error}',
+    'en': 'Could not upload the proof: {error}',
+  },
+  'pay.queue_no': {'id': 'Nomor antrian {no}. ', 'en': 'Queue number {no}. '},
+  'pay.saved_offline': {
+    'id': 'Tersimpan offline — otomatis disinkronkan saat koneksi kembali.',
+    'en':
+        'Saved offline — it will sync automatically once the connection is back.',
+  },
+  'pay.save_failed': {
+    'id': 'Gagal menyimpan transaksi: {error}',
+    'en': 'Could not save the transaction: {error}',
+  },
+  'pay.add_payment': {'id': 'Tambah Pembayaran', 'en': 'Add Payment'},
+  'pay.remaining_amount': {
+    'id': 'Sisa tagihan: {amount}',
+    'en': 'Remaining: {amount}',
+  },
+  'pay.method': {'id': 'Metode', 'en': 'Method'},
+  'pay.amount': {'id': 'Nominal', 'en': 'Amount'},
+  'pay.title': {'id': 'Pembayaran', 'en': 'Payment'},
+  'pay.total_due': {'id': 'Total yang harus dibayar', 'en': 'Amount due'},
+  'pay.inclusive': {'id': ' · termasuk', 'en': ' · included'},
+  'pay.promo': {'id': 'Promo', 'en': 'Promo'},
+  'pay.redeem_n': {'id': 'Tukar {n} poin', 'en': 'Redeem {n} points'},
+  'pay.total_pay': {'id': 'Total Bayar', 'en': 'Total Due'},
+  'pay.promo_code': {'id': 'Kode promo', 'en': 'Promo code'},
+  'pay.promo_applied': {
+    'id': 'Promo "{name}" diterapkan.',
+    'en': 'Promo "{name}" applied.',
+  },
+  'pay.redeem': {'id': 'Tukar poin', 'en': 'Redeem points'},
+  'pay.points_available': {
+    'id': '{points} poin tersedia · tukar {n} poin = {amount}',
+    'en': '{points} points available · redeem {n} points = {amount}',
+  },
+  'pay.table': {'id': 'Meja', 'en': 'Table'},
+  'pay.points_mult': {'id': 'poin ×{m}', 'en': 'points ×{m}'},
+  'pay.type': {'id': 'Tipe Pembayaran', 'en': 'Payment Type'},
+  'pay.split_toggle': {
+    'id': 'Bagi jadi beberapa metode (Split)',
+    'en': 'Split across several methods',
+  },
+  'pay.split_title': {'id': 'Split Pembayaran', 'en': 'Split Payment'},
+  'pay.add_method': {'id': '+ Tambah metode', 'en': '+ Add method'},
+  'pay.settled': {'id': 'Lunas', 'en': 'Settled'},
+  'pay.remaining': {'id': 'Sisa tagihan', 'en': 'Remaining'},
+  'pay.over': {'id': 'Kelebihan', 'en': 'Overpaid'},
+  'pay.transfer_detail': {
+    'id': 'Detail Rekening Transfer',
+    'en': 'Bank Transfer Details',
+  },
+  'pay.bank': {'id': 'Bank', 'en': 'Bank'},
+  'pay.account_no': {'id': 'Nomor Rekening', 'en': 'Account Number'},
+  'pay.account_name': {'id': 'Atas Nama', 'en': 'Account Holder'},
+  'pay.cash_amount': {'id': 'Jumlah Uang Tunai', 'en': 'Cash Received'},
+  'pay.exact': {'id': 'Uang Pas', 'en': 'Exact'},
+  'pay.paid': {'id': 'Dibayar', 'en': 'Paid'},
+  'pay.change': {'id': 'Kembalian', 'en': 'Change'},
+  'pay.confirm_later': {
+    'id': 'Simpan Pesanan (Bayar Nanti)',
+    'en': 'Save Order (Pay Later)',
+  },
+  'pay.confirm': {'id': 'Konfirmasi Pembayaran', 'en': 'Confirm Payment'},
+  'pay.pick_table': {'id': 'Pilih Meja', 'en': 'Choose a Table'},
+  'pay.table_seats': {'id': '{group} — {n} Kursi', 'en': '{group} — {n} seats'},
+  'pay.no_table': {'id': 'Belum ada meja dipilih', 'en': 'No table selected'},
+  'pay.proof_title': {
+    'id': 'Bukti Pembayaran (opsional)',
+    'en': 'Payment Proof (optional)',
+  },
+  'pay.proof_sub': {
+    'id': 'Foto QRIS scan, struk transfer, atau receipt mesin EDC.',
+    'en': 'A photo of the QRIS scan, transfer slip, or card terminal receipt.',
+  },
+  'pay.proof_upload': {'id': 'Upload Foto Bukti', 'en': 'Upload Proof Photo'},
+  'pay.qris_scan_filled': {
+    'id': 'Scan & Bayar — nominal sudah terisi',
+    'en': 'Scan & Pay — amount is pre-filled',
+  },
+  'pay.qris_scan': {'id': 'Scan QRIS untuk Bayar', 'en': 'Scan QRIS to Pay'},
+  'pay.qris_manual': {
+    'id':
+        'Nominal belum masuk ke QR — minta pelanggan mengetik {amount} sendiri.',
+    'en':
+        'The amount is not in the QR — ask the customer to enter {amount} themselves.',
+  },
+  'pay.today': {'id': 'Hari ini', 'en': 'Today'},
+  'pay.due': {'id': 'Jatuh tempo', 'en': 'Due date'},
+  'pay.due_reset': {'id': 'Kembalikan ke hari ini', 'en': 'Reset to today'},
+  'pay.due_help': {'id': 'Jatuh tempo pembayaran', 'en': 'Payment due date'},
 };
 
 String tr(String key, AppLocale locale) {
@@ -567,8 +800,52 @@ String tr(String key, AppLocale locale) {
   return entry[locale.name] ?? entry['id'] ?? key;
 }
 
+/// Seperti [tr], dengan pengganti `{nama}` di dalam teks:
+/// `trf('cart.pay', locale, {'total': 'Rp10.000'})` → "Bayar Rp10.000".
+/// Urutan kata boleh berbeda per bahasa, jadi kalimat berisi angka/nama
+/// JANGAN dirangkai dari potongan terjemahan — pakai satu kunci berparameter.
+String trf(String key, AppLocale locale, Map<String, Object?> args) {
+  var s = tr(key, locale);
+  args.forEach((k, v) => s = s.replaceAll('{$k}', '${v ?? ''}'));
+  return s;
+}
+
 extension TrRef on WidgetRef {
   String t(String key) => tr(key, watch(localeProvider));
+  String tf(String key, Map<String, Object?> args) =>
+      trf(key, watch(localeProvider), args);
+}
+
+/// Terjemahan lewat [BuildContext] — untuk tempat yang tak punya [WidgetRef]
+/// (StatelessWidget, dialog, callback).
+///
+/// Sumber bahasanya SAMA dengan `ref.t`: [localeProvider]. Bukan
+/// `Localizations.localeOf` — itu mengikuti bahasa perangkat bila
+/// `MaterialApp.locale` tak diisi, sehingga dua jalur terjemahan bisa
+/// menampilkan bahasa yang berbeda di layar yang sama.
+///
+/// [Localizations] tetap disentuh, tetapi hanya sebagai pemicu: app.dart
+/// mengisi `MaterialApp.locale` dari [localeProvider], jadi bergantung padanya
+/// membuat widget pemanggil dibangun ulang saat bahasa diganti. Berbeda dari
+/// `ref.watch`, ini aman dipanggil dari callback.
+///
+/// Tanpa ProviderScope di atasnya (mis. tes yang memompa satu widget) jatuh ke
+/// bahasa Indonesia.
+extension TrContext on BuildContext {
+  AppLocale get bahasa {
+    Localizations.maybeLocaleOf(this);
+    try {
+      return ProviderScope.containerOf(
+        this,
+        listen: false,
+      ).read(localeProvider);
+    } catch (_) {
+      return AppLocale.id;
+    }
+  }
+
+  String t(String key) => tr(key, bahasa);
+  String tf(String key, Map<String, Object?> args) => trf(key, bahasa, args);
 }
 
 extension TrRefX on Ref {

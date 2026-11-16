@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:nara_pos_mobile/core/buka_url.dart';
+import 'package:nara_pos_mobile/core/network/galat_api.dart';
 import 'package:nara_pos_mobile/core/shared_prefs.dart';
 import 'package:nara_pos_mobile/core/staff_device_storage.dart';
 import 'package:nara_pos_mobile/features/user/data/auth_api_service.dart';
@@ -96,13 +98,25 @@ class _AuthPalsu extends AuthNotifier {
     );
   }
 
+  /// Bukti yang dikirim langkah "Masuk sebagai Pemilik": ('pin', '135790')
+  /// atau ('password', '...'). Hanya satu yang boleh terisi.
+  final List<(String, String)> buktiPemilik = [];
+
+  /// Galat yang dilempar langkah masuk Pemilik (meniru server).
+  Object? galatMulai;
+
   @override
   Future<StaffSessionStart> startStaffSession({
     required String email,
-    required String password,
+    String password = '',
+    String pin = '',
     required String outletId,
     String deviceLabel = '',
-  }) async => resumeStaffSession(deviceToken: 'x');
+  }) async {
+    buktiPemilik.add(pin.isNotEmpty ? ('pin', pin) : ('password', password));
+    if (galatMulai != null) throw galatMulai!;
+    return resumeStaffSession(deviceToken: 'x');
+  }
 
   /// Token kartu yang diterima server palsu ini. Dipisah dari kodeDiverifikasi
   /// supaya tes bisa membedakan sesi yang dibuka KARTU dari yang dibuka PIN —
@@ -167,10 +181,14 @@ Future<_AuthPalsu> _bukaTersimpan(
 }
 
 /// Perangkat BARU tanpa device_token. Pemilik mengetik kredensialnya di sini.
-Future<_AuthPalsu> _bukaTanpaPerangkat(WidgetTester tester) async {
+Future<_AuthPalsu> _bukaTanpaPerangkat(
+  WidgetTester tester, {
+  Object? galatMulai,
+  List<Uri>? urlDibuka,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
-  final auth = _AuthPalsu();
+  final auth = _AuthPalsu()..galatMulai = galatMulai;
 
   await tester.pumpWidget(
     ProviderScope(
@@ -178,6 +196,10 @@ Future<_AuthPalsu> _bukaTanpaPerangkat(WidgetTester tester) async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         staffDeviceStorageProvider.overrideWithValue(_StoragePalsu()),
         authProvider.overrideWith(() => auth),
+        pembukaUrlProvider.overrideWithValue((uri) async {
+          urlDibuka?.add(uri);
+          return true;
+        }),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -227,9 +249,11 @@ void main() {
     // membuat jejak transaksinya berarti.
     final auth = await _bukaTanpaPerangkat(tester);
 
-    final isian = find.byType(TextField);
-    await tester.enterText(isian.at(0), 'owner@uji.invalid');
-    await tester.enterText(isian.at(1), 'rahasia');
+    await tester.enterText(
+      find.byKey(const ValueKey('pemilik-email')),
+      'owner@uji.invalid',
+    );
+    await tester.enterText(find.byKey(const ValueKey('pemilik-pin')), '135790');
     await tester.tap(find.text('Lanjut'));
     await tester.pump();
 
@@ -389,11 +413,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('sesi-scan-kartu')));
     await tester.pumpAndSettle();
 
-    expect(
-      auth.kartuDiverifikasi,
-      ['NPCARD1:abc123'],
-      reason: 'token hasil scan tidak sampai ke server apa adanya',
-    );
+    expect(auth.kartuDiverifikasi, [
+      'NPCARD1:abc123',
+    ], reason: 'token hasil scan tidak sampai ke server apa adanya');
     expect(
       auth.kodeDiverifikasi,
       isEmpty,
@@ -427,5 +449,113 @@ void main() {
     await _bukaTersimpan(tester);
     expect(find.textContaining('Scan kartu'), findsWidgets);
     expect(find.textContaining('PIN'), findsWidgets);
+  });
+
+  // ── Pemilik masuk dengan PIN, bukan password ─────────────────────────────
+
+  testWidgets('Pemilik masuk dengan email + PIN — password tak diminta', (
+    tester,
+  ) async {
+    final auth = await _bukaTanpaPerangkat(tester);
+
+    // Bawaannya PIN: tak ada isian password sama sekali.
+    expect(find.byKey(const ValueKey('pemilik-pin')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pemilik-password')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('pemilik-email')),
+      'owner@uji.invalid',
+    );
+    await tester.enterText(find.byKey(const ValueKey('pemilik-pin')), '135790');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pump();
+
+    expect(auth.buktiPemilik, [('pin', '135790')]);
+    // Sampai ke pemilihan kasir.
+    expect(find.text('putra'), findsOneWidget);
+  });
+
+  testWidgets('PIN Pemilik hanya menerima angka & dicek 4–6 digit', (
+    tester,
+  ) async {
+    final auth = await _bukaTanpaPerangkat(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('pemilik-email')),
+      'owner@uji.invalid',
+    );
+    // Huruf tersaring; tersisa "12" — terlalu pendek, tak boleh terkirim.
+    await tester.enterText(find.byKey(const ValueKey('pemilik-pin')), '1a2b');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pump();
+
+    expect(auth.buktiPemilik, isEmpty);
+    expect(find.text('PIN harus 4–6 digit angka.'), findsOneWidget);
+  });
+
+  testWidgets('tak ada jalan masuk pakai password di aplikasi kasir', (
+    tester,
+  ) async {
+    await _bukaTanpaPerangkat(tester);
+    expect(find.byKey(const ValueKey('pemilik-password')), findsNothing);
+    expect(find.byKey(const ValueKey('pemilik-ganti-cara')), findsNothing);
+    expect(find.text('Masuk pakai password'), findsNothing);
+  });
+
+  Future<void> masukPemilik(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('pemilik-email')),
+      'owner@uji.invalid',
+    );
+    await tester.enterText(find.byKey(const ValueKey('pemilik-pin')), '135790');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pump();
+  }
+
+  testWidgets('PIN belum diset → panduan langkah + tombol ke halaman web', (
+    tester,
+  ) async {
+    final dibuka = <Uri>[];
+    await _bukaTanpaPerangkat(
+      tester,
+      galatMulai: const GalatApi(
+        'PIN_PEMILIK_BELUM_DISET',
+        'PIN Otorisasi belum diset untuk akun ini.',
+      ),
+      urlDibuka: dibuka,
+    );
+    await masukPemilik(tester);
+
+    expect(find.byKey(const ValueKey('panduan-set-pin')), findsOneWidget);
+    expect(find.textContaining('Silakan set PIN dahulu'), findsOneWidget);
+    expect(find.textContaining('PIN Otorisasi Saya'), findsWidgets);
+
+    final tombol = find.byKey(const ValueKey('buka-set-pin-web'));
+    await tester.ensureVisible(tombol);
+    await tester.tap(tombol);
+    await tester.pump();
+
+    expect(dibuka, hasLength(1));
+    expect(dibuka.single.path, '/dashboard/settings');
+    expect(dibuka.single.fragment, 'pin-otorisasi');
+  });
+
+  testWidgets('PIN terkunci → pesan server tampil, PIN dikosongkan', (
+    tester,
+  ) async {
+    await _bukaTanpaPerangkat(
+      tester,
+      galatMulai: const GalatApi(
+        'PIN_PEMILIK_TERKUNCI',
+        'Terlalu banyak PIN salah. Coba lagi dalam 15 menit.',
+      ),
+    );
+    await masukPemilik(tester);
+
+    expect(find.textContaining('Coba lagi dalam 15 menit'), findsOneWidget);
+    expect(find.byIcon(Icons.lock_clock_outlined), findsOneWidget);
+    final isian = tester.widget<TextField>(
+      find.byKey(const ValueKey('pemilik-pin')),
+    );
+    expect(isian.controller!.text, isEmpty);
   });
 }

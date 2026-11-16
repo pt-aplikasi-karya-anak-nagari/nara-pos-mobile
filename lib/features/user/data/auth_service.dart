@@ -197,13 +197,15 @@ class AuthNotifier extends Notifier<AuthState> {
   /// sampai ke layar tanpa disamarkan jadi "gagal".
   Future<StaffSessionStart> startStaffSession({
     required String email,
-    required String password,
+    String password = '',
+    String pin = '',
     required String outletId,
     String deviceLabel = '',
   }) {
     return _authApi.startStaffSession(
       email: email.trim(),
       password: password,
+      pin: pin,
       outletId: outletId,
       deviceLabel: deviceLabel,
     );

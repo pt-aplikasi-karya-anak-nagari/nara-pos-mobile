@@ -10,12 +10,15 @@ class TaxSettings {
   final double percent;
   final double serviceChargePercent;
   final String serviceChargeName;
+  /// Nama pajak default outlet di struk/keranjang (mis. PPN, PB1).
+  final String taxName;
 
   const TaxSettings({
     this.enabled = true,
     this.percent = 10.0,
     this.serviceChargePercent = 0,
     this.serviceChargeName = 'Service Charge',
+    this.taxName = 'PPN',
   });
 
   /// Rate pajak (0..1) — 0 bila disabled.
@@ -29,11 +32,13 @@ class TaxSettings {
     double? percent,
     double? serviceChargePercent,
     String? serviceChargeName,
+    String? taxName,
   }) => TaxSettings(
     enabled: enabled ?? this.enabled,
     percent: percent ?? this.percent,
     serviceChargePercent: serviceChargePercent ?? this.serviceChargePercent,
     serviceChargeName: serviceChargeName ?? this.serviceChargeName,
+    taxName: taxName ?? this.taxName,
   );
 }
 
@@ -48,6 +53,7 @@ final taxSettingsProvider = Provider<TaxSettings>((ref) {
     percent: outlet.taxPercent,
     serviceChargePercent: outlet.serviceChargePercent,
     serviceChargeName: outlet.serviceChargeName,
+    taxName: outlet.taxName,
   );
 });
 

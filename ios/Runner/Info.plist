@@ -2,13 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Izinkan HTTP polos (cleartext) untuk backend DEV di LAN/localhost.
-	     Produksi memakai https (tak terpengaruh). Untuk rilis App Store,
-	     sebaiknya matikan NSAllowsArbitraryLoads & andalkan https. -->
+	<!-- App Transport Security: koneksi ke internet WAJIB HTTPS.
+	     NSAllowsArbitraryLoads dulu menyala, jadi aplikasi rilis pun boleh
+	     mengirim token lewat HTTP polos. Sekarang hanya jaringan lokal (backend
+	     DEV di LAN/localhost) yang boleh tanpa TLS. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>

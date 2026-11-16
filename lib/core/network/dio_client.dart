@@ -4,11 +4,13 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart' show Alignment, Text, TextDirection;
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../auth_storage.dart';
 import '../device_identity.dart';
 import '../offline/jam_offline.dart';
+import '../versi_app.dart';
 import '../config/app_config.dart';
 import '../../features/user/data/auth_service.dart';
 import 'api_endpoint.dart';
@@ -73,6 +75,10 @@ final dioProvider = Provider<Dio>((ref) {
         // header ini untuk memblokir login role Owner/Manager di mobile
         // (mereka hanya boleh login lewat Dashboard Web).
         options.headers['X-Client-Platform'] = 'mobile';
+        // Nomor build untuk paksa update (server: MOBILE_MIN_BUILD).
+        if (VersiApp.build > 0) {
+          options.headers['X-App-Build'] = '${VersiApp.build}';
+        }
 
         // Identitas perangkat: server memakainya untuk menegakkan "satu staf
         // = satu perangkat" sambil tetap mengizinkan tablet yang sama masuk
@@ -97,6 +103,21 @@ final dioProvider = Provider<Dio>((ref) {
         // Server membalas (walau dengan galat) = tablet tersambung.
         if (e.response != null) {
           _catatTersambung(ref, e.response!.headers.value('date'));
+        }
+        // Build terlalu lama (426): tampilkan layar Perbarui aplikasi, dan
+        // teruskan sebagai galat koneksi supaya antrian offline MENAHAN
+        // transaksi (bukan menandainya gagal) sampai aplikasi diperbarui.
+        final perluUpdate = infoDariRespons(e.response);
+        if (perluUpdate != null) {
+          ref.read(perluUpdateProvider.notifier).tandai(perluUpdate);
+          return handler.reject(
+            DioException(
+              requestOptions: e.requestOptions,
+              response: e.response,
+              type: DioExceptionType.connectionError,
+              error: 'Aplikasi perlu diperbarui',
+            ),
+          );
         }
         var authToastShown = false;
         if (_shouldAttemptRefresh(e, authStorage)) {
@@ -161,8 +182,12 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
-  // Add logging in debug mode
-  dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true));
+  // Log lengkap HANYA di build debug. Sebelumnya log ini aktif juga di rilis:
+  // isi request & response — termasuk token akses, refresh token, dan PIN
+  // login — tercetak ke logcat, yang bisa dibaca siapa pun lewat USB/ADB.
+  if (kDebugMode) {
+    dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true));
+  }
 
   return dio;
 });

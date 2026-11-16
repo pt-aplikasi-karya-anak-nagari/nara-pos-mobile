@@ -9,6 +9,9 @@ import 'package:hugeicons/hugeicons.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/app_icons.dart';
+import '../../../core/buka_url.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/network/galat_api.dart';
 import '../../../core/offline/sale_outbox.dart' show isOfflineError;
 import '../../../core/offline/sesi_offline.dart';
 import '../../../core/staff_device_storage.dart';
@@ -73,7 +76,12 @@ class StaffSessionFlow extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final langkah = useState(0); // 0=kredensial 1=pilih staf 2=verifikasi
     final emailCtrl = useTextEditingController();
-    final passCtrl = useTextEditingController();
+    // Pemilik WAJIB masuk dengan PIN Otorisasi — password tak diketik di
+    // perangkat kasir bersama (lihat pin_pemilik.go di backend).
+    final pinPemilikCtrl = useTextEditingController();
+    // Kode galat terakhir dari server (mis. PIN_PEMILIK_BELUM_DISET) untuk
+    // menampilkan panduan yang tepat, bukan sekadar teks.
+    final galatKode = useState<String?>(null);
     final kodeCtrl = useTextEditingController();
 
     final sesi = useState<StaffSessionStart?>(null);
@@ -151,8 +159,14 @@ class StaffSessionFlow extends HookConsumerWidget {
 
     Future<void> mulai({String? pilihOutlet}) async {
       final email = emailCtrl.text.trim();
-      if (email.isEmpty || passCtrl.text.isEmpty) {
-        error.value = 'Email dan password wajib diisi.';
+      final pin = pinPemilikCtrl.text.trim();
+      if (email.isEmpty) {
+        error.value = 'Email wajib diisi.';
+        return;
+      }
+      galatKode.value = null;
+      if (!RegExp(r'^[0-9]{4,6}$').hasMatch(pin)) {
+        error.value = 'PIN harus 4–6 digit angka.';
         return;
       }
       loading.value = true;
@@ -162,7 +176,7 @@ class StaffSessionFlow extends HookConsumerWidget {
             .read(authProvider.notifier)
             .startStaffSession(
               email: email,
-              password: passCtrl.text,
+              pin: pin,
               outletId: pilihOutlet ?? outletId.value ?? '',
             );
         sesi.value = res;
@@ -196,7 +210,10 @@ class StaffSessionFlow extends HookConsumerWidget {
         // langkah ini, tapi tampilkan pemilih outlet.
         langkah.value = res.outletId.isEmpty ? 0 : 1;
       } catch (e) {
+        galatKode.value = e is GalatApi ? e.kode : null;
         error.value = _pesan(e);
+        // PIN ditolak → kosongkan supaya tak terkirim ulang tanpa sengaja.
+        if (galatKode.value != null) pinPemilikCtrl.clear();
       } finally {
         loading.value = false;
       }
@@ -434,14 +451,28 @@ class StaffSessionFlow extends HookConsumerWidget {
         ),
         const Gap(20),
         if (error.value != null) ...[
-          _Peringatan(pesan: error.value!),
+          if (langkah.value == 0 && galatKode.value == kodePinBelumDiset)
+            _PanduanSetPin(
+              onBukaWeb: () => bukaDiBrowser(
+                context,
+                ref,
+                urlSetelPinPemilik,
+                pesanGagal:
+                    'Buka Dashboard Web → Pengaturan → PIN Otorisasi Saya di browser.',
+              ),
+            )
+          else
+            _Peringatan(
+              pesan: error.value!,
+              terkunci: galatKode.value == kodePinTerkunci,
+            ),
           const Gap(14),
         ],
         if (langkah.value == 0)
           ..._kredensial(
             context: context,
             emailCtrl: emailCtrl,
-            passCtrl: passCtrl,
+            pinCtrl: pinPemilikCtrl,
             loading: loading.value,
             outlets: sesi.value?.outlets ?? const [],
             onLanjut: () => mulai(),
@@ -514,7 +545,7 @@ String _pesan(Object e) {
 List<Widget> _kredensial({
   required BuildContext context,
   required TextEditingController emailCtrl,
-  required TextEditingController passCtrl,
+  required TextEditingController pinCtrl,
   required bool loading,
   required List<StaffOutletOption> outlets,
   required VoidCallback onLanjut,
@@ -532,7 +563,7 @@ List<Widget> _kredensial({
     Text(
       perluPilihOutlet
           ? 'Akun Anda terhubung ke beberapa outlet. Pilih tempat perangkat ini dipakai.'
-          : 'Masukkan email & password Anda untuk membuka sesi kasir di perangkat ini. '
+          : 'Masukkan email & PIN Otorisasi Anda untuk memilih kasir yang bertugas. '
                 'Anda tidak akan masuk sebagai diri sendiri — Anda hanya menyetujui.',
       style: _gayaKeterangan,
     ),
@@ -552,6 +583,7 @@ List<Widget> _kredensial({
       )
     else ...[
       TextField(
+        key: const ValueKey('pemilik-email'),
         controller: emailCtrl,
         keyboardType: TextInputType.emailAddress,
         autocorrect: false,
@@ -563,16 +595,34 @@ List<Widget> _kredensial({
       ),
       const Gap(12),
       TextField(
-        controller: passCtrl,
+        key: const ValueKey('pemilik-pin'),
+        controller: pinCtrl,
         obscureText: true,
         enabled: !loading,
-        decoration: const InputDecoration(labelText: 'Password'),
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(6),
+        ],
+        onSubmitted: (_) => loading ? null : onLanjut(),
+        decoration: const InputDecoration(
+          labelText: 'PIN Otorisasi',
+          hintText: '4–6 digit',
+        ),
       ),
       const Gap(20),
       FilledButton(
         onPressed: loading ? null : onLanjut,
         style: _gayaTombolUtama,
         child: Text(loading ? 'Memeriksa…' : 'Lanjut'),
+      ),
+      const Gap(10),
+      // PIN dipakai di sini SAJA; password hanya untuk Dashboard Web.
+      Text(
+        'Belum punya PIN atau lupa PIN? Atur di Dashboard Web → Pengaturan → '
+        'PIN Otorisasi Saya.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: kTextLight, height: 1.4),
       ),
     ],
   ];
@@ -642,10 +692,7 @@ List<Widget> _verifikasi({
   required VoidCallback onVerifikasi,
 }) {
   return [
-    Text(
-      'Setujui sesi ${staf.fullName}',
-      style: _gayaJudul,
-    ),
+    Text('Setujui sesi ${staf.fullName}', style: _gayaJudul),
     const Gap(6),
     // SATU cara, bukan dua.
     //
@@ -757,8 +804,9 @@ class _BarisStaf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inisial =
-        staf.fullName.isNotEmpty ? staf.fullName[0].toUpperCase() : '?';
+    final inisial = staf.fullName.isNotEmpty
+        ? staf.fullName[0].toUpperCase()
+        : '?';
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -807,7 +855,11 @@ class _BarisStaf extends StatelessWidget {
                   ],
                 ),
               ),
-              HugeIcon(icon: AppIcons.chevronRight, color: kTextLight, size: 18),
+              HugeIcon(
+                icon: AppIcons.chevronRight,
+                color: kTextLight,
+                size: 18,
+              ),
             ],
           ),
         ),
@@ -850,9 +902,91 @@ class _Langkah extends StatelessWidget {
   }
 }
 
+/// Kode galat server untuk langkah masuk Pemilik (lihat pin_pemilik.go).
+const kodePinBelumDiset = 'PIN_PEMILIK_BELUM_DISET';
+const kodePinTerkunci = 'PIN_PEMILIK_TERKUNCI';
+
+/// Halaman PIN Otorisasi Pemilik di Dashboard Web (kartu ber-anchor).
+String get urlSetelPinPemilik =>
+    '${AppConfig.webBaseUrl}/dashboard/settings#pin-otorisasi';
+
+/// Panduan saat Pemilik belum punya PIN: apa yang terjadi, langkahnya, dan
+/// tombol langsung ke halaman setelnya — bukan sekadar "PIN belum diset".
+class _PanduanSetPin extends StatelessWidget {
+  const _PanduanSetPin({required this.onBukaWeb});
+  final VoidCallback onBukaWeb;
+
+  @override
+  Widget build(BuildContext context) {
+    final gaya = TextStyle(fontSize: 13, color: kTextDark, height: 1.45);
+    Widget langkah(String n, String teks) => Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$n.  ', style: gaya.copyWith(fontWeight: FontWeight.w700)),
+          Expanded(child: Text(teks, style: gaya)),
+        ],
+      ),
+    );
+    return Container(
+      key: const ValueKey('panduan-set-pin'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kWarning.withValues(alpha: 0.10),
+        border: Border.all(color: kWarning.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pin_outlined, size: 20, color: kWarning),
+              const Gap(8),
+              Expanded(
+                child: Text(
+                  'PIN Otorisasi belum diset',
+                  style: gaya.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Gap(6),
+          Text(
+            'Silakan set PIN dahulu. Masuk sebagai Pemilik di aplikasi kasir '
+            'wajib memakai PIN, bukan password.',
+            style: gaya,
+          ),
+          langkah('1', 'Buka Dashboard Web dan masuk dengan email & password.'),
+          langkah('2', 'Buka Pengaturan → PIN Otorisasi Saya.'),
+          langkah('3', 'Set PIN 4–6 digit, lalu kembali ke sini dan masuk.'),
+          const Gap(12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              key: const ValueKey('buka-set-pin-web'),
+              onPressed: onBukaWeb,
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Buka pengaturan PIN di web'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Peringatan extends StatelessWidget {
-  const _Peringatan({required this.pesan});
+  const _Peringatan({required this.pesan, this.terkunci = false});
   final String pesan;
+
+  /// PIN dikunci sementara — tampil dengan ikon gembok supaya jelas ini
+  /// bukan salah ketik yang bisa langsung dicoba lagi.
+  final bool terkunci;
 
   @override
   Widget build(BuildContext context) {
@@ -863,9 +997,24 @@ class _Peringatan extends StatelessWidget {
         border: Border.all(color: kDanger.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        pesan,
-        style: const TextStyle(fontSize: 13, color: kDanger, height: 1.45),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (terkunci) ...[
+            const Icon(Icons.lock_clock_outlined, size: 18, color: kDanger),
+            const Gap(8),
+          ],
+          Expanded(
+            child: Text(
+              pesan,
+              style: const TextStyle(
+                fontSize: 13,
+                color: kDanger,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -925,8 +1074,8 @@ class _PerangkatTerdaftar extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Lepas perangkat ini?'),
         content: const Text(
-          'Pemilik harus memasukkan email dan password lagi untuk '
-          'membuka sesi kasir berikutnya di perangkat ini.',
+          'Pemilik harus memasukkan email dan PIN (atau password) lagi '
+          'untuk membuka sesi kasir berikutnya di perangkat ini.',
         ),
         actions: [
           TextButton(

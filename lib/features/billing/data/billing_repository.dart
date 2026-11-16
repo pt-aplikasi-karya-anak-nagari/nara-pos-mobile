@@ -99,6 +99,27 @@ class BillingRepository extends BaseApiService {
     }
   }
 
+  /// Status terkini sebuah invoice + instruksi bayarnya. Dipolling layar bayar
+  /// QRIS; server ikut menanyakan ke gateway bila webhook-nya belum tiba.
+  Future<BillingCheckoutResult> cekPembayaran(
+    String outletId,
+    String invoiceId,
+  ) async {
+    try {
+      final res = await dio.post<Map<String, dynamic>>(
+        ApiEndpoint.billingCekPembayaran(outletId, invoiceId),
+      );
+      final data = res.data?['data'];
+      return BillingCheckoutResult.fromJson(
+        data is Map<String, dynamic> ? data : const {},
+      );
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      final msg = body is Map ? body['message']?.toString() : null;
+      throw msg ?? 'Gagal memeriksa status pembayaran';
+    }
+  }
+
   /// Unggah bukti transfer untuk sebuah invoice pending (multipart, field
   /// `image`). Setelah ini status invoice tetap `pending` sampai admin
   /// mengonfirmasi transfer masuk. [externalReference] opsional — mis. no.
@@ -148,6 +169,12 @@ class BillingCheckoutResult {
     this.paymentInstruction,
   });
 
+  /// Invoice sudah lunas (langganan aktif).
+  bool get lunas => status == 'paid';
+
+  /// Dibayar otomatis lewat QRIS, bukan transfer manual.
+  bool get qris => paymentInstruction?.isQris ?? false;
+
   factory BillingCheckoutResult.fromJson(Map<String, dynamic> json) {
     final inv = json['invoice'];
     final pi = json['payment_instruction'];
@@ -171,9 +198,33 @@ class BillingCheckoutResult {
   }
 }
 
-/// Instruksi transfer bank manual (pengganti gateway/QR). Ditampilkan ke owner
-/// setelah checkout: transfer sesuai nominal ke rekening berikut lalu unggah
-/// bukti transfer.
+/// `method_code` invoice yang dibayar otomatis lewat QRIS (Xendit).
+const metodeQris = 'xendit_qris';
+
+/// Sisa waktu sebuah kode QR pada saat [kini]. `habis` juga true bila batas
+/// waktunya tidak ada — QR tanpa batas waktu yang jelas tidak ditampilkan
+/// sebagai "masih berlaku".
+({bool habis, bool mendesak, String teks}) sisaWaktuQris(
+  DateTime? expiresAt,
+  DateTime kini,
+) {
+  if (expiresAt == null) return (habis: true, mendesak: false, teks: '');
+  final detik = expiresAt.difference(kini).inSeconds;
+  if (detik <= 0) return (habis: true, mendesak: false, teks: '');
+  final m = detik ~/ 60;
+  final d = detik % 60;
+  final teks = m >= 60
+      ? '${m ~/ 60} jam ${m % 60} menit'
+      : '${m.toString().padLeft(2, '0')}:${d.toString().padLeft(2, '0')}';
+  return (habis: false, mendesak: detik <= 120, teks: teks);
+}
+
+/// Instruksi bayar yang dikembalikan checkout.
+///
+///  - `method_code` [metodeQris]      → QRIS otomatis: tampilkan [qrString]
+///    lalu polling `cekPembayaran` sampai lunas.
+///  - `method_code` `manual_transfer` → transfer bank + unggah bukti (cadangan,
+///    dipakai bila gateway belum dikonfigurasi di server).
 class PaymentInstruction {
   final String methodCode;
   final String methodName;
@@ -184,6 +235,21 @@ class PaymentInstruction {
   final String bankAccountName;
   final String instructions;
 
+  /// "xendit" bila dibayar lewat gateway.
+  final String provider;
+
+  /// Isi kode QRIS. Kosong = kode kedaluwarsa/gagal; checkout lagi untuk
+  /// kode baru (invoice-nya tetap sama).
+  final String qrString;
+
+  /// Batas waktu kode QR.
+  final DateTime? expiresAt;
+
+  /// pending | paid | expired | failed.
+  final String gatewayStatus;
+
+  bool get isQris => methodCode == metodeQris;
+
   const PaymentInstruction({
     required this.methodCode,
     required this.methodName,
@@ -193,6 +259,10 @@ class PaymentInstruction {
     required this.bankAccountNo,
     required this.bankAccountName,
     required this.instructions,
+    this.provider = '',
+    this.qrString = '',
+    this.expiresAt,
+    this.gatewayStatus = '',
   });
 
   factory PaymentInstruction.fromJson(Map<String, dynamic> json) {
@@ -205,6 +275,10 @@ class PaymentInstruction {
       bankAccountNo: json['bank_account_no']?.toString() ?? '',
       bankAccountName: json['bank_account_name']?.toString() ?? '',
       instructions: json['instructions']?.toString() ?? '',
+      provider: json['provider']?.toString() ?? '',
+      qrString: json['qr_string']?.toString() ?? '',
+      expiresAt: DateTime.tryParse(json['expires_at']?.toString() ?? ''),
+      gatewayStatus: json['gateway_status']?.toString() ?? '',
     );
   }
 }
