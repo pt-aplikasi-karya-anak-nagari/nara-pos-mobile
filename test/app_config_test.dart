@@ -1,23 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nara_pos_mobile/core/config/app_config.dart';
 
-/// Alamat untuk build rilis harus https dan bukan host lokal — supaya APK
-/// yang sampai ke pelanggan tidak menunjuk ke laptop developer.
-String? masalahAlamatRilis(String url) {
-  final uri = Uri.tryParse(url);
-  if (uri == null || uri.host.isEmpty) return 'bukan URL yang valid';
-  if (uri.scheme != 'https') return 'harus https://, bukan ${uri.scheme}://';
-  final h = uri.host;
-  final lokal = h == 'localhost' ||
-      h.endsWith('.local') ||
-      h.endsWith('.localhost') ||
-      RegExp(r'^(127|10)\.').hasMatch(h) ||
-      RegExp(r'^192\.168\.').hasMatch(h) ||
-      RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(h) ||
-      RegExp(r'^169\.254\.').hasMatch(h);
-  if (lokal) return 'host lokal/LAN ($h) tidak boleh dipakai di rilis';
-  return null;
-}
+// masalahAlamatRilis ada di lib/core/config/app_config.dart (dipakai juga
+// AppConfig.assertValid). scripts/build_prod menjalankan berkas ini dengan
+// --dart-define-from-file=env/prod.json, jadi yang diperiksa adalah alamat
+// yang benar-benar masuk ke APK rilis.
 
 void main() {
   group('AppConfig rilis', () {
@@ -60,6 +50,29 @@ void main() {
     test('menerima domain publik https', () {
       expect(masalahAlamatRilis('https://api.nara.id'), isNull);
       expect(masalahAlamatRilis('https://172.15.0.1'), isNull);
+    });
+  });
+
+  group('berkas env', () {
+    const kunci = ['NARA_API_HOST', 'NARA_WEB_URL', 'NARA_MENU_QR_URL'];
+    Map<String, dynamic> baca(String path) =>
+        jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
+
+    test('env/prod.json lengkap, https, bukan host lokal', () {
+      final env = baca('env/prod.json');
+      expect(env.keys, containsAll(kunci));
+      for (final k in kunci) {
+        expect(masalahAlamatRilis(env[k] as String), isNull, reason: k);
+        expect((env[k] as String).endsWith('/'), isFalse, reason: k);
+      }
+      // Rahasia tidak boleh ikut di berkas yang di-commit.
+      expect(env.keys.where((k) => k.contains('SECRET')), isEmpty);
+    });
+
+    test('env/dev.example.json memuat kunci yang sama', () {
+      final env = baca('env/dev.example.json');
+      expect(env.keys, containsAll(kunci));
+      expect(env.keys.where((k) => k.contains('SECRET')), isEmpty);
     });
   });
 }

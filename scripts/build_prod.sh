@@ -4,9 +4,9 @@
 #   ./scripts/build_prod.sh                 # apk
 #   TARGET=appbundle ./scripts/build_prod.sh
 #   TARGET=ipa       ./scripts/build_prod.sh
-# Build --release otomatis memakai apiHostRilis & makoScanQrBaseUrlRilis dari
-# lib/core/config/app_config.dart. Sebelum build, test app_config dijalankan
-# supaya alamat rilis yang masih http:// atau IP LAN ditolak.
+# Alamat server diambil dari env/prod.json (--dart-define-from-file). Sebelum
+# build, test app_config dijalankan DENGAN env/prod.json supaya alamat rilis
+# yang masih http:// atau IP LAN ditolak.
 #
 # Wajib env NARA_API_SECRET = API_SECRET_KEY server produksi. Nilainya tidak
 # pernah ditulis di repo; disuntik ke app lewat --dart-define.
@@ -29,13 +29,13 @@ if [ "$TARGET" != "ipa" ] && [ ! -f android/key.properties ]; then
   exit 1
 fi
 
-echo "Memeriksa alamat server rilis (test/app_config_test.dart)..."
-if ! flutter test test/app_config_test.dart; then
-  echo "✗ Alamat rilis di lib/core/config/app_config.dart tidak valid — build dibatalkan." >&2
+. scripts/_env.sh
+echo "Memeriksa alamat server rilis (test/app_config_test.dart + env/prod.json)..."
+if ! flutter test test/app_config_test.dart --dart-define-from-file=env/prod.json; then
+  echo "✗ Alamat di env/prod.json tidak valid untuk rilis — build dibatalkan." >&2
   exit 1
 fi
-grep -E "static const String (apiHostRilis|makoScanQrBaseUrlRilis)" lib/core/config/app_config.dart \
-  | sed -E "s/.*(apiHostRilis|makoScanQrBaseUrlRilis) = '([^']*)'.*/  ✓ \1 = \2/"
+tampilkan_env env/prod.json
 
 # ── Anti-repackaging: sidik jari sertifikat rilis resmi ─────────────────────
 # Aplikasi membandingkan sertifikat penanda tangan APK yang terpasang dengan
@@ -70,6 +70,7 @@ exec flutter build "$TARGET" \
   --release \
   --obfuscate \
   --split-debug-info="$SIMBOL" \
+  --dart-define-from-file=env/prod.json \
   --dart-define=NARA_API_SECRET="$NARA_API_SECRET" \
   --dart-define=NARA_SERTIFIKAT_SHA256="$SERTIFIKAT" \
   "$@"
