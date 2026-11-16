@@ -72,6 +72,23 @@ class BarisPajak {
   }
 }
 
+/// Baris pajak yang ditampilkan untuk transaksi yang SUDAH tersimpan (detail
+/// transaksi), sama dengan yang tercetak di struk: satu baris per tarif bila
+/// transaksi multi-tarif, selain itu satu baris "Pajak". Tarif bernilai nol
+/// dilewati, seperti di struk.
+List<({String label, double nilai})> barisPajakTampil(
+  List<BarisPajak> rincian,
+  double totalPajak,
+) {
+  if (rincian.isNotEmpty) {
+    return [
+      for (final b in rincian)
+        if (b.pajak != 0) (label: b.label, nilai: b.pajak),
+    ];
+  }
+  return totalPajak > 0 ? [(label: 'Pajak', nilai: totalPajak)] : const [];
+}
+
 /// Hasil hitung pajak keranjang. [rincian] kosong = satu tarif (pakai baris
 /// tunggal lama: nama pajak outlet + [tax]).
 class RincianPajakKeranjang {

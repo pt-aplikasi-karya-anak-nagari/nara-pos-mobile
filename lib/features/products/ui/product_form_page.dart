@@ -25,6 +25,7 @@ import '../domain/modifier_group.dart';
 import '../data/modifier_repository.dart';
 import '../../kasir/providers.dart';
 import '../../outlet/data/outlet_service.dart';
+import 'pilih_tarif_pajak.dart';
 import 'barcode_scanner_page.dart';
 import '../../../shared/widgets/sheet_bawah.dart';
 
@@ -67,6 +68,8 @@ class ProductFormPage extends HookConsumerWidget {
     // Kena pajak (PPN/PB1). Default ON supaya produk baru mengikuti perilaku
     // umum; produk existing memakai nilai tersimpan.
     final isTaxable = useState(existing?.isTaxable ?? true);
+    // Tarif pajak tambahan (pajak multi-tarif). null = tarif utama outlet.
+    final tarifId = useState<String?>(existing?.taxRateId);
     final stockCtrl = useTextEditingController(
       text: existing != null && existing.trackStock
           ? existing.stock.toString()
@@ -344,6 +347,11 @@ class ProductFormPage extends HookConsumerWidget {
             'is_available': product.isAvailable,
             'track_stock': product.trackStock,
             'is_taxable': product.isTaxable,
+            // Dikirim hanya bila berubah (atau produk baru): tarif yang sudah
+            // dinonaktifkan ditolak server, padahal produk lama boleh tetap
+            // memakainya sampai tarifnya diganti. "" = kembali ke tarif utama.
+            if (existing == null || tarifId.value != existing.taxRateId)
+              'tax_rate_id': tarifId.value ?? '',
             'description': product.description,
             'discount_type': product.discountType,
             'discount_value': product.discountValue,
@@ -710,6 +718,12 @@ class ProductFormPage extends HookConsumerWidget {
           onChanged: (v) => isTaxable.value = v,
         ),
       ),
+      if (isTaxable.value && selectedOutletId.value != null)
+        PilihTarifPajak(
+          outletId: selectedOutletId.value!,
+          nilai: tarifId.value,
+          onUbah: (v) => tarifId.value = v,
+        ),
       const SizedBox(height: 12),
       _FieldWrap(
         child: SwitchListTile.adaptive(
