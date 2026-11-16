@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:gap/gap.dart';
 import 'package:skeletonizer/skeletonizer.dart';
+import '../../kasir/domain/pajak_multi_tarif.dart' show barisPajakTampil;
 import '../../kasir/ui/widgets/kartu_nomor_antrian.dart';
 import '../../../app/theme.dart';
 import '../../../shared/widgets/butuh_online.dart';
@@ -1530,9 +1531,11 @@ class _ReceiptCard extends ConsumerWidget {
               value: formatRupiah(sale.serviceCharge),
             ),
           ],
-          if (sale.tax > 0) ...[
+          // Sama dengan struk: satu baris per tarif (PB1, PPN, …) bila
+          // transaksi multi-tarif. Dulu selalu satu baris "PPN" berisi total.
+          for (final b in barisPajakTampil(sale.rincianPajak, sale.tax)) ...[
             const Gap(6),
-            _ReceiptBreakdownRow(label: 'PPN', value: formatRupiah(sale.tax)),
+            _ReceiptBreakdownRow(label: b.label, value: formatRupiah(b.nilai)),
           ],
           Padding(
             padding: EdgeInsets.symmetric(vertical: 10),

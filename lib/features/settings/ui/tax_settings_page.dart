@@ -9,6 +9,7 @@ import '../../../core/app_icons.dart';
 import '../../../core/outlet_scope.dart';
 import '../../../shared/widgets/tablet_components.dart';
 import '../data/tax_settings.dart';
+import 'tarif_pajak_section.dart';
 
 class TaxSettingsPage extends HookConsumerWidget {
   const TaxSettingsPage({super.key});
@@ -154,6 +155,11 @@ class TaxSettingsPage extends HookConsumerWidget {
                 isLoading: saving.value,
                 onPressed: save,
               ),
+              // Tarif tambahan tersimpan per aksi (bukan lewat tombol di atas).
+              if (outlet.remoteId != null) ...[
+                const Gap(32),
+                TarifPajakSection(outletId: outlet.remoteId!),
+              ],
             ],
           ),
         ),
