@@ -2,19 +2,21 @@ import 'package:flutter/foundation.dart' show kReleaseMode;
 
 /// Konfigurasi runtime aplikasi.
 ///
-/// Nilai di sini ditulis langsung sebagai konstanta di dalam kode — BUKAN dari
-/// environment / `--dart-define` / file `env/*.json`, jadi app langsung jalan
-/// tanpa flag build.
+/// Alamat server dibaca dari berkas env lewat `--dart-define-from-file`:
 ///
-/// Server DEV dan RILIS dipisah jadi dua konstanta, dipilih otomatis oleh mode
-/// build: `flutter build/run --release` → nilai `...Rilis`; debug & profile →
-/// nilai `...Dev`. Dengan begitu APK rilis tidak bisa ikut membawa IP LAN.
-/// Test `test/app_config_test.dart` (jalan di CI) dan `scripts/build_prod.sh`
-/// menolak nilai rilis yang masih `http://` atau IP lokal.
+///   - `env/dev.json`  — debug/profile (`scripts/run_dev`, `scripts/build_dev`).
+///     Tidak di-commit; dibuat dari `env/dev.example.json`, dan
+///     `scripts/set_dev_ip` mengisinya dengan IP Wi-Fi PC saat ini.
+///   - `env/prod.json` — rilis (`scripts/run_prod`, `scripts/build_prod`).
 ///
-/// Untuk dev di LAN, `./scripts/set_dev_ip.sh` (Mac) menyetel [apiHostDev]
-/// otomatis ke IP saat ini. Di Windows via kabel USB, set [apiHostDev] ke
-/// `http://127.0.0.1:3001` lalu pakai `scripts/run_dev_windows.ps1`.
+/// Kunci: `NARA_API_HOST`, `NARA_WEB_URL`, `NARA_MENU_QR_URL`. Tanpa berkas env
+/// (mis. `flutter run` polos dari IDE), nilai bawaan di bawah dipakai: nilai
+/// `...Dev` untuk debug/profile, `...Rilis` untuk `--release`.
+///
+/// Pengaman rilis: `scripts/build_prod` menjalankan `test/app_config_test.dart`
+/// DENGAN `env/prod.json`, dan [assertValid] menolak start bila build rilis
+/// menunjuk ke `http://` atau IP lokal — APK pelanggan tidak bisa membawa
+/// alamat laptop developer.
 class AppConfig {
   AppConfig._();
 
@@ -22,10 +24,16 @@ class AppConfig {
   ///
   /// Pakai IP Wi-Fi PC (bukan adaptor vEthernet/WSL 172.x — itu tak bisa
   /// dijangkau tablet), formatnya `http://IP:PORT` tanpa `/` sebelum port.
-  static const String apiHostDev = 'http://192.168.1.22:3001';
+  static const String apiHostDev = String.fromEnvironment(
+    'NARA_API_HOST',
+    defaultValue: 'http://192.168.1.22:3001',
+  );
 
   /// Host backend untuk build rilis. Wajib `https://` dan bukan IP lokal.
-  static const String apiHostRilis = 'https://api.nara.id';
+  static const String apiHostRilis = String.fromEnvironment(
+    'NARA_API_HOST',
+    defaultValue: 'https://api.nara.id',
+  );
 
   /// Host backend yang dipakai saat ini (dipilih dari mode build).
   static const String apiHost = kReleaseMode ? apiHostRilis : apiHostDev;
@@ -42,7 +50,9 @@ class AppConfig {
   /// `--dart-define=NARA_API_SECRET=...` (dilakukan `scripts/build_prod.sh`
   /// dari env `NARA_API_SECRET`). Harus sama dengan `API_SECRET_KEY` server
   /// produksi.
-  static const String apiSecretRilis = String.fromEnvironment('NARA_API_SECRET');
+  static const String apiSecretRilis = String.fromEnvironment(
+    'NARA_API_SECRET',
+  );
 
   /// HMAC secret yang dipakai saat ini (dipilih dari mode build). Debug boleh
   /// di-override juga lewat `--dart-define`.
@@ -58,16 +68,30 @@ class AppConfig {
   ///
   /// Boleh dikosongkan bila fitur QR belum dipakai. Kalau kosong, dialog QR
   /// menampilkan instruksi setup, bukan crash.
-  static const String makoScanQrBaseUrlDev = 'http://192.168.1.22:3000/menu';
+  static const String makoScanQrBaseUrlDev = String.fromEnvironment(
+    'NARA_MENU_QR_URL',
+    defaultValue: 'http://192.168.1.22:3000/menu',
+  );
 
   /// Base URL menu QR untuk build rilis (web produksi).
-  static const String makoScanQrBaseUrlRilis = 'https://app.nara.id/menu';
+  static const String makoScanQrBaseUrlRilis = String.fromEnvironment(
+    'NARA_MENU_QR_URL',
+    defaultValue: 'https://app.nara.id/menu',
+  );
 
   /// Dashboard web — pendaftaran akun Pemilik HANYA lewat web; aplikasi kasir
   /// cukup membuka halaman daftarnya di browser.
-  static const String webBaseUrlDev = 'http://192.168.1.22:3000';
-  static const String webBaseUrlRilis = 'https://app.nara.id';
-  static const String webBaseUrl = kReleaseMode ? webBaseUrlRilis : webBaseUrlDev;
+  static const String webBaseUrlDev = String.fromEnvironment(
+    'NARA_WEB_URL',
+    defaultValue: 'http://192.168.1.22:3000',
+  );
+  static const String webBaseUrlRilis = String.fromEnvironment(
+    'NARA_WEB_URL',
+    defaultValue: 'https://app.nara.id',
+  );
+  static const String webBaseUrl = kReleaseMode
+      ? webBaseUrlRilis
+      : webBaseUrlDev;
 
   /// Halaman pendaftaran akun Pemilik di web.
   static const String daftarPemilikUrl = '$webBaseUrl/register';
@@ -89,7 +113,37 @@ class AppConfig {
         'dengan env NARA_API_SECRET.',
       );
     }
+    // Build rilis yang tak sengaja memakai env/dev.json.
+    if (kReleaseMode) {
+      for (final url in [apiHost, webBaseUrl]) {
+        final masalah = masalahAlamatRilis(url);
+        if (masalah != null) {
+          throw StateError(
+            'Alamat rilis $url ditolak: $masalah. Build lewat scripts/build_prod.',
+          );
+        }
+      }
+    }
   }
+}
+
+/// Alamat untuk build rilis harus https dan bukan host lokal — supaya APK
+/// yang sampai ke pelanggan tidak menunjuk ke laptop developer. null = sah.
+String? masalahAlamatRilis(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.host.isEmpty) return 'bukan URL yang valid';
+  if (uri.scheme != 'https') return 'harus https://, bukan ${uri.scheme}://';
+  final h = uri.host;
+  final lokal =
+      h == 'localhost' ||
+      h.endsWith('.local') ||
+      h.endsWith('.localhost') ||
+      RegExp(r'^(127|10)\.').hasMatch(h) ||
+      RegExp(r'^192\.168\.').hasMatch(h) ||
+      RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(h) ||
+      RegExp(r'^169\.254\.').hasMatch(h);
+  if (lokal) return 'host lokal/LAN ($h) tidak boleh dipakai di rilis';
+  return null;
 }
 
 /// Panduan hapus akun & unduh data (Kebijakan Privasi) — juga URL yang

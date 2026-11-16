@@ -1,0 +1,4 @@
+# Skrip bash wajib LF (CRLF membuat bash gagal: $'': command not found),
+# PowerShell 5.1 paling aman CRLF. Berlaku di semua OS, apa pun core.autocrlf.
+*.sh  text eol=lf
+*.ps1 text eol=crlf

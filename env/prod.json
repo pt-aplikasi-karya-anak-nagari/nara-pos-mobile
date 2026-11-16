@@ -1,0 +1,5 @@
+{
+  "NARA_API_HOST": "https://api.nara.id",
+  "NARA_WEB_URL": "https://app.nara.id",
+  "NARA_MENU_QR_URL": "https://app.nara.id/menu"
+}

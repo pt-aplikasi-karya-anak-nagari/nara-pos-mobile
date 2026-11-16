@@ -17,6 +17,38 @@ For help getting started with Flutter development, view the
 samples, guidance on mobile development, and a full API reference.
 # nara-pos
 
+## Menjalankan & build (dev / prod)
+
+Alamat server ada di berkas env (`env/README.md`): `env/dev.json` (per PC, tidak
+di-commit) dan `env/prod.json`. Tiap skrip punya versi bash (`.sh`) dan
+PowerShell (`.ps1`, Windows: `powershell -ExecutionPolicy Bypass -File scripts\<nama>.ps1`).
+
+| Tujuan | Skrip | Hasil |
+|---|---|---|
+| Isi IP PC ke `env/dev.json` | `set_dev_ip` | API `http://<IP>:3001`, web `:3000` |
+| Jalankan debug ke server dev | `run_dev` | `flutter run` + `env/dev.json` |
+| Debug lewat kabel USB (Windows) | `run_dev_windows.ps1` | `adb reverse` + `127.0.0.1` |
+| APK uji ke server dev | `build_dev` | `build/app/outputs/flutter-apk/app-debug.apk` |
+| Jalankan release ke produksi | `run_prod` | butuh `NARA_API_SECRET` |
+| Build rilis (Play Store) | `build_prod` | APK/AAB ber-obfuscate, butuh `NARA_API_SECRET` & `android/key.properties` |
+
+```bash
+./scripts/set_dev_ip.sh && ./scripts/run_dev.sh
+NARA_API_SECRET='...' TARGET=appbundle ./scripts/build_prod.sh
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\set_dev_ip.ps1
+powershell -ExecutionPolicy Bypass -File scriptsun_dev.ps1
+$env:NARA_API_SECRET = '...'
+powershell -ExecutionPolicy Bypass -File scriptsuild_prod.ps1 -Target appbundle
+```
+
+`build_prod` menolak build bila `env/prod.json` bukan `https://` / masih IP
+lokal, secret kosong atau masih secret dev. App rilis juga menolak start bila
+alamatnya lokal. `flutter run` polos dari IDE tetap jalan dengan alamat bawaan
+di `lib/core/config/app_config.dart`.
+
 ## Pelaporan crash (Sentry)
 
 Opsional — tanpa DSN, Sentry tidak dinyalakan. DSN dibaca saat build:

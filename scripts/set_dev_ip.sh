@@ -1,38 +1,36 @@
 #!/usr/bin/env bash
-# Set apiHostDev (dan makoScanQrBaseUrlDev) di lib/core/config/app_config.dart
-# ke IP LAN Mac SAAT INI. Hindari edit manual tiap IP DHCP berubah.
-# Nilai ...Rilis tidak disentuh.
-# Port API default 3001, web 3000 — override: PORT=xxxx WEB_PORT=yyyy ./scripts/set_dev_ip.sh
+# Isi env/dev.json dengan IP LAN PC SAAT INI (API :3001, web :3000).
+# Override port: PORT=3005 WEB_PORT=3001 ./scripts/set_dev_ip.sh
+# Atau tentukan IP sendiri: IP=192.168.1.30 ./scripts/set_dev_ip.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PORT="${PORT:-3001}"
 WEB_PORT="${WEB_PORT:-3000}"
+IP="${IP:-}"
 
-# Ambil IP LAN aktif (WiFi en0 dulu, lalu en1/ethernet).
-IP=""
-for iface in en0 en1 en2; do
-  IP=$(ipconfig getifaddr "$iface" 2>/dev/null || true)
-  [ -n "$IP" ] && break
-done
+if [ -z "$IP" ] && command -v ipconfig >/dev/null 2>&1; then
+  # macOS: Wi-Fi en0 dulu, lalu en1/ethernet.
+  for iface in en0 en1 en2; do
+    IP=$(ipconfig getifaddr "$iface" 2>/dev/null || true)
+    [ -n "$IP" ] && break
+  done
+fi
+if [ -z "$IP" ] && command -v hostname >/dev/null 2>&1; then
+  # Linux.
+  IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168|10)\.' | head -1 || true)
+fi
 if [ -z "$IP" ]; then
-  echo "✗ Gagal mendapatkan IP LAN (en0/en1/en2). Pastikan Mac terhubung WiFi." >&2
+  echo "✗ Gagal mendapatkan IP LAN. Isi manual: IP=192.168.x.x ./scripts/set_dev_ip.sh" >&2
+  echo "  (Windows: powershell -ExecutionPolicy Bypass -File scripts\set_dev_ip.ps1)" >&2
   exit 1
 fi
 
-HOST="http://$IP:$PORT"
-QR="http://$IP:$WEB_PORT/menu"
-python3 - "$HOST" "$QR" <<'PY'
-import re, sys
-host, qr = sys.argv[1], sys.argv[2]
-path = "lib/core/config/app_config.dart"
-src = open(path).read()
-# Ganti HANYA konstanta dev; nilai rilis tetap.
-src, n1 = re.subn(r"(static const String apiHostDev\s*=\s*)'[^']*'", r"\g<1>'" + host + "'", src)
-src, n2 = re.subn(r"(static const String makoScanQrBaseUrlDev\s*=\s*)'[^']*'", r"\g<1>'" + qr + "'", src)
-if n1 == 0:
-    raise SystemExit("✗ Konstanta apiHostDev tidak ditemukan di " + path)
-open(path, "w").write(src)
-print(f"✓ app_config.dart → apiHostDev={host}, makoScanQrBaseUrlDev={qr} (x{n1}, x{n2})")
-PY
-
-echo "  Pastikan HP di WiFi yang sama, lalu run ulang: ./scripts/run_dev.sh"
+cat > env/dev.json <<JSON
+{
+  "NARA_API_HOST": "http://$IP:$PORT",
+  "NARA_WEB_URL": "http://$IP:$WEB_PORT",
+  "NARA_MENU_QR_URL": "http://$IP:$WEB_PORT/menu"
+}
+JSON
+echo "✓ env/dev.json → API http://$IP:$PORT, web http://$IP:$WEB_PORT"
+echo "  Pastikan HP/tablet di Wi-Fi yang sama, lalu: ./scripts/run_dev.sh"

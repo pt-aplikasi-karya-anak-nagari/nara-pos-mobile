@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Alamat server dev per PC (env/README.md)
+/env/dev.json
+/env/usb.json
